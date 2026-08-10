@@ -4,19 +4,31 @@ import { useCurrentUser, useActivities } from '@/lib/marketing-hooks'
 import { useState } from 'react'
 import ActivitiesTable from '@/components/ActivitiesTable'
 import CreateActivityModal from '@/components/CreateActivityModal'
-import { Plus, Calendar, FileText, Loader } from 'lucide-react'
+import FixedActivitiesModal from '@/components/FixedActivitiesModal'
+import {
+  Plus,
+  Calendar,
+  FileText,
+  Loader,
+  Sparkles,
+} from 'lucide-react'
 import Link from 'next/link'
 
 export default function MarketingDashboard() {
   const { user, loading: userLoading } = useCurrentUser()
   const { activities, loading: activitiesLoading } = useActivities()
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showFixedActivitiesModal, setShowFixedActivitiesModal] =
+  useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const handleSuccess = () => {
     setRefreshKey(prev => prev + 1)
     setShowCreateModal(false)
   }
+  const handleFixedActivitySuccess = () => {
+  setRefreshKey(prev => prev + 1)
+}
 
   if (userLoading) {
     return (
@@ -57,14 +69,25 @@ export default function MarketingDashboard() {
       </div>
 
       <div className="flex gap-3 flex-wrap">
-        {user.role === 'admin' && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold transition"
-          >
-            <Plus size={20} /> Crear Actividad
-          </button>
-        )}
+      {user.role === 'admin' && (
+  <>
+    <button
+      onClick={() => setShowCreateModal(true)}
+      className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold transition"
+    >
+      <Plus size={20} />
+      Crear Actividad
+    </button>
+
+    <button
+      onClick={() => setShowFixedActivitiesModal(true)}
+      className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 font-semibold transition"
+    >
+      <Sparkles size={20} />
+      Actividades Fijas
+    </button>
+  </>
+)}
 
         <Link href="/app1/marketing/calendar" className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-semibold transition">
           <Calendar size={20} /> Calendario
@@ -118,6 +141,11 @@ export default function MarketingDashboard() {
         onClose={() => setShowCreateModal(false)}
         onSuccess={handleSuccess}
       />
+      <FixedActivitiesModal
+  isOpen={showFixedActivitiesModal}
+  onClose={() => setShowFixedActivitiesModal(false)}
+  onSuccess={handleFixedActivitySuccess}
+/>
     </div>
   )
 }
