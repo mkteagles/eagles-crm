@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ActivityStatus } from '@/lib/marketing-types'
 import { statusConfig } from '@/lib/marketing-ui'
+import { CalendarDays, Check, X } from 'lucide-react'
 
 interface ActivityDetailModalProps {
   activity: any
@@ -30,16 +31,47 @@ export default function ActivityDetailModal({
   const [rejectionReason, setRejectionReason] = useState('')
   const [showRejectBox, setShowRejectBox] = useState(false)
 
-  // =========================================================
-  // COMENTARIOS
-  // =========================================================
-
   const [comments, setComments] = useState<ActivityComment[]>([])
   const [message, setMessage] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [sendingComment, setSendingComment] = useState(false)
 
+  const [editingDate, setEditingDate] = useState(false)
+  const [newDueDate, setNewDueDate] = useState(
+    activity?.due_date
+      ? String(activity.due_date).split('T')[0]
+      : ''
+  )
+  const [savingDate, setSavingDate] = useState(false)
+
   const supabase = createClient()
+
+  // =========================================================
+  // PERMISO PARA CAMBIAR FECHA
+  // =========================================================
+  //
+  // Hugo:
+  // Puede modificar la fecha de SUS actividades.
+  //
+  // Ursula:
+  // Puede modificar la fecha de SUS actividades.
+  //
+  // Marcos:
+  // NO puede modificar fechas.
+  //
+  // La comprobación principal es que la actividad esté
+  // asignada al usuario actual.
+  // =========================================================
+
+  const canEditDate =
+    !!currentUserId &&
+    activity?.assigned_to === currentUserId &&
+    (
+      currentUserRole === 'admin' ||
+      String(activity?.assigned_to_name || '')
+        .toLowerCase()
+        .includes('ursula')
+    )
 
   // =========================================================
   // CARGAR COMENTARIOS
@@ -73,6 +105,54 @@ export default function ActivityDetailModal({
   useEffect(() => {
     loadComments()
   }, [activity?.id])
+
+  // =========================================================
+  // CAMBIAR FECHA
+  // =========================================================
+
+  const handleSaveDate = async () => {
+    if (!canEditDate) {
+      alert('No tienes permiso para modificar esta fecha.')
+      return
+    }
+
+    if (!newDueDate) {
+      alert('Selecciona una fecha.')
+      return
+    }
+
+    setSavingDate(true)
+
+    try {
+      const { error } = await supabase
+        .from('activities')
+        .update({
+          due_date: newDueDate,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', activity.id)
+        .eq('assigned_to', currentUserId)
+
+      if (error) {
+        console.error('Error updating activity date:', error)
+        alert(`No se pudo cambiar la fecha: ${error.message}`)
+        return
+      }
+
+      // Actualizamos el objeto local para que el modal
+      // muestre inmediatamente la nueva fecha.
+      activity.due_date = newDueDate
+
+      setEditingDate(false)
+
+      alert('Fecha actualizada correctamente.')
+    } catch (error) {
+      console.error('Error updating activity date:', error)
+      alert('Ocurrió un error al actualizar la fecha.')
+    } finally {
+      setSavingDate(false)
+    }
+  }
 
   // =========================================================
   // APROBAR ACTIVIDAD
@@ -153,7 +233,7 @@ export default function ActivityDetailModal({
   // =========================================================
 
   const handleAddComment = async (
-    e: React.FormEvent<HTMLFormElement>
+    e: React.FormEvent
   ) => {
     e.preventDefault()
 
@@ -241,10 +321,6 @@ export default function ActivityDetailModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
 
-      {/* =====================================================
-          MODAL
-      ===================================================== */}
-
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-background border border-border-color shadow-xl">
 
         {/* ===================================================
@@ -284,7 +360,7 @@ export default function ActivityDetailModal({
         <div className="p-6">
 
           {/* =================================================
-              INFORMACIÓN DE LA ACTIVIDAD
+              INFORMACIÓN
           ================================================= */}
 
           <div className="grid grid-cols-2 gap-4 mb-6">
@@ -305,13 +381,96 @@ export default function ActivityDetailModal({
             {/* VENCIMIENTO */}
 
             <div>
-              <p className="text-foreground/60 text-sm">
-                Vencimiento
-              </p>
 
-              <p className="font-semibold">
-                {activity.due_date}
-              </p>
+              <div className="flex items-center justify-between">
+
+                <p className="text-foreground/60 text-sm">
+                  Vencimiento
+                </p>
+
+                {canEditDate && !editingDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNewDueDate(
+                        activity?.due_date
+                          ? String(activity.due_date).split('T')[0]
+                          : ''
+                      )
+                      setEditingDate(true)
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold"
+                  >
+                    Cambiar fecha
+                  </button>
+                )}
+
+              </div>
+
+              {editingDate ? (
+
+                <div className="mt-2 space-y-2">
+
+                  <div className="flex items-center gap-2">
+
+                    <CalendarDays
+                      size={18}
+                      className="text-blue-500"
+                    />
+
+                    <input
+                      type="date"
+                      value={newDueDate}
+                      onChange={(e) =>
+                        setNewDueDate(e.target.value)
+                      }
+                      disabled={savingDate}
+                      className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                    />
+
+                  </div>
+
+                  <div className="flex gap-2">
+
+                    <button
+                      type="button"
+                      onClick={handleSaveDate}
+                      disabled={
+                        savingDate ||
+                        !newDueDate
+                      }
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-md text-xs font-semibold hover:bg-green-700 disabled:opacity-50"
+                    >
+                      <Check size={14} />
+                      {savingDate
+                        ? 'Guardando...'
+                        : 'Guardar'}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setEditingDate(false)
+                      }
+                      disabled={savingDate}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-md text-xs font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
+                    >
+                      <X size={14} />
+                      Cancelar
+                    </button>
+
+                  </div>
+
+                </div>
+
+              ) : (
+
+                <p className="font-semibold">
+                  {activity.due_date || 'Sin fecha'}
+                </p>
+
+              )}
+
             </div>
 
             {/* PRIORIDAD */}
@@ -321,7 +480,7 @@ export default function ActivityDetailModal({
                 Prioridad
               </p>
 
-              <p className="font-semibold">
+              <p className="font-semibold capitalize">
                 {activity.priority}
               </p>
             </div>
@@ -329,6 +488,7 @@ export default function ActivityDetailModal({
             {/* ESTADO */}
 
             <div>
+
               <p className="text-foreground/60 text-sm">
                 Estado
               </p>
@@ -368,6 +528,22 @@ export default function ActivityDetailModal({
             </div>
 
           </div>
+
+          {/* =================================================
+              AVISO DE EDICIÓN
+          ================================================= */}
+
+          {canEditDate && (
+            <div className="mb-5 rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+
+              <p className="text-xs text-blue-700 dark:text-blue-300">
+                Puedes modificar la fecha de esta actividad
+                desde aquí para organizar grabaciones,
+                publicaciones o cambios de contenido.
+              </p>
+
+            </div>
+          )}
 
           {/* =================================================
               NOTAS
@@ -421,12 +597,10 @@ export default function ActivityDetailModal({
             )}
 
           {/* =================================================
-              COMENTARIOS / ACTUALIZACIONES
+              COMENTARIOS
           ================================================= */}
 
           <div className="mt-6 pt-6 border-t border-border-color">
-
-            {/* TÍTULO */}
 
             <div className="flex items-center justify-between mb-4">
 
@@ -447,10 +621,6 @@ export default function ActivityDetailModal({
               </span>
 
             </div>
-
-            {/* =================================================
-                LISTA DE COMENTARIOS
-            ================================================= */}
 
             <div className="space-y-3 mb-5">
 
@@ -535,9 +705,7 @@ export default function ActivityDetailModal({
 
             </div>
 
-            {/* =================================================
-                FORMULARIO PARA NUEVO COMENTARIO
-            ================================================= */}
+            {/* COMENTARIO */}
 
             <form
               onSubmit={handleAddComment}
