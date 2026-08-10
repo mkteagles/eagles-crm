@@ -49,7 +49,7 @@ export default function ActivitiesTable() {
                 </td>
                 <td className="px-4 py-3 text-sm">{activity.assigned_to_name || activity.assigned_to}</td>
                 <td className="px-4 py-3 text-sm">{activity.due_date}</td>
-                <td className={`px-4 py-3 text-sm font-semibold ${priorityConfig[activity.priority as keyof typeof priorityConfig].className}`}>
+               <td className={`px-4 py-3 text-sm font-semibold ${priorityConfig[activity.priority as keyof typeof priorityConfig].badge}`}>
                   {priorityConfig[activity.priority as keyof typeof priorityConfig].label}
                 </td>
                 <td className="px-4 py-3">
