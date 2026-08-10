@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -21,7 +20,10 @@ import {
   Sparkles,
 } from 'lucide-react'
 
-import { useMemo, useState } from 'react'
+import {
+  useMemo,
+  useState,
+} from 'react'
 
 import ActivityDetailModal from './ActivityDetailModal'
 
@@ -117,43 +119,65 @@ export default function ActivitiesTable({
           Number(activityId)
       )
 
-    const {
-      error,
-    } = await supabase
-      .from('activities')
-      .update({
-        status: newStatus,
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        'id',
-        activityId
+    try {
+
+      const {
+        error,
+      } = await supabase
+        .from('activities')
+        .update({
+          status: newStatus,
+          updated_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          'id',
+          activityId
+        )
+
+      // ===================================================
+      // ERROR
+      // ===================================================
+
+      if (error) {
+
+        console.error(
+          '❌ Error actualizando actividad:',
+          error
+        )
+
+        alert(
+          `No se pudo actualizar la actividad:\n\n${error.message}`
+        )
+
+        return
+      }
+
+      // ===================================================
+      // ÉXITO
+      // ===================================================
+
+      console.log(
+        '✅ Estado actualizado:',
+        {
+          activityId,
+          oldStatus:
+            previousActivity?.status,
+          newStatus,
+        }
       )
 
-    if (error) {
+    } catch (error) {
 
       console.error(
-        'Error actualizando actividad:',
+        '❌ Error inesperado actualizando actividad:',
         error
       )
 
       alert(
-        `No se pudo actualizar la actividad: ${error.message}`
+        'Ocurrió un error inesperado al actualizar la actividad.'
       )
-
-      return
     }
-
-    console.log(
-      '✅ Estado actualizado:',
-      {
-        activityId,
-        oldStatus:
-          previousActivity?.status,
-        newStatus,
-      }
-    )
   }
 
   // =======================================================
@@ -169,11 +193,18 @@ export default function ActivitiesTable({
     // SEGURIDAD FRONTEND
     // -----------------------------------------------------
 
-    if (
-      user?.role !== 'admin'
-    ) {
+    if (user?.role !== 'admin') {
+
+      console.warn(
+        '⛔ Usuario sin permisos para eliminar actividades'
+      )
+
       return
     }
+
+    // -----------------------------------------------------
+    // CONFIRMACIÓN
+    // -----------------------------------------------------
 
     const confirmed =
       window.confirm(
@@ -184,9 +215,19 @@ export default function ActivitiesTable({
       return
     }
 
+    // -----------------------------------------------------
+    // ELIMINAR
+    // -----------------------------------------------------
+
     try {
 
+      console.log(
+        '🗑️ Intentando eliminar actividad:',
+        activityId
+      )
+
       const {
+        data,
         error,
       } = await supabase
         .from('activities')
@@ -195,24 +236,64 @@ export default function ActivitiesTable({
           'id',
           activityId
         )
+        .select('id')
+
+      // ===================================================
+      // ERROR SUPABASE
+      // ===================================================
 
       if (error) {
 
         console.error(
-          'Error eliminando actividad:',
+          '❌ Error eliminando actividad:',
           error
         )
 
         alert(
-          `No se pudo eliminar la actividad: ${error.message}`
+          `No se pudo eliminar la actividad:\n\n${error.message}`
         )
 
         return
       }
 
-      // ---------------------------------------------------
-      // LIMPIAR ACTIVIDAD ABIERTA
-      // ---------------------------------------------------
+      // ===================================================
+      // NO SE ELIMINÓ NINGUNA FILA
+      // ===================================================
+
+      if (
+        !data ||
+        data.length === 0
+      ) {
+
+        console.error(
+          '❌ Supabase no eliminó ninguna actividad.',
+          {
+            activityId,
+            userId: user?.id,
+            userRole: user?.role,
+          }
+        )
+
+        alert(
+          'La actividad no fue eliminada.\n\n' +
+          'Supabase no encontró una actividad que puedas eliminar.'
+        )
+
+        return
+      }
+
+      // ===================================================
+      // ÉXITO
+      // ===================================================
+
+      console.log(
+        '✅ Actividad eliminada correctamente:',
+        data
+      )
+
+      // ===================================================
+      // CERRAR MODAL SI ESTABA ABIERTO
+      // ===================================================
 
       if (
         Number(
@@ -226,20 +307,15 @@ export default function ActivitiesTable({
         )
       }
 
-      console.log(
-        '🗑️ Actividad eliminada:',
-        activityId
-      )
-
     } catch (error) {
 
       console.error(
-        'Error eliminando actividad:',
+        '❌ Error inesperado eliminando actividad:',
         error
       )
 
       alert(
-        'Ocurrió un error al eliminar la actividad.'
+        'Ocurrió un error inesperado al eliminar la actividad.'
       )
     }
   }
@@ -287,7 +363,7 @@ export default function ActivitiesTable({
   }
 
   // =======================================================
-  // SIN ACTIVIDADES PARA EL FILTRO
+  // SIN ACTIVIDADES
   // =======================================================
 
   if (
@@ -365,7 +441,7 @@ export default function ActivitiesTable({
           </thead>
 
           {/* =================================================
-              ACTIVIDADES FILTRADAS
+              ACTIVIDADES
           ================================================= */}
 
           <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
@@ -375,18 +451,18 @@ export default function ActivitiesTable({
                 activity: any
               ) => {
 
-                // ------------------------------------------------
+                // -------------------------------------------
                 // NUEVA
-                // ------------------------------------------------
+                // -------------------------------------------
 
                 const isNew =
                   newActivityIds.includes(
                     Number(activity.id)
                   )
 
-                // ------------------------------------------------
+                // -------------------------------------------
                 // ESTILOS
-                // ------------------------------------------------
+                // -------------------------------------------
 
                 const priorityStyles =
                   getPriorityStyles(
@@ -424,9 +500,9 @@ export default function ActivitiesTable({
                     `}
                   >
 
-                    {/* =========================================
+                    {/* =====================================
                         ACTIVIDAD
-                    ========================================= */}
+                    ===================================== */}
 
                     <td className="px-4 py-4">
 
@@ -478,9 +554,9 @@ export default function ActivitiesTable({
 
                     </td>
 
-                    {/* =========================================
+                    {/* =====================================
                         ASIGNADO
-                    ========================================= */}
+                    ===================================== */}
 
                     <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
 
@@ -492,9 +568,9 @@ export default function ActivitiesTable({
 
                     </td>
 
-                    {/* =========================================
+                    {/* =====================================
                         VENCIMIENTO
-                    ========================================= */}
+                    ===================================== */}
 
                     <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
 
@@ -505,9 +581,9 @@ export default function ActivitiesTable({
 
                     </td>
 
-                    {/* =========================================
+                    {/* =====================================
                         PRIORIDAD
-                    ========================================= */}
+                    ===================================== */}
 
                     <td className="px-4 py-4">
 
@@ -532,9 +608,9 @@ export default function ActivitiesTable({
 
                     </td>
 
-                    {/* =========================================
+                    {/* =====================================
                         ESTADO
-                    ========================================= */}
+                    ===================================== */}
 
                     <td className="px-4 py-4">
 
@@ -621,17 +697,17 @@ export default function ActivitiesTable({
 
                     </td>
 
-                    {/* =========================================
+                    {/* =====================================
                         ACCIONES
-                    ========================================= */}
+                    ===================================== */}
 
                     <td className="px-4 py-4 text-center">
 
                       <div className="flex items-center justify-center gap-3">
 
-                        {/* -------------------------------------
+                        {/* ---------------------------------
                             VER
-                        ------------------------------------- */}
+                        --------------------------------- */}
 
                         <button
                           type="button"
@@ -666,10 +742,10 @@ export default function ActivitiesTable({
 
                         </button>
 
-                        {/* -------------------------------------
+                        {/* ---------------------------------
                             ELIMINAR
-                            ADMIN
-                        ------------------------------------- */}
+                            SOLO ADMIN
+                        --------------------------------- */}
 
                         {user?.role ===
                           'admin' && (
@@ -678,7 +754,7 @@ export default function ActivitiesTable({
                             type="button"
                             onClick={() =>
                               handleDeleteActivity(
-                                activity.id,
+                                Number(activity.id),
                                 activity.title
                               )
                             }
