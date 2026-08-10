@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useActivities, useCurrentUser } from '@/lib/marketing-hooks'
+import {
+  useActivities,
+  useCurrentUser,
+} from '@/lib/marketing-hooks'
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,51 +15,104 @@ import {
   Save,
   Loader,
   Pencil,
+  Sparkles,
+  Bell,
 } from 'lucide-react'
+
 import ActivityDetailModal from './ActivityDetailModal'
+
+import {
+  isActivityNew,
+} from '@/lib/activity-notifications'
 
 export default function CalendarActivities() {
   const supabase = createClient()
 
-  const { activities, loading } = useActivities()
-  const { user } = useCurrentUser()
+  const {
+    activities,
+    loading,
+  } = useActivities()
 
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const { user } =
+    useCurrentUser()
 
-  const [selectedActivity, setSelectedActivity] =
-    useState<any | null>(null)
+  const [
+    currentDate,
+    setCurrentDate,
+  ] = useState(
+    new Date()
+  )
 
-  const [showDateModal, setShowDateModal] =
-    useState(false)
+  const [
+    selectedActivity,
+    setSelectedActivity,
+  ] = useState<any | null>(
+    null
+  )
 
-  const [newDate, setNewDate] = useState('')
+  const [
+    showDateModal,
+    setShowDateModal,
+  ] = useState(false)
 
-  const [savingDate, setSavingDate] =
-    useState(false)
+  const [
+    newDate,
+    setNewDate,
+  ] = useState('')
+
+  const [
+    savingDate,
+    setSavingDate,
+  ] = useState(false)
+
+  // =========================================================
+  // FORZAR REFRESH VISUAL CUANDO UNA ACTIVIDAD SE MARCA
+  // COMO VISTA DESDE EL MODAL
+  // =========================================================
+
+  const [
+    notificationVersion,
+    setNotificationVersion,
+  ] = useState(0)
+
+  useEffect(() => {
+    const handleActivitySeen = () => {
+      setNotificationVersion(
+        (value) => value + 1
+      )
+    }
+
+    window.addEventListener(
+      'activity-seen',
+      handleActivitySeen
+    )
+
+    return () => {
+      window.removeEventListener(
+        'activity-seen',
+        handleActivitySeen
+      )
+    }
+  }, [])
+
+  // Evitamos warning de variable no utilizada
+  void notificationVersion
 
   // =========================================================
   // PERMISOS PARA CAMBIAR FECHA
   // =========================================================
 
-  /*
-   * Hugo = admin
-   * Ursula = executor
-   *
-   * Hugo puede cambiar cualquier actividad.
-   *
-   * Ursula únicamente puede cambiar actividades
-   * que estén asignadas a ella.
-   *
-   * Marcos NO puede modificar fechas.
-   */
-
   const canEditActivityDate = (
     activity: any
   ) => {
-    if (!user) return false
+    if (!user) {
+      return false
+    }
 
-    // Hugo
-    if (user.role === 'admin') {
+    // Hugo / admin
+    if (
+      user.role === 'admin'
+    ) {
       return true
     }
 
@@ -63,7 +120,8 @@ export default function CalendarActivities() {
     if (
       user.role === 'executor' &&
       user.full_name === 'Ursula' &&
-      activity.assigned_to === user.id
+      activity.assigned_to ===
+        user.id
     ) {
       return true
     }
@@ -75,7 +133,9 @@ export default function CalendarActivities() {
   // DÍAS DEL MES
   // =========================================================
 
-  const getDaysInMonth = (date: Date) => {
+  const getDaysInMonth = (
+    date: Date
+  ) => {
     return new Date(
       date.getFullYear(),
       date.getMonth() + 1,
@@ -83,7 +143,9 @@ export default function CalendarActivities() {
     ).getDate()
   }
 
-  const getFirstDayOfMonth = (date: Date) => {
+  const getFirstDayOfMonth = (
+    date: Date
+  ) => {
     return new Date(
       date.getFullYear(),
       date.getMonth(),
@@ -98,7 +160,9 @@ export default function CalendarActivities() {
   const handleActivityClick = (
     activity: any
   ) => {
-    setSelectedActivity(activity)
+    setSelectedActivity(
+      activity
+    )
   }
 
   // =========================================================
@@ -108,20 +172,32 @@ export default function CalendarActivities() {
   const openDateModal = (
     activity: any
   ) => {
-    if (!canEditActivityDate(activity)) {
+    if (
+      !canEditActivityDate(
+        activity
+      )
+    ) {
       return
     }
 
-    setSelectedActivity(activity)
+    setSelectedActivity(
+      activity
+    )
 
     const currentDueDate =
       activity.due_date
-        ? String(activity.due_date).split('T')[0]
+        ? String(
+            activity.due_date
+          ).split('T')[0]
         : ''
 
-    setNewDate(currentDueDate)
+    setNewDate(
+      currentDueDate
+    )
 
-    setShowDateModal(true)
+    setShowDateModal(
+      true
+    )
   }
 
   // =========================================================
@@ -129,9 +205,14 @@ export default function CalendarActivities() {
   // =========================================================
 
   const closeDateModal = () => {
-    if (savingDate) return
+    if (savingDate) {
+      return
+    }
 
-    setShowDateModal(false)
+    setShowDateModal(
+      false
+    )
+
     setNewDate('')
   }
 
@@ -139,100 +220,123 @@ export default function CalendarActivities() {
   // GUARDAR NUEVA FECHA
   // =========================================================
 
-  const handleSaveDate = async () => {
-    if (!selectedActivity?.id) {
-      alert('No se encontró la actividad.')
-      return
-    }
-
-    if (!newDate) {
-      alert('Selecciona una fecha.')
-      return
-    }
-
-    if (
-      !canEditActivityDate(
-        selectedActivity
-      )
-    ) {
-      alert(
-        'No tienes permiso para cambiar la fecha de esta actividad.'
-      )
-      return
-    }
-
-    setSavingDate(true)
-
-    try {
-      const { error } = await supabase
-        .from('activities')
-        .update({
-          due_date: newDate,
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          'id',
-          selectedActivity.id
+  const handleSaveDate =
+    async () => {
+      if (
+        !selectedActivity?.id
+      ) {
+        alert(
+          'No se encontró la actividad.'
         )
 
-      if (error) {
+        return
+      }
+
+      if (!newDate) {
+        alert(
+          'Selecciona una fecha.'
+        )
+
+        return
+      }
+
+      if (
+        !canEditActivityDate(
+          selectedActivity
+        )
+      ) {
+        alert(
+          'No tienes permiso para cambiar la fecha de esta actividad.'
+        )
+
+        return
+      }
+
+      setSavingDate(
+        true
+      )
+
+      try {
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              'activities'
+            )
+            .update({
+              due_date:
+                newDate,
+              updated_at:
+                new Date().toISOString(),
+            })
+            .eq(
+              'id',
+              selectedActivity.id
+            )
+
+        if (error) {
+          console.error(
+            'Error actualizando fecha:',
+            error
+          )
+
+          alert(
+            `No se pudo actualizar la fecha: ${error.message}`
+          )
+
+          return
+        }
+
+        setSelectedActivity(
+          (prev: any) =>
+            prev
+              ? {
+                  ...prev,
+                  due_date:
+                    newDate,
+                }
+              : null
+        )
+
+        setShowDateModal(
+          false
+        )
+
+        setNewDate('')
+      } catch (error) {
         console.error(
           'Error actualizando fecha:',
           error
         )
 
         alert(
-          `No se pudo actualizar la fecha: ${error.message}`
+          'Ocurrió un error al actualizar la fecha.'
         )
-
-        return
+      } finally {
+        setSavingDate(
+          false
+        )
       }
-
-      // Actualizar actividad seleccionada
-      setSelectedActivity(
-        (prev: any) =>
-          prev
-            ? {
-                ...prev,
-                due_date: newDate,
-              }
-            : null
-      )
-
-      setShowDateModal(false)
-      setNewDate('')
-
-      /*
-       * useActivities tiene realtime,
-       * por lo que el calendario se actualizará
-       * automáticamente después del UPDATE.
-       */
-    } catch (error) {
-      console.error(
-        'Error actualizando fecha:',
-        error
-      )
-
-      alert(
-        'Ocurrió un error al actualizar la fecha.'
-      )
-    } finally {
-      setSavingDate(false)
     }
-  }
 
   // =========================================================
   // CONSTRUIR CALENDARIO
   // =========================================================
 
-  const days: Array<number | null> = []
+  const days: Array<
+    number | null
+  > = []
 
   const daysInMonth =
-    getDaysInMonth(currentDate)
+    getDaysInMonth(
+      currentDate
+    )
 
   const firstDay =
-    getFirstDayOfMonth(currentDate)
+    getFirstDayOfMonth(
+      currentDate
+    )
 
   for (
     let i = 0;
@@ -254,10 +358,11 @@ export default function CalendarActivities() {
   // AGRUPAR ACTIVIDADES POR FECHA
   // =========================================================
 
-  const groupedActivities: Record<
-    string,
-    any[]
-  > = {}
+  const groupedActivities:
+    Record<
+      string,
+      any[]
+    > = {}
 
   activities.forEach(
     (activity: any) => {
@@ -268,16 +373,23 @@ export default function CalendarActivities() {
         return
       }
 
-      const dateStr = String(
-        activity.due_date
-      ).split('T')[0]
+      const dateStr =
+        String(
+          activity.due_date
+        ).split('T')[0]
 
       if (!dateStr) {
         return
       }
 
-      if (!groupedActivities[dateStr]) {
-        groupedActivities[dateStr] = []
+      if (
+        !groupedActivities[
+          dateStr
+        ]
+      ) {
+        groupedActivities[
+          dateStr
+        ] = []
       }
 
       groupedActivities[
@@ -292,361 +404,501 @@ export default function CalendarActivities() {
 
   return (
     <>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* =================================================
-            CALENDARIO
-        ================================================= */}
+      {/* =================================================
+          CALENDARIO
+      ================================================= */}
 
-        <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-lg shadow p-6">
+      <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-lg shadow p-6">
 
-          {/* ENCABEZADO */}
+        {/* ENCABEZADO */}
 
-          <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-6">
 
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentDate(
-                  new Date(
-                    currentDate.getFullYear(),
-                    currentDate.getMonth() - 1,
-                    1
-                  )
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentDate(
+                new Date(
+                  currentDate.getFullYear(),
+                  currentDate.getMonth() - 1,
+                  1
                 )
-              }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
-              aria-label="Mes anterior"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
+              )
+            }}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
+            aria-label="Mes anterior"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
 
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white capitalize">
-              {currentDate.toLocaleDateString(
-                'es-MX',
-                {
-                  month: 'long',
-                  year: 'numeric',
-                }
-              )}
-            </h2>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white capitalize">
+            {currentDate.toLocaleDateString(
+              'es-MX',
+              {
+                month: 'long',
+                year: 'numeric',
+              }
+            )}
+          </h2>
 
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentDate(
-                  new Date(
-                    currentDate.getFullYear(),
-                    currentDate.getMonth() + 1,
-                    1
-                  )
+          <button
+            type="button"
+            onClick={() => {
+              setCurrentDate(
+                new Date(
+                  currentDate.getFullYear(),
+                  currentDate.getMonth() + 1,
+                  1
                 )
-              }}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
-              aria-label="Mes siguiente"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
+              )
+            }}
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
+            aria-label="Mes siguiente"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
 
-          </div>
+        </div>
 
-          {/* DÍAS DE LA SEMANA */}
+        {/* INDICADOR */}
 
-          <div className="grid grid-cols-7 gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-4">
 
-            {[
-              'Dom',
-              'Lun',
-              'Mar',
-              'Mié',
-              'Jue',
-              'Vie',
-              'Sab',
-            ].map((dayName) => (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+
+            <Sparkles
+              size={14}
+            />
+
+            Nueva actividad
+
+          </span>
+
+        </div>
+
+        {/* DÍAS DE LA SEMANA */}
+
+        <div className="grid grid-cols-7 gap-2 mb-2">
+
+          {[
+            'Dom',
+            'Lun',
+            'Mar',
+            'Mié',
+            'Jue',
+            'Vie',
+            'Sab',
+          ].map(
+            (dayName) => (
 
               <div
-                key={dayName}
+                key={
+                  dayName
+                }
                 className="text-center font-semibold text-gray-600 dark:text-gray-400 text-sm py-2"
               >
                 {dayName}
               </div>
 
-            ))}
-
-          </div>
-
-          {/* DÍAS DEL MES */}
-
-          <div className="grid grid-cols-7 gap-2">
-
-            {days.map(
-              (day, index) => {
-
-                let dateStr = ''
-
-                if (
-                  day !== null
-                ) {
-                  const year =
-                    currentDate.getFullYear()
-
-                  const month =
-                    String(
-                      currentDate.getMonth() +
-                        1
-                    ).padStart(2, '0')
-
-                  const dayNumber =
-                    String(
-                      day
-                    ).padStart(
-                      2,
-                      '0'
-                    )
-
-                  dateStr =
-                    `${year}-${month}-${dayNumber}`
-                }
-
-                const dayActivities =
-                  dateStr !== ''
-                    ? groupedActivities[
-                        dateStr
-                      ] || []
-                    : []
-
-                return (
-                  <div
-                    key={index}
-                    className="min-h-[120px] border border-gray-200 dark:border-gray-700 rounded-lg p-2 flex flex-col bg-gray-50 dark:bg-gray-800"
-                  >
-
-                    {day !== null && (
-                      <>
-
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          {day}
-                        </span>
-
-                        <div className="space-y-1 overflow-y-auto">
-
-                          {dayActivities.map(
-                            (
-                              activity: any
-                            ) => {
-
-                              const canEdit =
-                                canEditActivityDate(
-                                  activity
-                                )
-
-                              return (
-                                <div
-                                  key={String(
-                                    activity.id
-                                  )}
-                                  className="group"
-                                >
-
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleActivityClick(
-                                        activity
-                                      )
-                                    }
-                                    className="w-full text-left text-xs font-medium px-2 py-1.5 rounded-md bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50 transition truncate"
-                                    title={
-                                      activity.title ||
-                                      'Sin título'
-                                    }
-                                  >
-                                    {activity.title ||
-                                      'Sin título'}
-                                  </button>
-
-                                  {canEdit && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        openDateModal(
-                                          activity
-                                        )
-                                      }
-                                      className="mt-1 w-full flex items-center justify-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition"
-                                    >
-                                      <Pencil
-                                        size={
-                                          11
-                                        }
-                                      />
-
-                                      Cambiar fecha
-                                    </button>
-                                  )}
-
-                                </div>
-                              )
-                            }
-                          )}
-
-                        </div>
-
-                      </>
-                    )}
-
-                  </div>
-                )
-              }
-            )}
-
-          </div>
+            )
+          )}
 
         </div>
 
-        {/* =================================================
-            PANEL DERECHO
-        ================================================= */}
+        {/* DÍAS DEL MES */}
 
-        <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
+        <div className="grid grid-cols-7 gap-2">
 
-          <div className="flex items-center gap-2 mb-4">
+          {days.map(
+            (
+              day,
+              index
+            ) => {
 
-            <CalendarDays
-              size={20}
-              className="text-blue-500"
+              let dateStr =
+                ''
+
+              if (
+                day !==
+                null
+              ) {
+                const year =
+                  currentDate.getFullYear()
+
+                const month =
+                  String(
+                    currentDate.getMonth() +
+                      1
+                  ).padStart(
+                    2,
+                    '0'
+                  )
+
+                const dayNumber =
+                  String(
+                    day
+                  ).padStart(
+                    2,
+                    '0'
+                  )
+
+                dateStr =
+                  `${year}-${month}-${dayNumber}`
+              }
+
+              const dayActivities =
+                dateStr !==
+                ''
+                  ? groupedActivities[
+                      dateStr
+                    ] || []
+                  : []
+
+              return (
+                <div
+                  key={
+                    index
+                  }
+                  className="min-h-[120px] border border-gray-200 dark:border-gray-700 rounded-lg p-2 flex flex-col bg-gray-50 dark:bg-gray-800"
+                >
+
+                  {day !==
+                    null && (
+                    <>
+
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {day}
+                      </span>
+
+                      <div className="space-y-2 overflow-y-auto">
+
+                        {dayActivities.map(
+                          (
+                            activity: any
+                          ) => {
+
+                            const canEdit =
+                              canEditActivityDate(
+                                activity
+                              )
+
+                            const isNew =
+                              isActivityNew(
+                                activity,
+                                user?.id
+                              )
+
+                            return (
+                              <div
+                                key={String(
+                                  activity.id
+                                )}
+                                className={`group relative rounded-md transition ${
+                                  isNew
+                                    ? 'ring-2 ring-blue-500 ring-offset-1 dark:ring-offset-gray-800 bg-blue-50 dark:bg-blue-900/20'
+                                    : ''
+                                }`}
+                              >
+
+                                {/* NUEVA */}
+
+                                {isNew && (
+                                  <div className="absolute -top-2 -right-1 z-10">
+
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[9px] font-bold shadow-sm">
+
+                                      <Sparkles
+                                        size={9}
+                                      />
+
+                                      NUEVA
+
+                                    </span>
+
+                                  </div>
+                                )}
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleActivityClick(
+                                      activity
+                                    )
+                                  }
+                                  className={`w-full text-left text-xs font-medium px-2 py-1.5 rounded-md transition truncate ${
+                                    isNew
+                                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-900/60'
+                                      : 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300 hover:bg-orange-200 dark:hover:bg-orange-900/50'
+                                  }`}
+                                  title={
+                                    activity.title ||
+                                    'Sin título'
+                                  }
+                                >
+
+                                  <div className="flex items-center gap-1">
+
+                                    {isNew && (
+                                      <Bell
+                                        size={
+                                          11
+                                        }
+                                        className="shrink-0"
+                                      />
+                                    )}
+
+                                    <span className="truncate">
+                                      {activity.title ||
+                                        'Sin título'}
+                                    </span>
+
+                                  </div>
+
+                                </button>
+
+                                {canEdit && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      openDateModal(
+                                        activity
+                                      )
+                                    }
+                                    className="mt-1 w-full flex items-center justify-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition"
+                                  >
+
+                                    <Pencil
+                                      size={
+                                        11
+                                      }
+                                    />
+
+                                    Cambiar fecha
+
+                                  </button>
+                                )}
+
+                              </div>
+                            )
+                          }
+                        )}
+
+                      </div>
+
+                    </>
+                  )}
+
+                </div>
+              )
+            }
+          )}
+
+        </div>
+
+      </div>
+
+      {/* =================================================
+          PANEL DERECHO
+      ================================================= */}
+
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow p-6">
+
+        <div className="flex items-center gap-2 mb-4">
+
+          <CalendarDays
+            size={20}
+            className="text-blue-500"
+          />
+
+          <h3 className="font-bold text-gray-900 dark:text-white">
+            Actividades
+          </h3>
+
+        </div>
+
+        {loading ? (
+
+          <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+
+            <Loader
+              size={18}
+              className="animate-spin"
             />
 
-            <h3 className="font-bold text-gray-900 dark:text-white">
-              Actividades
-            </h3>
+            <p>
+              Cargando...
+            </p>
 
           </div>
 
-          {loading ? (
+        ) : Object.keys(
+            groupedActivities
+          ).length === 0 ? (
 
-            <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            Sin actividades
+          </p>
 
-              <Loader
-                size={18}
-                className="animate-spin"
-              />
+        ) : (
 
-              <p>
-                Cargando...
-              </p>
+          <div className="space-y-3">
 
-            </div>
-
-          ) : Object.keys(
+            {Object.entries(
               groupedActivities
-            ).length === 0 ? (
-
-            <p className="text-gray-500 dark:text-gray-400 text-sm">
-              Sin actividades
-            </p>
-
-          ) : (
-
-            <div className="space-y-3">
-
-              {Object.entries(
-                groupedActivities
+            )
+              .sort(
+                (
+                  [
+                    dateA,
+                  ],
+                  [
+                    dateB,
+                  ]
+                ) =>
+                  dateA.localeCompare(
+                    dateB
+                  )
               )
-                .sort(
-                  ([dateA], [dateB]) =>
-                    dateA.localeCompare(
-                      dateB
-                    )
-                )
-                .slice(0, 8)
-                .map(
-                  ([date, acts]) => (
+              .slice(
+                0,
+                8
+              )
+              .map(
+                (
+                  [
+                    date,
+                    acts,
+                  ]
+                ) => (
 
-                    <div
-                      key={date}
-                      className="space-y-2"
-                    >
+                  <div
+                    key={
+                      date
+                    }
+                    className="space-y-2"
+                  >
 
-                      <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
-                        {date}
-                      </div>
+                    <div className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                      {date}
+                    </div>
 
-                      {acts.map(
-                        (
-                          activity: any
-                        ) => {
+                    {acts.map(
+                      (
+                        activity: any
+                      ) => {
 
-                          const canEdit =
-                            canEditActivityDate(
-                              activity
-                            )
+                        const canEdit =
+                          canEditActivityDate(
+                            activity
+                          )
 
-                          return (
-                            <div
-                              key={String(
-                                activity.id
-                              )}
-                              className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3"
+                        const isNew =
+                          isActivityNew(
+                            activity,
+                            user?.id
+                          )
+
+                        return (
+                          <div
+                            key={String(
+                              activity.id
+                            )}
+                            className={`relative rounded-lg p-3 transition ${
+                              isNew
+                                ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-500 shadow-sm'
+                                : 'bg-gray-50 dark:bg-gray-800 border border-transparent'
+                            }`}
+                          >
+
+                            {isNew && (
+                              <div className="absolute -top-2 right-2">
+
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-bold shadow">
+
+                                  <Sparkles
+                                    size={10}
+                                  />
+
+                                  NUEVA
+
+                                </span>
+
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleActivityClick(
+                                  activity
+                                )
+                              }
+                              className="w-full text-left"
                             >
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleActivityClick(
-                                    activity
-                                  )
-                                }
-                                className="w-full text-left"
-                              >
+                              <div className="flex items-center gap-2">
 
-                                <div className="font-medium text-gray-900 dark:text-white text-sm">
+                                {isNew && (
+                                  <Bell
+                                    size={
+                                      14
+                                    }
+                                    className="text-blue-600 dark:text-blue-400 shrink-0"
+                                  />
+                                )}
+
+                                <div className="font-medium text-gray-900 dark:text-white text-sm truncate">
                                   {activity.title ||
                                     'Sin título'}
                                 </div>
 
-                                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                  {activity.assigned_to_name ||
-                                    'Sin asignar'}
-                                </div>
+                              </div>
+
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+
+                                {activity.assigned_to_name ||
+                                  'Sin asignar'}
+
+                              </div>
+
+                            </button>
+
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openDateModal(
+                                    activity
+                                  )
+                                }
+                                className="mt-2 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+
+                                <Pencil
+                                  size={
+                                    12
+                                  }
+                                />
+
+                                Cambiar fecha
 
                               </button>
+                            )}
 
-                              {canEdit && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    openDateModal(
-                                      activity
-                                    )
-                                  }
-                                  className="mt-2 flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
-                                >
-                                  <Pencil
-                                    size={
-                                      12
-                                    }
-                                  />
+                          </div>
+                        )
+                      }
+                    )}
 
-                                  Cambiar fecha
-                                </button>
-                              )}
+                  </div>
 
-                            </div>
-                          )
-                        }
-                      )}
+                )
+              )}
 
-                    </div>
+          </div>
 
-                  )
-                )}
-
-            </div>
-
-          )}
-
-        </div>
+        )}
 
       </div>
 
@@ -656,6 +908,7 @@ export default function CalendarActivities() {
 
       {selectedActivity &&
         !showDateModal && (
+
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
 
             <ActivityDetailModal
@@ -676,6 +929,7 @@ export default function CalendarActivities() {
             />
 
           </div>
+
         )}
 
       {/* =====================================================
@@ -700,7 +954,9 @@ export default function CalendarActivities() {
                   </h2>
 
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {selectedActivity.title}
+                    {
+                      selectedActivity.title
+                    }
                   </p>
 
                 </div>
@@ -715,7 +971,9 @@ export default function CalendarActivities() {
                   }
                   className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition disabled:opacity-50"
                 >
-                  <X size={20} />
+                  <X
+                    size={20}
+                  />
                 </button>
 
               </div>
@@ -730,8 +988,12 @@ export default function CalendarActivities() {
 
                 <input
                   type="date"
-                  value={newDate}
-                  onChange={(e) =>
+                  value={
+                    newDate
+                  }
+                  onChange={(
+                    e
+                  ) =>
                     setNewDate(
                       e.target.value
                     )
@@ -779,18 +1041,28 @@ export default function CalendarActivities() {
 
                   {savingDate ? (
                     <>
+
                       <Loader
-                        size={17}
+                        size={
+                          17
+                        }
                         className="animate-spin"
                       />
 
                       Guardando...
+
                     </>
                   ) : (
                     <>
-                      <Save size={17} />
+
+                      <Save
+                        size={
+                          17
+                        }
+                      />
 
                       Guardar fecha
+
                     </>
                   )}
 
@@ -801,6 +1073,7 @@ export default function CalendarActivities() {
             </div>
 
           </div>
+
         )}
 
     </>

@@ -2,24 +2,25 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { ActivityStatus } from '@/lib/marketing-types'
-import { statusConfig } from '@/lib/marketing-ui'
-import { CalendarDays, Check, X } from 'lucide-react'
+import {
+  X,
+  Save,
+  Trash2,
+  Calendar,
+  User,
+  Flag,
+  FileText,
+} from 'lucide-react'
 
-interface ActivityDetailModalProps {
+import {
+  ActivityStatus,
+} from '@/lib/marketing-types'
+
+type Props = {
   activity: any
   currentUserRole?: string
   currentUserId?: string
   onClose: () => void
-}
-
-interface ActivityComment {
-  id: string
-  activity_id: string
-  user_id: string
-  message: string
-  created_at: string
-  user_name?: string
 }
 
 export default function ActivityDetailModal({
@@ -27,793 +28,1153 @@ export default function ActivityDetailModal({
   currentUserRole,
   currentUserId,
   onClose,
-}: ActivityDetailModalProps) {
-  const [rejectionReason, setRejectionReason] = useState('')
-  const [showRejectBox, setShowRejectBox] = useState(false)
-
-  const [comments, setComments] = useState<ActivityComment[]>([])
-  const [message, setMessage] = useState('')
-  const [loadingComments, setLoadingComments] = useState(false)
-  const [sendingComment, setSendingComment] = useState(false)
-
-  const [editingDate, setEditingDate] = useState(false)
-  const [newDueDate, setNewDueDate] = useState(
-    activity?.due_date
-      ? String(activity.due_date).split('T')[0]
-      : ''
-  )
-  const [savingDate, setSavingDate] = useState(false)
+}: Props) {
 
   const supabase = createClient()
 
-  // =========================================================
-  // PERMISO PARA CAMBIAR FECHA
-  // =========================================================
-  //
-  // Hugo:
-  // Puede modificar la fecha de SUS actividades.
-  //
-  // Ursula:
-  // Puede modificar la fecha de SUS actividades.
-  //
-  // Marcos:
-  // NO puede modificar fechas.
-  //
-  // La comprobación principal es que la actividad esté
-  // asignada al usuario actual.
-  // =========================================================
+  const isAdmin =
+    currentUserRole === 'admin'
 
-  const canEditDate =
-    !!currentUserId &&
-    activity?.assigned_to === currentUserId &&
-    (
-      currentUserRole === 'admin' ||
-      String(activity?.assigned_to_name || '')
-        .toLowerCase()
-        .includes('ursula')
+  // =====================================================
+  // ESTADOS
+  // =====================================================
+
+  const [title, setTitle] =
+    useState(activity?.title || '')
+
+  const [description, setDescription] =
+    useState(activity?.description || '')
+
+  const [assignedTo, setAssignedTo] =
+    useState(activity?.assigned_to || '')
+
+  const [dueDate, setDueDate] =
+    useState(activity?.due_date || '')
+
+  const [priority, setPriority] =
+    useState(activity?.priority || 'medium')
+
+  const [status, setStatus] =
+    useState<ActivityStatus>(
+      activity?.status || 'pending'
     )
 
-  // =========================================================
-  // CARGAR COMENTARIOS
-  // =========================================================
+  const [users, setUsers] =
+    useState<any[]>([])
 
-  const loadComments = async () => {
-    if (!activity?.id) return
+  const [saving, setSaving] =
+    useState(false)
 
-    setLoadingComments(true)
+  const [deleting, setDeleting] =
+    useState(false)
 
-    try {
-      const { data, error } = await supabase
-        .from('activity_comments')
-        .select('*')
-        .eq('activity_id', activity.id)
-        .order('created_at', { ascending: true })
-
-      if (error) {
-        console.error('Error loading comments:', error)
-        return
-      }
-
-      setComments((data || []) as ActivityComment[])
-    } catch (error) {
-      console.error('Error loading comments:', error)
-    } finally {
-      setLoadingComments(false)
-    }
-  }
+  // =====================================================
+  // CARGAR USUARIOS
+  // =====================================================
 
   useEffect(() => {
-    loadComments()
-  }, [activity?.id])
 
-  // =========================================================
-  // CAMBIAR FECHA
-  // =========================================================
-
-  const handleSaveDate = async () => {
-    if (!canEditDate) {
-      alert('No tienes permiso para modificar esta fecha.')
+    if (!isAdmin) {
       return
     }
 
-    if (!newDueDate) {
-      alert('Selecciona una fecha.')
-      return
-    }
+    const loadUsers = async () => {
 
-    setSavingDate(true)
-
-    try {
-      const { error } = await supabase
-        .from('activities')
-        .update({
-          due_date: newDueDate,
-          updated_at: new Date().toISOString(),
+      const {
+        data,
+        error,
+      } = await supabase
+        .from('user_profiles')
+        .select('id, full_name')
+        .order('full_name', {
+          ascending: true,
         })
-        .eq('id', activity.id)
-        .eq('assigned_to', currentUserId)
 
       if (error) {
-        console.error('Error updating activity date:', error)
-        alert(`No se pudo cambiar la fecha: ${error.message}`)
+        console.error(
+          'Error cargando usuarios:',
+          error
+        )
+
         return
       }
 
-      // Actualizamos el objeto local para que el modal
-      // muestre inmediatamente la nueva fecha.
-      activity.due_date = newDueDate
-
-      setEditingDate(false)
-
-      alert('Fecha actualizada correctamente.')
-    } catch (error) {
-      console.error('Error updating activity date:', error)
-      alert('Ocurrió un error al actualizar la fecha.')
-    } finally {
-      setSavingDate(false)
+      setUsers(data || [])
     }
-  }
 
-  // =========================================================
-  // APROBAR ACTIVIDAD
-  // =========================================================
+    loadUsers()
 
-  const handleApprove = async () => {
-    if (!currentUserId) {
-      alert('Debes estar autenticado')
+  }, [isAdmin])
+
+  // =====================================================
+  // CERRAR CON ESC
+  // =====================================================
+
+  useEffect(() => {
+
+    const handleKeyDown = (
+      event: KeyboardEvent
+    ) => {
+
+      if (event.key === 'Escape') {
+        onClose()
+      }
+
+    }
+
+    document.addEventListener(
+      'keydown',
+      handleKeyDown
+    )
+
+    return () => {
+      document.removeEventListener(
+        'keydown',
+        handleKeyDown
+      )
+    }
+
+  }, [onClose])
+
+  // =====================================================
+  // GUARDAR
+  // =====================================================
+
+  const handleSave = async () => {
+
+    if (!isAdmin) {
       return
     }
 
+    if (!title.trim()) {
+
+      alert(
+        'El título de la actividad es obligatorio.'
+      )
+
+      return
+    }
+
+    setSaving(true)
+
     try {
-      const { error } = await supabase
+
+      const {
+        error,
+      } = await supabase
         .from('activities')
         .update({
-          approved_by: currentUserId,
-          approved_at: new Date().toISOString(),
-          rejection_reason: null,
-          updated_at: new Date().toISOString(),
+          title:
+            title.trim(),
+
+          description:
+            description.trim() ||
+            null,
+
+          assigned_to:
+            assignedTo ||
+            null,
+
+          due_date:
+            dueDate ||
+            null,
+
+          priority,
+
+          status,
+
+          updated_at:
+            new Date().toISOString(),
         })
-        .eq('id', activity.id)
+        .eq(
+          'id',
+          activity.id
+        )
 
       if (error) {
-        console.error('Error approving activity:', error)
-        alert('Error al aprobar la actividad')
+
+        console.error(
+          'Error actualizando actividad:',
+          error
+        )
+
+        alert(
+          `No se pudo guardar la actividad: ${error.message}`
+        )
+
         return
       }
+
+      console.log(
+        '✅ Actividad actualizada:',
+        activity.id
+      )
 
       onClose()
+
     } catch (error) {
-      console.error('Error approving activity:', error)
-      alert('Error al aprobar la actividad')
+
+      console.error(
+        'Error actualizando actividad:',
+        error
+      )
+
+      alert(
+        'Ocurrió un error al guardar la actividad.'
+      )
+
+    } finally {
+
+      setSaving(false)
+
     }
   }
 
-  // =========================================================
-  // RECHAZAR ACTIVIDAD
-  // =========================================================
+  // =====================================================
+  // ELIMINAR
+  // =====================================================
 
-  const handleReject = async () => {
-    if (!currentUserId) {
-      alert('Debes estar autenticado')
+  const handleDelete = async () => {
+
+    if (!isAdmin) {
       return
     }
 
-    if (!rejectionReason.trim()) {
-      alert('Escribe un motivo de rechazo')
+    const confirmed =
+      window.confirm(
+        `¿Seguro que quieres eliminar "${activity.title}"?\n\nEsta acción no se puede deshacer.`
+      )
+
+    if (!confirmed) {
       return
     }
+
+    setDeleting(true)
 
     try {
-      const { error } = await supabase
+
+      const {
+        error,
+      } = await supabase
         .from('activities')
-        .update({
-          status: 'rejected' as ActivityStatus,
-          approved_by: currentUserId,
-          approved_at: new Date().toISOString(),
-          rejection_reason: rejectionReason.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', activity.id)
+        .delete()
+        .eq(
+          'id',
+          activity.id
+        )
 
       if (error) {
-        console.error('Error rejecting activity:', error)
-        alert('Error al rechazar la actividad')
+
+        console.error(
+          'Error eliminando actividad:',
+          error
+        )
+
+        alert(
+          `No se pudo eliminar la actividad: ${error.message}`
+        )
+
         return
       }
+
+      console.log(
+        '🗑️ Actividad eliminada:',
+        activity.id
+      )
 
       onClose()
+
     } catch (error) {
-      console.error('Error rejecting activity:', error)
-      alert('Error al rechazar la actividad')
-    }
-  }
 
-  // =========================================================
-  // AGREGAR COMENTARIO
-  // =========================================================
+      console.error(
+        'Error eliminando actividad:',
+        error
+      )
 
-  const handleAddComment = async (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault()
+      alert(
+        'Ocurrió un error al eliminar la actividad.'
+      )
 
-    if (!message.trim()) {
-      alert('Escribe algo primero')
-      return
-    }
-
-    if (!currentUserId) {
-      alert('Debes estar autenticado')
-      return
-    }
-
-    if (!activity?.id) {
-      alert('No se encontró la actividad')
-      return
-    }
-
-    setSendingComment(true)
-
-    try {
-      const { data, error } = await supabase
-        .from('activity_comments')
-        .insert({
-          activity_id: activity.id,
-          user_id: currentUserId,
-          message: message.trim(),
-        })
-        .select('*')
-        .single()
-
-      if (error) {
-        console.error('Error adding comment:', error)
-        alert(`Error al guardar comentario: ${error.message}`)
-        return
-      }
-
-      if (data) {
-        setComments((prev) => [
-          ...prev,
-          data as ActivityComment,
-        ])
-      }
-
-      setMessage('')
-    } catch (error) {
-      console.error('Error adding comment:', error)
-      alert('Error al guardar comentario')
     } finally {
-      setSendingComment(false)
+
+      setDeleting(false)
+
     }
   }
 
-  // =========================================================
-  // PERMISOS DE MODERACIÓN
-  // =========================================================
-
-  const canModerate =
-    currentUserRole === 'admin' &&
-    activity.status === 'completed' &&
-    !activity.approved_by
-
-  // =========================================================
-  // FORMATEAR FECHA
-  // =========================================================
-
-  const formatCommentDate = (date: string) => {
-    try {
-      return new Date(date).toLocaleString('es-MX', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    } catch {
-      return date
-    }
-  }
-
-  // =========================================================
-  // RENDER
-  // =========================================================
+  // =====================================================
+  // MODAL
+  // =====================================================
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
 
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-background border border-border-color shadow-xl">
+    <div
+      className="
+        fixed
+        inset-0
+        z-[9999]
+        flex
+        items-center
+        justify-center
+        p-4
+      "
+      onMouseDown={(event) => {
 
-        {/* ===================================================
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          onClose()
+        }
+
+      }}
+    >
+
+      {/* ===============================================
+          BACKDROP
+      =============================================== */}
+
+      <div
+        className="
+          absolute
+          inset-0
+          bg-black/60
+          backdrop-blur-sm
+        "
+      />
+
+      {/* ===============================================
+          VENTANA
+      =============================================== */}
+
+      <div
+        className="
+          relative
+          z-10
+          w-full
+          max-w-2xl
+          max-h-[90vh]
+          overflow-y-auto
+          rounded-2xl
+          bg-white
+          dark:bg-gray-900
+          shadow-2xl
+          border
+          border-gray-200
+          dark:border-gray-800
+        "
+      >
+
+        {/* =============================================
             HEADER
-        =================================================== */}
+        ============================================= */}
 
-        <div className="flex items-start justify-between p-6 border-b border-border-color">
+        <div
+          className="
+            sticky
+            top-0
+            z-20
+            flex
+            items-center
+            justify-between
+            px-6
+            py-4
+            border-b
+            border-gray-200
+            dark:border-gray-800
+            bg-white
+            dark:bg-gray-900
+          "
+        >
 
-          <div className="pr-4">
+          <div>
 
-            <h2 className="text-xl font-bold text-foreground">
-              {activity.title}
+            <h2
+              className="
+                text-lg
+                font-bold
+                text-gray-900
+                dark:text-white
+              "
+            >
+              {isAdmin
+                ? 'Editar actividad'
+                : 'Detalle de actividad'}
             </h2>
 
-            {activity.description && (
-              <p className="mt-2 text-sm text-foreground/60">
-                {activity.description}
-              </p>
-            )}
+            <p
+              className="
+                mt-0.5
+                text-xs
+                text-gray-500
+              "
+            >
+              ID: {activity.id}
+            </p>
 
           </div>
 
           <button
+            type="button"
             onClick={onClose}
-            className="text-foreground/60 hover:text-foreground text-xl"
-            aria-label="Cerrar"
+            className="
+              flex
+              h-9
+              w-9
+              items-center
+              justify-center
+              rounded-lg
+              text-gray-500
+              hover:bg-gray-100
+              hover:text-gray-900
+              dark:hover:bg-gray-800
+              dark:hover:text-white
+              transition
+            "
           >
-            ✕
+
+            <X size={20} />
+
           </button>
 
         </div>
 
-        {/* ===================================================
+        {/* =============================================
             CONTENIDO
-        =================================================== */}
-
-        <div className="p-6">
-
-          {/* =================================================
-              INFORMACIÓN
-          ================================================= */}
-
-          <div className="grid grid-cols-2 gap-4 mb-6">
-
-            {/* ASIGNADO */}
-
-            <div>
-              <p className="text-foreground/60 text-sm">
-                Asignado a
-              </p>
-
-              <p className="font-semibold">
-                {activity.assigned_to_name ||
-                  activity.assigned_to}
-              </p>
-            </div>
-
-            {/* VENCIMIENTO */}
-
-            <div>
-
-              <div className="flex items-center justify-between">
-
-                <p className="text-foreground/60 text-sm">
-                  Vencimiento
-                </p>
-
-                {canEditDate && !editingDate && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewDueDate(
-                        activity?.due_date
-                          ? String(activity.due_date).split('T')[0]
-                          : ''
-                      )
-                      setEditingDate(true)
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold"
-                  >
-                    Cambiar fecha
-                  </button>
-                )}
-
-              </div>
-
-              {editingDate ? (
-
-                <div className="mt-2 space-y-2">
-
-                  <div className="flex items-center gap-2">
-
-                    <CalendarDays
-                      size={18}
-                      className="text-blue-500"
-                    />
-
-                    <input
-                      type="date"
-                      value={newDueDate}
-                      onChange={(e) =>
-                        setNewDueDate(e.target.value)
-                      }
-                      disabled={savingDate}
-                      className="flex-1 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
-                    />
-
-                  </div>
-
-                  <div className="flex gap-2">
-
-                    <button
-                      type="button"
-                      onClick={handleSaveDate}
-                      disabled={
-                        savingDate ||
-                        !newDueDate
-                      }
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-md text-xs font-semibold hover:bg-green-700 disabled:opacity-50"
-                    >
-                      <Check size={14} />
-                      {savingDate
-                        ? 'Guardando...'
-                        : 'Guardar'}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEditingDate(false)
-                      }
-                      disabled={savingDate}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white rounded-md text-xs font-semibold hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50"
-                    >
-                      <X size={14} />
-                      Cancelar
-                    </button>
-
-                  </div>
-
-                </div>
-
-              ) : (
-
-                <p className="font-semibold">
-                  {activity.due_date || 'Sin fecha'}
-                </p>
-
-              )}
-
-            </div>
-
-            {/* PRIORIDAD */}
-
-            <div>
-              <p className="text-foreground/60 text-sm">
-                Prioridad
-              </p>
-
-              <p className="font-semibold capitalize">
-                {activity.priority}
-              </p>
-            </div>
-
-            {/* ESTADO */}
-
-            <div>
-
-              <p className="text-foreground/60 text-sm">
-                Estado
-              </p>
-
-              {statusConfig[
-                activity.status as ActivityStatus
-              ] ? (
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    statusConfig[
-                      activity.status as ActivityStatus
-                    ].badge
-                  }`}
-                >
-
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      statusConfig[
-                        activity.status as ActivityStatus
-                      ].dot
-                    }`}
-                  />
-
-                  {
-                    statusConfig[
-                      activity.status as ActivityStatus
-                    ].label
-                  }
-
-                </span>
-              ) : (
-                <span className="text-sm">
-                  {activity.status}
-                </span>
-              )}
-
-            </div>
-
-          </div>
-
-          {/* =================================================
-              AVISO DE EDICIÓN
-          ================================================= */}
-
-          {canEditDate && (
-            <div className="mb-5 rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
-
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                Puedes modificar la fecha de esta actividad
-                desde aquí para organizar grabaciones,
-                publicaciones o cambios de contenido.
-              </p>
-
-            </div>
-          )}
-
-          {/* =================================================
-              NOTAS
-          ================================================= */}
-
-          {activity.result_notes && (
-            <div className="p-4 bg-yellow-500/10 rounded border-l-4 border-yellow-400 mb-4">
-
-              <p className="text-sm">
-                <strong>Notas:</strong>{' '}
-                {activity.result_notes}
-              </p>
-
-            </div>
-          )}
-
-          {/* =================================================
-              MOTIVO DE RECHAZO
-          ================================================= */}
-
-          {activity.status === 'rejected' &&
-            activity.rejection_reason && (
-              <div className="p-4 bg-red-500/10 rounded border-l-4 border-red-400 mb-4">
-
-                <p className="text-sm">
-                  <strong>
-                    Motivo de rechazo:
-                  </strong>{' '}
-                  {activity.rejection_reason}
-                </p>
-
-              </div>
-            )}
-
-          {/* =================================================
-              ACTIVIDAD APROBADA
-          ================================================= */}
-
-          {activity.approved_by &&
-            activity.status !== 'rejected' && (
-              <div className="p-4 bg-green-500/10 rounded border-l-4 border-green-400 mb-4">
-
-                <p className="text-sm font-semibold">
-                  Aprobada
-                  {activity.approved_by_name
-                    ? ` por ${activity.approved_by_name}`
-                    : ''}
-                </p>
-
-              </div>
-            )}
-
-          {/* =================================================
-              COMENTARIOS
-          ================================================= */}
-
-          <div className="mt-6 pt-6 border-t border-border-color">
-
-            <div className="flex items-center justify-between mb-4">
-
-              <div>
-
-                <h3 className="text-lg font-bold">
-                  Actualizaciones
-                </h3>
-
-                <p className="text-sm text-foreground/60 mt-1">
-                  Historial de comentarios de esta actividad
-                </p>
-
-              </div>
-
-              <span className="text-xs bg-foreground/10 px-2 py-1 rounded-full">
-                {comments.length}
-              </span>
-
-            </div>
-
-            <div className="space-y-3 mb-5">
-
-              {loadingComments ? (
-
-                <div className="py-6 text-center text-sm text-foreground/60">
-                  Cargando actualizaciones...
-                </div>
-
-              ) : comments.length === 0 ? (
-
-                <div className="py-6 text-center border border-dashed border-border-color rounded-lg">
-
-                  <p className="text-sm text-foreground/60">
-                    No hay actualizaciones todavía.
-                  </p>
-
-                  <p className="text-xs text-foreground/40 mt-1">
-                    Agrega la primera actualización de esta actividad.
-                  </p>
-
-                </div>
-
-              ) : (
-
-                comments.map((comment) => (
-
-                  <div
-                    key={comment.id}
-                    className="p-3 rounded-lg bg-foreground/5 border border-border-color"
-                  >
-
-                    <div className="flex items-center justify-between gap-3 mb-2">
-
-                      <div className="flex items-center gap-2">
-
-                        <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-
-                          {(
-                            comment.user_name ||
-                            comment.user_id ||
-                            'U'
-                          )
-                            .charAt(0)
-                            .toUpperCase()}
-
-                        </div>
-
-                        <span className="text-sm font-semibold">
-
-                          {comment.user_name ||
-                            (comment.user_id
-                              ? `Usuario ${comment.user_id.slice(
-                                  0,
-                                  8
-                                )}`
-                              : 'Usuario')}
-
-                        </span>
-
-                      </div>
-
-                      <span className="text-xs text-foreground/50">
-
-                        {formatCommentDate(
-                          comment.created_at
-                        )}
-
-                      </span>
-
-                    </div>
-
-                    <p className="text-sm text-foreground/80 whitespace-pre-wrap break-words">
-                      {comment.message}
-                    </p>
-
-                  </div>
-
-                ))
-
-              )}
-
-            </div>
-
-            {/* COMENTARIO */}
-
-            <form
-              onSubmit={handleAddComment}
-              className="flex gap-2"
+        ============================================= */}
+
+        <div className="p-6 space-y-5">
+
+          {/* ===========================================
+              TÍTULO
+          =========================================== */}
+
+          <div>
+
+            <label
+              className="
+                mb-2
+                block
+                text-sm
+                font-semibold
+                text-gray-700
+                dark:text-gray-300
+              "
             >
+              Actividad
+            </label>
+
+            {isAdmin ? (
 
               <input
                 type="text"
-                name="comment"
-                value={message}
+                value={title}
                 onChange={(e) =>
-                  setMessage(e.target.value)
+                  setTitle(e.target.value)
                 }
-                maxLength={500}
-                placeholder="Añade una actualización..."
-                disabled={sendingComment}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="
+                  w-full
+                  rounded-lg
+                  border
+                  border-gray-300
+                  dark:border-gray-700
+                  bg-white
+                  dark:bg-gray-800
+                  px-3
+                  py-2.5
+                  text-sm
+                  text-gray-900
+                  dark:text-white
+                  outline-none
+                  focus:ring-2
+                  focus:ring-blue-500
+                "
               />
 
-              <button
-                type="submit"
-                disabled={
-                  sendingComment ||
-                  !message.trim()
-                }
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {sendingComment
-                  ? 'Enviando...'
-                  : 'Enviar'}
-              </button>
+            ) : (
 
-            </form>
+              <div
+                className="
+                  rounded-lg
+                  bg-gray-50
+                  dark:bg-gray-800/60
+                  px-4
+                  py-3
+                  text-sm
+                  font-semibold
+                  text-gray-900
+                  dark:text-white
+                "
+              >
+                {activity.title}
+              </div>
+
+            )}
 
           </div>
 
-          {/* =================================================
-              CAJA DE RECHAZO
-          ================================================= */}
+          {/* ===========================================
+              DESCRIPCIÓN
+          =========================================== */}
 
-          {showRejectBox && (
-            <div className="mb-4 mt-6">
+          <div>
+
+            <label
+              className="
+                mb-2
+                flex
+                items-center
+                gap-2
+                text-sm
+                font-semibold
+                text-gray-700
+                dark:text-gray-300
+              "
+            >
+
+              <FileText size={15} />
+
+              Descripción
+
+            </label>
+
+            {isAdmin ? (
 
               <textarea
-                value={rejectionReason}
+                value={description}
                 onChange={(e) =>
-                  setRejectionReason(
+                  setDescription(
                     e.target.value
                   )
                 }
-                placeholder="Motivo del rechazo..."
-                rows={3}
-                className="w-full border border-border-color rounded p-2 text-sm bg-background text-foreground"
+                rows={4}
+                className="
+                  w-full
+                  resize-none
+                  rounded-lg
+                  border
+                  border-gray-300
+                  dark:border-gray-700
+                  bg-white
+                  dark:bg-gray-800
+                  px-3
+                  py-2.5
+                  text-sm
+                  text-gray-900
+                  dark:text-white
+                  outline-none
+                  focus:ring-2
+                  focus:ring-blue-500
+                "
+                placeholder="Descripción de la actividad..."
               />
 
-            </div>
-          )}
+            ) : (
 
-          {/* =================================================
-              BOTONES
-          ================================================= */}
+              <div
+                className="
+                  rounded-lg
+                  bg-gray-50
+                  dark:bg-gray-800/60
+                  px-4
+                  py-3
+                  text-sm
+                  text-gray-700
+                  dark:text-gray-300
+                  whitespace-pre-wrap
+                "
+              >
+                {activity.description ||
+                  'Sin descripción'}
+              </div>
 
-          <div className="flex gap-3 justify-end flex-wrap mt-6">
-
-            {canModerate && (
-              <>
-
-                {showRejectBox ? (
-
-                  <button
-                    onClick={handleReject}
-                    disabled={
-                      !rejectionReason.trim()
-                    }
-                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold disabled:opacity-50"
-                  >
-                    Confirmar rechazo
-                  </button>
-
-                ) : (
-
-                  <button
-                    onClick={() =>
-                      setShowRejectBox(true)
-                    }
-                    className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold"
-                  >
-                    Rechazar
-                  </button>
-
-                )}
-
-                <button
-                  onClick={handleApprove}
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
-                >
-                  Aprobar
-                </button>
-
-              </>
             )}
 
+          </div>
+
+          {/* ===========================================
+              GRID
+          =========================================== */}
+
+          <div
+            className="
+              grid
+              grid-cols-1
+              md:grid-cols-2
+              gap-4
+            "
+          >
+
+            {/* =========================================
+                ASIGNADO
+            ========================================= */}
+
+            <div>
+
+              <label
+                className="
+                  mb-2
+                  flex
+                  items-center
+                  gap-2
+                  text-sm
+                  font-semibold
+                  text-gray-700
+                  dark:text-gray-300
+                "
+              >
+
+                <User size={15} />
+
+                Asignado a
+
+              </label>
+
+              {isAdmin ? (
+
+                <select
+                  value={assignedTo}
+                  onChange={(e) =>
+                    setAssignedTo(
+                      e.target.value
+                    )
+                  }
+                  className="
+                    w-full
+                    rounded-lg
+                    border
+                    border-gray-300
+                    dark:border-gray-700
+                    bg-white
+                    dark:bg-gray-800
+                    px-3
+                    py-2.5
+                    text-sm
+                    text-gray-900
+                    dark:text-white
+                    outline-none
+                    focus:ring-2
+                    focus:ring-blue-500
+                  "
+                >
+
+                  <option value="">
+                    Sin asignar
+                  </option>
+
+                  {users.map(
+                    (user) => (
+
+                      <option
+                        key={user.id}
+                        value={user.id}
+                      >
+                        {user.full_name}
+                      </option>
+
+                    )
+                  )}
+
+                </select>
+
+              ) : (
+
+                <div
+                  className="
+                    rounded-lg
+                    bg-gray-50
+                    dark:bg-gray-800/60
+                    px-4
+                    py-2.5
+                    text-sm
+                    text-gray-700
+                    dark:text-gray-300
+                  "
+                >
+                  {activity.assigned_to_name ||
+                    activity.assigned_to ||
+                    'Sin asignar'}
+                </div>
+
+              )}
+
+            </div>
+
+            {/* =========================================
+                FECHA
+            ========================================= */}
+
+            <div>
+
+              <label
+                className="
+                  mb-2
+                  flex
+                  items-center
+                  gap-2
+                  text-sm
+                  font-semibold
+                  text-gray-700
+                  dark:text-gray-300
+                "
+              >
+
+                <Calendar size={15} />
+
+                Fecha de vencimiento
+
+              </label>
+
+              {isAdmin ? (
+
+                <input
+                  type="date"
+                  value={
+                    dueDate
+                      ? String(
+                          dueDate
+                        ).slice(
+                          0,
+                          10
+                        )
+                      : ''
+                  }
+                  onChange={(e) =>
+                    setDueDate(
+                      e.target.value
+                    )
+                  }
+                  className="
+                    w-full
+                    rounded-lg
+                    border
+                    border-gray-300
+                    dark:border-gray-700
+                    bg-white
+                    dark:bg-gray-800
+                    px-3
+                    py-2.5
+                    text-sm
+                    text-gray-900
+                    dark:text-white
+                    outline-none
+                    focus:ring-2
+                    focus:ring-blue-500
+                  "
+                />
+
+              ) : (
+
+                <div
+                  className="
+                    rounded-lg
+                    bg-gray-50
+                    dark:bg-gray-800/60
+                    px-4
+                    py-2.5
+                    text-sm
+                    text-gray-700
+                    dark:text-gray-300
+                  "
+                >
+                  {activity.due_date ||
+                    'Sin fecha'}
+                </div>
+
+              )}
+
+            </div>
+
+            {/* =========================================
+                PRIORIDAD
+            ========================================= */}
+
+            <div>
+
+              <label
+                className="
+                  mb-2
+                  flex
+                  items-center
+                  gap-2
+                  text-sm
+                  font-semibold
+                  text-gray-700
+                  dark:text-gray-300
+                "
+              >
+
+                <Flag size={15} />
+
+                Prioridad
+
+              </label>
+
+              {isAdmin ? (
+
+                <select
+                  value={priority}
+                  onChange={(e) =>
+                    setPriority(
+                      e.target.value
+                    )
+                  }
+                  className="
+                    w-full
+                    rounded-lg
+                    border
+                    border-gray-300
+                    dark:border-gray-700
+                    bg-white
+                    dark:bg-gray-800
+                    px-3
+                    py-2.5
+                    text-sm
+                    text-gray-900
+                    dark:text-white
+                    outline-none
+                    focus:ring-2
+                    focus:ring-blue-500
+                  "
+                >
+
+                  <option value="low">
+                    Baja
+                  </option>
+
+                  <option value="medium">
+                    Media
+                  </option>
+
+                  <option value="high">
+                    Alta
+                  </option>
+
+                  <option value="urgent">
+                    Urgente
+                  </option>
+
+                </select>
+
+              ) : (
+
+                <div
+                  className="
+                    rounded-lg
+                    bg-gray-50
+                    dark:bg-gray-800/60
+                    px-4
+                    py-2.5
+                    text-sm
+                    text-gray-700
+                    dark:text-gray-300
+                  "
+                >
+                  {activity.priority}
+                </div>
+
+              )}
+
+            </div>
+
+            {/* =========================================
+                ESTADO
+            ========================================= */}
+
+            <div>
+
+              <label
+                className="
+                  mb-2
+                  block
+                  text-sm
+                  font-semibold
+                  text-gray-700
+                  dark:text-gray-300
+                "
+              >
+                Estado
+              </label>
+
+              {isAdmin ? (
+
+                <select
+                  value={status}
+                  onChange={(e) =>
+                    setStatus(
+                      e.target.value as ActivityStatus
+                    )
+                  }
+                  className="
+                    w-full
+                    rounded-lg
+                    border
+                    border-gray-300
+                    dark:border-gray-700
+                    bg-white
+                    dark:bg-gray-800
+                    px-3
+                    py-2.5
+                    text-sm
+                    text-gray-900
+                    dark:text-white
+                    outline-none
+                    focus:ring-2
+                    focus:ring-blue-500
+                  "
+                >
+
+                  <option value="pending">
+                    Pendiente
+                  </option>
+
+                  <option value="in_progress">
+                    En progreso
+                  </option>
+
+                  <option value="completed">
+                    Completada
+                  </option>
+
+                  <option value="rejected">
+                    Rechazada
+                  </option>
+
+                </select>
+
+              ) : (
+
+                <div
+                  className="
+                    rounded-lg
+                    bg-gray-50
+                    dark:bg-gray-800/60
+                    px-4
+                    py-2.5
+                    text-sm
+                    text-gray-700
+                    dark:text-gray-300
+                  "
+                >
+                  {activity.status}
+                </div>
+
+              )}
+
+            </div>
+
+          </div>
+
+          {/* ===========================================
+              INFORMACIÓN EXTRA
+          =========================================== */}
+
+          <div
+            className="
+              rounded-lg
+              border
+              border-gray-200
+              dark:border-gray-800
+              bg-gray-50
+              dark:bg-gray-800/40
+              p-4
+            "
+          >
+
+            <div
+              className="
+                grid
+                grid-cols-1
+                md:grid-cols-2
+                gap-3
+                text-xs
+              "
+            >
+
+              <div>
+
+                <span className="text-gray-500">
+                  Creada:
+                </span>
+
+                <span
+                  className="
+                    ml-2
+                    text-gray-700
+                    dark:text-gray-300
+                  "
+                >
+                  {activity.created_at
+                    ? new Date(
+                        activity.created_at
+                      ).toLocaleString(
+                        'es-MX'
+                      )
+                    : '—'}
+                </span>
+
+              </div>
+
+              <div>
+
+                <span className="text-gray-500">
+                  Actualizada:
+                </span>
+
+                <span
+                  className="
+                    ml-2
+                    text-gray-700
+                    dark:text-gray-300
+                  "
+                >
+                  {activity.updated_at
+                    ? new Date(
+                        activity.updated_at
+                      ).toLocaleString(
+                        'es-MX'
+                      )
+                    : '—'}
+                </span>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        {/* =============================================
+            FOOTER
+        ============================================= */}
+
+        <div
+          className="
+            sticky
+            bottom-0
+            flex
+            items-center
+            justify-between
+            gap-3
+            border-t
+            border-gray-200
+            dark:border-gray-800
+            bg-white
+            dark:bg-gray-900
+            px-6
+            py-4
+          "
+        >
+
+          {/* ELIMINAR */}
+
+          {isAdmin ? (
+
             <button
+              type="button"
+              onClick={handleDelete}
+              disabled={
+                saving ||
+                deleting
+              }
+              className="
+                inline-flex
+                items-center
+                gap-2
+                rounded-lg
+                px-4
+                py-2.5
+                text-sm
+                font-semibold
+                text-red-600
+                hover:bg-red-50
+                dark:hover:bg-red-950/30
+                disabled:opacity-50
+                transition
+              "
+            >
+
+              <Trash2 size={17} />
+
+              {deleting
+                ? 'Eliminando...'
+                : 'Eliminar'}
+
+            </button>
+
+          ) : (
+
+            <div />
+
+          )}
+
+          {/* BOTONES */}
+
+          <div className="flex items-center gap-3">
+
+            <button
+              type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-foreground/10 rounded hover:bg-foreground/20 font-semibold"
+              disabled={
+                saving ||
+                deleting
+              }
+              className="
+                rounded-lg
+                border
+                border-gray-300
+                dark:border-gray-700
+                px-4
+                py-2.5
+                text-sm
+                font-semibold
+                text-gray-700
+                dark:text-gray-300
+                hover:bg-gray-50
+                dark:hover:bg-gray-800
+                disabled:opacity-50
+                transition
+              "
             >
               Cerrar
             </button>
+
+            {isAdmin && (
+
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={
+                  saving ||
+                  deleting
+                }
+                className="
+                  inline-flex
+                  items-center
+                  gap-2
+                  rounded-lg
+                  bg-blue-600
+                  px-4
+                  py-2.5
+                  text-sm
+                  font-semibold
+                  text-white
+                  hover:bg-blue-700
+                  disabled:opacity-50
+                  transition
+                "
+              >
+
+                <Save size={17} />
+
+                {saving
+                  ? 'Guardando...'
+                  : 'Guardar cambios'}
+
+              </button>
+
+            )}
 
           </div>
 

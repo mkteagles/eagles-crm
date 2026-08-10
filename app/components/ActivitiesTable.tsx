@@ -1,43 +1,138 @@
 
 'use client'
 
-import { useActivities, useCurrentUser } from '@/lib/marketing-hooks'
+import {
+  useActivities,
+  useCurrentUser,
+} from '@/lib/marketing-hooks'
+
 import { createClient } from '@/lib/supabase/client'
+
 import { ActivityStatus } from '@/lib/marketing-types'
+
 import {
   getStatusStyles,
   getPriorityStyles,
 } from '@/lib/marketing-ui'
-import { Eye, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+
+import {
+  Eye,
+  Trash2,
+  Sparkles,
+} from 'lucide-react'
+
+import { useMemo, useState } from 'react'
+
 import ActivityDetailModal from './ActivityDetailModal'
 
-export default function ActivitiesTable() {
-  const { activities, loading } = useActivities()
-  const { user } = useCurrentUser()
+// =========================================================
+// TIPOS
+// =========================================================
 
-  const [selectedActivity, setSelectedActivity] =
-    useState<any | null>(null)
+type StatusFilter =
+  | 'all'
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+
+interface ActivitiesTableProps {
+  statusFilter?: StatusFilter
+}
+
+// =========================================================
+// COMPONENTE
+// =========================================================
+
+export default function ActivitiesTable({
+  statusFilter = 'all',
+}: ActivitiesTableProps) {
+
+  // =======================================================
+  // ACTIVIDADES
+  // =======================================================
+
+  const {
+    activities,
+    loading,
+    newActivityIds,
+    markActivityAsSeen,
+  } = useActivities()
+
+  // =======================================================
+  // USUARIO
+  // =======================================================
+
+  const {
+    user,
+  } = useCurrentUser()
+
+  // =======================================================
+  // ACTIVIDAD SELECCIONADA
+  // =======================================================
+
+  const [
+    selectedActivity,
+    setSelectedActivity,
+  ] = useState<any | null>(null)
+
+  // =======================================================
+  // SUPABASE
+  // =======================================================
 
   const supabase = createClient()
 
-  // =========================================================
+  // =======================================================
+  // FILTRAR ACTIVIDADES
+  // =======================================================
+
+  const filteredActivities = useMemo(() => {
+
+    if (statusFilter === 'all') {
+      return activities
+    }
+
+    return activities.filter(
+      (activity: any) =>
+        activity.status === statusFilter
+    )
+
+  }, [
+    activities,
+    statusFilter,
+  ])
+
+  // =======================================================
   // CAMBIAR ESTADO
-  // =========================================================
+  // =======================================================
 
   const handleStatusChange = async (
     activityId: number,
     newStatus: ActivityStatus
   ) => {
-    const { error } = await supabase
+
+    const previousActivity =
+      activities.find(
+        (activity: any) =>
+          Number(activity.id) ===
+          Number(activityId)
+      )
+
+    const {
+      error,
+    } = await supabase
       .from('activities')
       .update({
         status: newStatus,
-        updated_at: new Date().toISOString(),
+        updated_at:
+          new Date().toISOString(),
       })
-      .eq('id', activityId)
+      .eq(
+        'id',
+        activityId
+      )
 
     if (error) {
+
       console.error(
         'Error actualizando actividad:',
         error
@@ -46,38 +141,63 @@ export default function ActivitiesTable() {
       alert(
         `No se pudo actualizar la actividad: ${error.message}`
       )
+
+      return
     }
+
+    console.log(
+      '✅ Estado actualizado:',
+      {
+        activityId,
+        oldStatus:
+          previousActivity?.status,
+        newStatus,
+      }
+    )
   }
 
-  // =========================================================
+  // =======================================================
   // ELIMINAR ACTIVIDAD
-  // SOLO ADMIN
-  // =========================================================
+  // =======================================================
 
   const handleDeleteActivity = async (
     activityId: number,
     activityTitle: string
   ) => {
-    // Seguridad adicional en frontend
-    if (user?.role !== 'admin') {
+
+    // -----------------------------------------------------
+    // SEGURIDAD FRONTEND
+    // -----------------------------------------------------
+
+    if (
+      user?.role !== 'admin'
+    ) {
       return
     }
 
-    const confirmed = window.confirm(
-      `¿Seguro que quieres eliminar la actividad "${activityTitle}"?\n\nEsta acción no se puede deshacer.`
-    )
+    const confirmed =
+      window.confirm(
+        `¿Seguro que quieres eliminar la actividad "${activityTitle}"?\n\nEsta acción no se puede deshacer.`
+      )
 
     if (!confirmed) {
       return
     }
 
     try {
-      const { error } = await supabase
+
+      const {
+        error,
+      } = await supabase
         .from('activities')
         .delete()
-        .eq('id', activityId)
+        .eq(
+          'id',
+          activityId
+        )
 
       if (error) {
+
         console.error(
           'Error eliminando actividad:',
           error
@@ -90,13 +210,29 @@ export default function ActivitiesTable() {
         return
       }
 
-      // Si la actividad estaba abierta en el modal,
-      // cerramos el modal.
-      if (selectedActivity?.id === activityId) {
-        setSelectedActivity(null)
+      // ---------------------------------------------------
+      // LIMPIAR ACTIVIDAD ABIERTA
+      // ---------------------------------------------------
+
+      if (
+        Number(
+          selectedActivity?.id
+        ) ===
+        Number(activityId)
+      ) {
+
+        setSelectedActivity(
+          null
+        )
       }
 
+      console.log(
+        '🗑️ Actividad eliminada:',
+        activityId
+      )
+
     } catch (error) {
+
       console.error(
         'Error eliminando actividad:',
         error
@@ -108,37 +244,87 @@ export default function ActivitiesTable() {
     }
   }
 
-  // =========================================================
+  // =======================================================
+  // ABRIR ACTIVIDAD
+  // =======================================================
+
+  const handleOpenActivity = (
+    activity: any
+  ) => {
+
+    // -----------------------------------------------------
+    // QUITAR INDICADOR "NUEVA"
+    // -----------------------------------------------------
+
+    markActivityAsSeen(
+      Number(activity.id)
+    )
+
+    // -----------------------------------------------------
+    // ABRIR MODAL
+    // -----------------------------------------------------
+
+    setSelectedActivity(
+      activity
+    )
+  }
+
+  // =======================================================
   // LOADING
-  // =========================================================
+  // =======================================================
 
   if (loading) {
+
     return (
-      <div className="py-8 text-center text-foreground/60">
-        Cargando actividades...
+      <div className="flex items-center justify-center py-12">
+
+        <p className="text-gray-500 dark:text-gray-400">
+          Cargando actividades...
+        </p>
+
       </div>
     )
   }
 
-  // =========================================================
-  // SIN ACTIVIDADES
-  // =========================================================
+  // =======================================================
+  // SIN ACTIVIDADES PARA EL FILTRO
+  // =======================================================
 
-  if (activities.length === 0) {
+  if (
+    filteredActivities.length === 0
+  ) {
+
     return (
-      <div className="py-8 text-center text-foreground/60">
-        Sin actividades
+      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-surface p-10 text-center">
+
+        <div className="text-4xl mb-3">
+          📋
+        </div>
+
+        <h3 className="font-semibold text-gray-900 dark:text-white">
+          No hay actividades
+        </h3>
+
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+
+          {statusFilter === 'all'
+            ? 'Todavía no hay actividades registradas.'
+            : 'No hay actividades con este estado.'}
+
+        </p>
+
       </div>
     )
   }
 
-  // =========================================================
+  // =======================================================
   // TABLA
-  // =========================================================
+  // =======================================================
 
   return (
     <>
-      <div className="overflow-x-auto bg-surface rounded-lg shadow mb-6">
+
+      <div className="w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800 bg-surface shadow-sm">
 
         <table className="w-full">
 
@@ -179,206 +365,357 @@ export default function ActivitiesTable() {
           </thead>
 
           {/* =================================================
-              ACTIVIDADES
+              ACTIVIDADES FILTRADAS
           ================================================= */}
 
           <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
 
-            {activities.map((activity: any) => {
+            {filteredActivities.map(
+              (
+                activity: any
+              ) => {
 
-              /*
-               * Usamos estas funciones para evitar que un valor
-               * inesperado enviado por Supabase rompa la UI.
-               */
+                // ------------------------------------------------
+                // NUEVA
+                // ------------------------------------------------
 
-              const priorityStyles =
-                getPriorityStyles(
-                  activity.priority
-                )
+                const isNew =
+                  newActivityIds.includes(
+                    Number(activity.id)
+                  )
 
-              const statusStyles =
-                getStatusStyles(
-                  activity.status
-                )
+                // ------------------------------------------------
+                // ESTILOS
+                // ------------------------------------------------
 
-              return (
-                <tr
-                  key={activity.id}
-                  className="hover:bg-gray-50 dark:hover:bg-gray-900/50"
-                >
+                const priorityStyles =
+                  getPriorityStyles(
+                    activity.priority
+                  )
 
-                  {/* =========================================
-                      ACTIVIDAD
-                  ========================================= */}
+                const statusStyles =
+                  getStatusStyles(
+                    activity.status
+                  )
 
-                  <td className="px-4 py-4">
+                return (
 
-                    <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                      {activity.title}
-                    </div>
+                  <tr
+                    key={
+                      activity.id
+                    }
+                    className={`
+                      transition-all
+                      duration-300
+                      ${
+                        isNew
+                          ? `
+                            bg-blue-50
+                            dark:bg-blue-950/20
+                            ring-1
+                            ring-inset
+                            ring-blue-400/40
+                          `
+                          : `
+                            hover:bg-gray-50
+                            dark:hover:bg-gray-900/50
+                          `
+                      }
+                    `}
+                  >
 
-                    {activity.description && (
-                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        {activity.description}
+                    {/* =========================================
+                        ACTIVIDAD
+                    ========================================= */}
+
+                    <td className="px-4 py-4">
+
+                      <div className="flex items-start gap-3">
+
+                        {isNew && (
+
+                          <div className="flex-shrink-0 mt-0.5">
+
+                            <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase tracking-wide shadow-sm">
+
+                              <Sparkles
+                                size={11}
+                              />
+
+                              Nueva
+
+                            </div>
+
+                          </div>
+
+                        )}
+
+                        <div className="min-w-0">
+
+                          <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+
+                            {
+                              activity.title
+                            }
+
+                          </div>
+
+                          {activity.description && (
+
+                            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+
+                              {
+                                activity.description
+                              }
+
+                            </div>
+
+                          )}
+
+                        </div>
+
                       </div>
-                    )}
 
-                  </td>
+                    </td>
 
-                  {/* =========================================
-                      ASIGNADO
-                  ========================================= */}
+                    {/* =========================================
+                        ASIGNADO
+                    ========================================= */}
 
-                  <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
+                    <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
 
-                    {activity.assigned_to_name ||
-                      activity.assigned_to ||
-                      'Sin asignar'}
+                      {
+                        activity.assigned_to_name ||
+                        activity.assigned_to ||
+                        'Sin asignar'
+                      }
 
-                  </td>
+                    </td>
 
-                  {/* =========================================
-                      VENCIMIENTO
-                  ========================================= */}
+                    {/* =========================================
+                        VENCIMIENTO
+                    ========================================= */}
 
-                  <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
+                    <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
 
-                    {activity.due_date ||
-                      'Sin fecha'}
+                      {
+                        activity.due_date ||
+                        'Sin fecha'
+                      }
 
-                  </td>
+                    </td>
 
-                  {/* =========================================
-                      PRIORIDAD
-                  ========================================= */}
+                    {/* =========================================
+                        PRIORIDAD
+                    ========================================= */}
 
-                  <td className="px-4 py-4">
-
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${priorityStyles.badge}`}
-                    >
-                      {priorityStyles.label}
-                    </span>
-
-                  </td>
-
-                  {/* =========================================
-                      ESTADO
-                  ========================================= */}
-
-                  <td className="px-4 py-4">
-
-                    {user?.role === 'executor' &&
-                    activity.assigned_to === user.id ? (
-
-                      <select
-                        value={activity.status}
-                        onChange={(e) =>
-                          handleStatusChange(
-                            activity.id,
-                            e.target
-                              .value as ActivityStatus
-                          )
-                        }
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer border-0 outline-none ${statusStyles.badge}`}
-                      >
-
-                        <option value="pending">
-                          Pendiente
-                        </option>
-
-                        <option value="in_progress">
-                          En progreso
-                        </option>
-
-                        <option value="completed">
-                          Completada
-                        </option>
-
-                        <option value="rejected">
-                          Rechazada
-                        </option>
-
-                      </select>
-
-                    ) : (
+                    <td className="px-4 py-4">
 
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${statusStyles.badge}`}
+                        className={`
+                          inline-flex
+                          items-center
+                          px-2.5
+                          py-1
+                          rounded-full
+                          text-xs
+                          font-semibold
+                          ${priorityStyles.badge}
+                        `}
                       >
 
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${statusStyles.dot}`}
-                        />
-
-                        {statusStyles.label}
+                        {
+                          priorityStyles.label
+                        }
 
                       </span>
 
-                    )}
+                    </td>
 
-                  </td>
+                    {/* =========================================
+                        ESTADO
+                    ========================================= */}
 
-                  {/* =========================================
-                      ACCIONES
-                  ========================================= */}
+                    <td className="px-4 py-4">
 
-                  <td className="px-4 py-4 text-center">
+                      {user?.role ===
+                        'executor' &&
+                      activity.assigned_to ===
+                        user.id ? (
 
-                    <div className="flex items-center justify-center gap-3">
+                        <select
+                          value={
+                            activity.status
+                          }
+                          onChange={(
+                            e
+                          ) =>
+                            handleStatusChange(
+                              activity.id,
+                              e.target.value as ActivityStatus
+                            )
+                          }
+                          className={`
+                            px-2.5
+                            py-1
+                            rounded-full
+                            text-xs
+                            font-semibold
+                            cursor-pointer
+                            border-0
+                            outline-none
+                            ${statusStyles.badge}
+                          `}
+                        >
 
-                      {/* VER */}
+                          <option value="pending">
+                            Pendiente
+                          </option>
 
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedActivity(
-                            activity
-                          )
-                        }
-                        className="text-blue-500 hover:text-blue-400 text-sm font-semibold inline-flex items-center justify-center gap-1 transition"
-                      >
+                          <option value="in_progress">
+                            En progreso
+                          </option>
 
-                        <Eye size={16} />
+                          <option value="completed">
+                            Completada
+                          </option>
 
-                        Ver
+                          <option value="rejected">
+                            Rechazada
+                          </option>
 
-                      </button>
+                        </select>
 
-                      {/* =====================================
-                          ELIMINAR
-                          SOLO ADMIN
-                      ===================================== */}
+                      ) : (
 
-                      {user?.role === 'admin' && (
+                        <span
+                          className={`
+                            inline-flex
+                            items-center
+                            gap-1.5
+                            px-2.5
+                            py-1
+                            rounded-full
+                            text-xs
+                            font-semibold
+                            ${statusStyles.badge}
+                          `}
+                        >
+
+                          <span
+                            className={`
+                              w-1.5
+                              h-1.5
+                              rounded-full
+                              ${statusStyles.dot}
+                            `}
+                          />
+
+                          {
+                            statusStyles.label
+                          }
+
+                        </span>
+
+                      )}
+
+                    </td>
+
+                    {/* =========================================
+                        ACCIONES
+                    ========================================= */}
+
+                    <td className="px-4 py-4 text-center">
+
+                      <div className="flex items-center justify-center gap-3">
+
+                        {/* -------------------------------------
+                            VER
+                        ------------------------------------- */}
 
                         <button
                           type="button"
                           onClick={() =>
-                            handleDeleteActivity(
-                              activity.id,
-                              activity.title
+                            handleOpenActivity(
+                              activity
                             )
                           }
-                          className="text-red-500 hover:text-red-600 dark:hover:text-red-400 text-sm font-semibold inline-flex items-center justify-center gap-1 transition"
-                          title="Eliminar actividad"
+                          className={`
+                            text-blue-500
+                            hover:text-blue-400
+                            text-sm
+                            font-semibold
+                            inline-flex
+                            items-center
+                            justify-center
+                            gap-1
+                            transition
+                            ${
+                              isNew
+                                ? 'animate-pulse'
+                                : ''
+                            }
+                          `}
                         >
 
-                          <Trash2 size={16} />
+                          <Eye
+                            size={16}
+                          />
 
-                          Eliminar
+                          Ver
 
                         </button>
 
-                      )}
+                        {/* -------------------------------------
+                            ELIMINAR
+                            ADMIN
+                        ------------------------------------- */}
 
-                    </div>
+                        {user?.role ===
+                          'admin' && (
 
-                  </td>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleDeleteActivity(
+                                activity.id,
+                                activity.title
+                              )
+                            }
+                            className="
+                              text-red-500
+                              hover:text-red-600
+                              dark:hover:text-red-400
+                              text-sm
+                              font-semibold
+                              inline-flex
+                              items-center
+                              justify-center
+                              gap-1
+                              transition
+                            "
+                            title="Eliminar actividad"
+                          >
 
-                </tr>
-              )
-            })}
+                            <Trash2
+                              size={16}
+                            />
+
+                            Eliminar
+
+                          </button>
+
+                        )}
+
+                      </div>
+
+                    </td>
+
+                  </tr>
+
+                )
+              }
+            )}
 
           </tbody>
 
@@ -393,11 +730,22 @@ export default function ActivitiesTable() {
       {selectedActivity && (
 
         <ActivityDetailModal
-          activity={selectedActivity}
-          currentUserRole={user?.role}
-          currentUserId={user?.id}
+          activity={
+            selectedActivity
+          }
+
+          currentUserRole={
+            user?.role
+          }
+
+          currentUserId={
+            user?.id
+          }
+
           onClose={() =>
-            setSelectedActivity(null)
+            setSelectedActivity(
+              null
+            )
           }
         />
 
@@ -406,4 +754,3 @@ export default function ActivitiesTable() {
     </>
   )
 }
-
