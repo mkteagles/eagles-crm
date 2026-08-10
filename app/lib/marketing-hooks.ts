@@ -122,6 +122,7 @@ export const useCurrentUser = () => {
 // =========================================================
 
 export const useActivities = () => {
+
   const [
     activities,
     setActivities,
@@ -142,193 +143,213 @@ export const useActivities = () => {
     mounted,
   } = useCurrentUser()
 
-  const supabase = createClient()
+  const supabase =
+    createClient()
 
-  // =======================================================
-  // EFFECT PRINCIPAL
-  // =======================================================
 
   useEffect(() => {
-    if (!mounted || !user) {
+
+    if (
+      !mounted ||
+      !user
+    ) {
       return
     }
 
     let isActive = true
 
-    // =====================================================
+
+    // ===================================================
     // CARGAR ACTIVIDADES
-    // =====================================================
+    // ===================================================
 
-    const fetchActivities = async () => {
-      try {
-        let query = supabase
-          .from('activities')
-          .select('*')
-          .order(
-            'due_date',
-            {
-              ascending: true,
-            }
+    const fetchActivities =
+      async () => {
+
+        try {
+
+          let query =
+            supabase
+              .from('activities')
+              .select('*')
+              .order(
+                'due_date',
+                {
+                  ascending: true,
+                }
+              )
+              .order(
+                'due_time',
+                {
+                  ascending: true,
+                  nullsFirst: false,
+                }
+              )
+
+
+          // ------------------------------------------------
+          // EXECUTOR
+          // ------------------------------------------------
+
+          if (
+            user.role ===
+            'executor'
+          ) {
+
+            query =
+              query.eq(
+                'assigned_to',
+                user.id
+              )
+
+          }
+
+
+          const [
+            activitiesResult,
+            profilesResult,
+          ] =
+            await Promise.all([
+
+              query,
+
+              supabase
+                .from(
+                  'user_profiles'
+                )
+                .select(
+                  'id, full_name, role'
+                ),
+
+            ])
+
+
+          if (!isActive) {
+            return
+          }
+
+
+          const {
+            data,
+            error,
+          } =
+            activitiesResult
+
+          const {
+            data: profiles,
+          } =
+            profilesResult
+
+
+          if (error) {
+
+            console.error(
+              'Error cargando actividades:',
+              error
+            )
+
+            return
+          }
+
+
+          // ------------------------------------------------
+          // MAPA DE USUARIOS
+          // ------------------------------------------------
+
+          const nameById =
+            new Map(
+              (profiles || [])
+                .map(
+                  (profile: any) => [
+                    profile.id,
+                    profile.full_name,
+                  ]
+                )
+            )
+
+
+          // ------------------------------------------------
+          // AGREGAR NOMBRES
+          // ------------------------------------------------
+
+          const activitiesWithNames =
+            (data || []).map(
+              (activity: any) => ({
+
+                ...activity,
+
+                assigned_to_name:
+                  nameById.get(
+                    activity.assigned_to
+                  ) ||
+                  activity.assigned_to,
+
+                created_by_name:
+                  nameById.get(
+                    activity.created_by
+                  ) ||
+                  activity.created_by,
+
+                approved_by_name:
+                  activity.approved_by
+                    ? (
+                        nameById.get(
+                          activity.approved_by
+                        ) ||
+                        activity.approved_by
+                      )
+                    : undefined,
+
+              })
+            )
+
+
+          if (!isActive) {
+            return
+          }
+
+
+          setActivities(
+            activitiesWithNames
           )
 
-        // -------------------------------------------------
-        // EXECUTOR
-        // -------------------------------------------------
-        //
-        // Los executors solamente ven sus actividades.
-        //
+        } catch (error) {
 
-        if (
-          user.role === 'executor'
-        ) {
-          query = query.eq(
-            'assigned_to',
-            user.id
-          )
-        }
-
-        const [
-          activitiesResult,
-          profilesResult,
-        ] = await Promise.all([
-          query,
-
-          supabase
-            .from('user_profiles')
-            .select(
-              'id, full_name'
-            ),
-        ])
-
-        if (!isActive) {
-          return
-        }
-
-        const {
-          data,
-          error,
-        } = activitiesResult
-
-        const {
-          data: profiles,
-        } = profilesResult
-
-        if (error) {
           console.error(
             'Error cargando actividades:',
             error
           )
 
-          return
-        }
+        } finally {
 
-        // -------------------------------------------------
-        // MAPA DE NOMBRES
-        // -------------------------------------------------
+          if (isActive) {
+            setLoading(false)
+          }
 
-        const nameById =
-          new Map(
-            (profiles || []).map(
-              (profile: any) => [
-                profile.id,
-                profile.full_name,
-              ]
-            )
-          )
-
-        // -------------------------------------------------
-        // AGREGAR NOMBRES
-        // -------------------------------------------------
-
-        const activitiesWithNames =
-          (data || []).map(
-            (activity: any) => ({
-              ...activity,
-
-              assigned_to_name:
-                nameById.get(
-                  activity.assigned_to
-                ) ||
-                activity.assigned_to,
-
-              created_by_name:
-                nameById.get(
-                  activity.created_by
-                ) ||
-                activity.created_by,
-
-              approved_by_name:
-                activity.approved_by
-                  ? (
-                      nameById.get(
-                        activity.approved_by
-                      ) ||
-                      activity.approved_by
-                    )
-                  : undefined,
-            })
-          )
-
-        if (!isActive) {
-          return
-        }
-
-        setActivities(
-          activitiesWithNames
-        )
-      } catch (error) {
-        console.error(
-          'Error cargando actividades:',
-          error
-        )
-      } finally {
-        if (isActive) {
-          setLoading(false)
         }
       }
-    }
 
-    // =====================================================
+
+    // ===================================================
     // CARGA INICIAL
-    // =====================================================
+    // ===================================================
 
     fetchActivities()
 
-    // =====================================================
+
+    // ===================================================
     // REALTIME
-    // =====================================================
-    //
-    // MUY IMPORTANTE:
-    //
-    // 1. Creamos canal.
-    // 2. Agregamos callback .on()
-    // 3. AL FINAL hacemos .subscribe()
-    //
-    // Nunca:
-    //
-    // subscribe()
-    // on()
-    //
-    // =====================================================
+    // ===================================================
 
     const channelName =
-      `activities_realtime_${user.id}_${Date.now()}_${Math.random()
-        .toString(36)
-        .substring(2, 10)}`
+      `activities_realtime_${user.id}_${Date.now()}`
 
-    console.log(
-      '📡 Creando canal Realtime:',
-      channelName
-    )
 
     const channel =
       supabase.channel(
         channelName
       )
 
-    // =====================================================
-    // CALLBACK REALTIME
-    // =====================================================
 
     channel.on(
       'postgres_changes',
@@ -338,9 +359,11 @@ export const useActivities = () => {
         table: 'activities',
       },
       async (payload) => {
+
         if (!isActive) {
           return
         }
+
 
         console.log(
           '🔔 Cambio Realtime:',
@@ -348,24 +371,19 @@ export const useActivities = () => {
           payload
         )
 
-        // ================================================
+
+        // ===============================================
         // INSERT
-        // ================================================
+        // ===============================================
 
         if (
           payload.eventType ===
           'INSERT'
         ) {
+
           const newActivity =
             payload.new as any
 
-          // ----------------------------------------------
-          // EXECUTOR
-          // ----------------------------------------------
-          //
-          // Solamente se considera nueva si está asignada
-          // al usuario actual.
-          //
 
           if (
             user.role ===
@@ -373,21 +391,22 @@ export const useActivities = () => {
             newActivity.assigned_to !==
               user.id
           ) {
+
             await fetchActivities()
+
             return
           }
+
 
           const newId =
             Number(
               newActivity.id
             )
 
-          // ----------------------------------------------
-          // MARCAR COMO NUEVA
-          // ----------------------------------------------
 
           setNewActivityIds(
             (previous) => {
+
               if (
                 previous.includes(
                   newId
@@ -403,64 +422,53 @@ export const useActivities = () => {
             }
           )
 
-          console.log(
-            '🆕 Nueva actividad:',
-            newId
-          )
         }
 
-        // ================================================
+
+        // ===============================================
         // UPDATE
-        // ================================================
+        // ===============================================
 
         if (
           payload.eventType ===
           'UPDATE'
         ) {
+
           const oldActivity =
             payload.old as any
 
           const updatedActivity =
             payload.new as any
 
-          // ----------------------------------------------
-          // DETECTAR NUEVA ASIGNACIÓN
-          // ----------------------------------------------
-          //
-          // Ejemplo:
-          //
-          // Antes:
-          // assigned_to = Hugo
-          //
-          // Después:
-          // assigned_to = Ursula
-          //
-          // Ursula recibe highlight NUEVA.
-          //
 
           if (
             user.role ===
-              'executor'
+            'executor'
           ) {
-            const wasAssignedToUser =
+
+            const wasAssigned =
               oldActivity?.assigned_to ===
               user.id
 
-            const isAssignedToUser =
+            const isAssigned =
               updatedActivity?.assigned_to ===
               user.id
 
+
             if (
-              !wasAssignedToUser &&
-              isAssignedToUser
+              !wasAssigned &&
+              isAssigned
             ) {
+
               const updatedId =
                 Number(
                   updatedActivity.id
                 )
 
+
               setNewActivityIds(
                 (previous) => {
+
                   if (
                     previous.includes(
                       updatedId
@@ -476,34 +484,30 @@ export const useActivities = () => {
                 }
               )
 
-              console.log(
-                '🆕 Actividad asignada al usuario:',
-                updatedId
-              )
             }
+
           }
 
-          console.log(
-            '🔄 Actividad actualizada:',
-            updatedActivity
-          )
         }
 
-        // ================================================
+
+        // ===============================================
         // DELETE
-        // ================================================
+        // ===============================================
 
         if (
           payload.eventType ===
           'DELETE'
         ) {
-          const deletedActivity =
+
+          const deleted =
             payload.old as any
 
           const deletedId =
             Number(
-              deletedActivity.id
+              deleted.id
             )
+
 
           setNewActivityIds(
             (previous) =>
@@ -514,31 +518,26 @@ export const useActivities = () => {
               )
           )
 
-          console.log(
-            '🗑️ Actividad eliminada:',
-            deletedId
-          )
         }
 
-        // ================================================
-        // RECARGAR ACTIVIDADES
-        // ================================================
+
+        // ===============================================
+        // RECARGAR
+        // ===============================================
 
         await fetchActivities()
+
       }
     )
 
-    // =====================================================
-    // SUSCRIBIR
-    // =====================================================
-    //
-    // ESTE ES EL ÚNICO subscribe()
-    // DEL CANAL.
-    //
-    // =====================================================
+
+    // ===================================================
+    // SUBSCRIBE
+    // ===================================================
 
     channel.subscribe(
       (status) => {
+
         console.log(
           '📡 Activities realtime:',
           status
@@ -548,115 +547,89 @@ export const useActivities = () => {
           status ===
           'SUBSCRIBED'
         ) {
+
           console.log(
-            '✅ Realtime de actividades conectado'
+            '✅ Realtime conectado'
           )
+
         }
 
         if (
           status ===
           'CHANNEL_ERROR'
         ) {
+
           console.error(
-            '❌ Error del canal Realtime de actividades'
+            '❌ Error Realtime'
           )
+
         }
 
         if (
           status ===
           'TIMED_OUT'
         ) {
+
           console.error(
-            '⏱️ Timeout del canal Realtime de actividades'
+            '⏱️ Realtime timeout'
           )
+
         }
 
-        if (
-          status ===
-          'CLOSED'
-        ) {
-          console.log(
-            '🔌 Canal Realtime de actividades cerrado'
-          )
-        }
       }
     )
 
-    // =====================================================
+
+    // ===================================================
     // CLEANUP
-    // =====================================================
+    // ===================================================
 
     return () => {
+
       isActive = false
-
-      console.log(
-        '🧹 Cerrando Realtime:',
-        channelName
-      )
-
-      // ---------------------------------------------------
-      // IMPORTANTE:
-      //
-      // Se elimina EXACTAMENTE el canal creado arriba.
-      // ---------------------------------------------------
 
       supabase.removeChannel(
         channel
       )
+
     }
+
   }, [
     mounted,
     user?.id,
     user?.role,
   ])
 
-  // =======================================================
-  // MARCAR ACTIVIDAD COMO VISTA
-  // =======================================================
 
-  const markActivityAsSeen = (
-    activityId: number
-  ) => {
-    const id =
-      Number(activityId)
+  // =====================================================
+  // MARCAR COMO VISTA
+  // =====================================================
 
-    setNewActivityIds(
-      (previous) =>
-        previous.filter(
-          (existingId) =>
-            existingId !== id
-        )
-    )
-  }
+  const markActivityAsSeen =
+    (
+      activityId: number
+    ) => {
 
-  // =======================================================
-  // LIMPIAR NUEVA
-  // =======================================================
+      const id =
+        Number(activityId)
 
-  const clearNewActivity = (
-    activityId: number
-  ) => {
-    markActivityAsSeen(
-      activityId
-    )
-  }
+      setNewActivityIds(
+        (previous) =>
+          previous.filter(
+            (existingId) =>
+              existingId !== id
+          )
+      )
+    }
 
-  // =======================================================
-  // RETURN
-  // =======================================================
 
   return {
     activities,
     loading,
-
-    // IDs de actividades nuevas
     newActivityIds,
-
-    // Marca actividad como vista
     markActivityAsSeen,
-
-    // Alias compatible
-    clearNewActivity,
+    clearNewActivity:
+      markActivityAsSeen,
   }
 }
 
