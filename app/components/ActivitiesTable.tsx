@@ -5,9 +5,13 @@ import {
   useCurrentUser,
 } from '@/lib/marketing-hooks'
 
-import { createClient } from '@/lib/supabase/client'
+import {
+  createClient,
+} from '@/lib/supabase/client'
 
-import { ActivityStatus } from '@/lib/marketing-types'
+import {
+  ActivityStatus,
+} from '@/lib/marketing-types'
 
 import {
   getStatusStyles,
@@ -20,6 +24,11 @@ import {
   Sparkles,
   Clock,
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CheckCircle2,
+  Circle,
+  LoaderCircle,
 } from 'lucide-react'
 
 import {
@@ -29,24 +38,8 @@ import {
 
 import ActivityDetailModal from './ActivityDetailModal'
 
-
 // =========================================================
-// TIPOS
-// =========================================================
-
-type StatusFilter =
-  | 'all'
-  | 'pending'
-  | 'in_progress'
-  | 'completed'
-
-interface ActivitiesTableProps {
-  statusFilter?: StatusFilter
-}
-
-
-// =========================================================
-// HELPERS
+// HELPERS DE FECHA
 // =========================================================
 
 function getLocalDateString(
@@ -59,19 +52,28 @@ function getLocalDateString(
   const month =
     String(
       date.getMonth() + 1
-    ).padStart(2, '0')
+    ).padStart(
+      2,
+      '0'
+    )
 
   const day =
     String(
       date.getDate()
-    ).padStart(2, '0')
+    ).padStart(
+      2,
+      '0'
+    )
 
   return `${year}-${month}-${day}`
 }
 
+// =========================================================
+// OBTENER MES
+// =========================================================
 
 function getMonthKey(
-  date: Date = new Date()
+  date: Date
 ): string {
 
   const year =
@@ -80,11 +82,66 @@ function getMonthKey(
   const month =
     String(
       date.getMonth() + 1
-    ).padStart(2, '0')
+    ).padStart(
+      2,
+      '0'
+    )
 
   return `${year}-${month}`
 }
 
+// =========================================================
+// CREAR DATE DESDE YYYY-MM-DD
+// SIN PROBLEMAS DE UTC
+// =========================================================
+
+function dateFromString(
+  dateString: string
+): Date {
+
+  const [
+    year,
+    month,
+    day,
+  ] =
+    dateString
+      .split('-')
+      .map(Number)
+
+  return new Date(
+    year,
+    month - 1,
+    day
+  )
+}
+
+// =========================================================
+// FORMATEAR FECHA LARGA
+// =========================================================
+
+function formatLongDate(
+  dateString: string
+) {
+
+  const date =
+    dateFromString(
+      dateString
+    )
+
+  return date.toLocaleDateString(
+    'es-MX',
+    {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }
+  )
+}
+
+// =========================================================
+// FORMATEAR HORA
+// =========================================================
 
 function formatTime(
   time?: string | null
@@ -128,6 +185,9 @@ function formatTime(
   )
 }
 
+// =========================================================
+// FORMATEAR FECHA CORTA
+// =========================================================
 
 function formatDate(
   date?: string | null
@@ -157,6 +217,9 @@ function formatDate(
   return `${day}/${month}/${year}`
 }
 
+// =========================================================
+// FORMATEAR MES
+// =========================================================
 
 function formatMonthTitle(
   date: Date
@@ -171,6 +234,9 @@ function formatMonthTitle(
   )
 }
 
+// =========================================================
+// STATUS LABEL
+// =========================================================
 
 function getStatusLabel(
   status?: string | null
@@ -194,18 +260,20 @@ function getStatusLabel(
       return 'Aprobada'
 
     default:
-      return status || 'Sin estado'
+      return status ||
+        'Sin estado'
   }
 }
-
 
 // =========================================================
 // COMPONENTE
 // =========================================================
 
-export default function ActivitiesTable({
-  statusFilter = 'all',
-}: ActivitiesTableProps) {
+export default function ActivitiesTable() {
+
+  // =======================================================
+  // ACTIVIDADES
+  // =======================================================
 
   const {
     activities,
@@ -215,23 +283,33 @@ export default function ActivitiesTable({
   } =
     useActivities()
 
+  // =======================================================
+  // USUARIO
+  // =======================================================
 
   const {
     user,
   } =
     useCurrentUser()
 
+  // =======================================================
+  // SUPABASE
+  // =======================================================
+
+  const supabase =
+    createClient()
+
+  // =======================================================
+  // ACTIVIDAD SELECCIONADA
+  // =======================================================
 
   const [
     selectedActivity,
     setSelectedActivity,
   ] =
-    useState<any | null>(null)
-
-
-  const supabase =
-    createClient()
-
+    useState<any | null>(
+      null
+    )
 
   // =======================================================
   // FECHA ACTUAL
@@ -240,53 +318,119 @@ export default function ActivitiesTable({
   const today =
     getLocalDateString()
 
-  const currentMonth =
-    getMonthKey()
-
-
   // =======================================================
-  // FILTRO POR ESTADO
+  // FECHA SELECCIONADA
   // =======================================================
 
-  const statusFilteredActivities =
+  const [
+    selectedDate,
+    setSelectedDate,
+  ] =
+    useState(
+      today
+    )
+
+  // =======================================================
+  // DATE DE LA FECHA SELECCIONADA
+  // =======================================================
+
+  const selectedDateObject =
     useMemo(
-      () => {
-
-        if (
-          statusFilter === 'all'
-        ) {
-          return activities
-        }
-
-        return activities.filter(
-          (activity: any) =>
-            activity.status ===
-            statusFilter
-        )
-
-      },
+      () =>
+        dateFromString(
+          selectedDate
+        ),
       [
-        activities,
-        statusFilter,
+        selectedDate,
       ]
     )
 
+  // =======================================================
+  // MES SELECCIONADO
+  // =======================================================
+
+  const selectedMonth =
+    getMonthKey(
+      selectedDateObject
+    )
 
   // =======================================================
-  // ACTIVIDADES DE HOY
+  // CAMBIAR DÍA
   // =======================================================
 
-  const todayActivities =
+  const changeDay =
+    (
+      amount: number
+    ) => {
+
+      const current =
+        dateFromString(
+          selectedDate
+        )
+
+      current.setDate(
+        current.getDate() +
+          amount
+      )
+
+      setSelectedDate(
+        getLocalDateString(
+          current
+        )
+      )
+    }
+
+  // =======================================================
+  // IR A HOY
+  // =======================================================
+
+  const goToToday =
+    () => {
+
+      setSelectedDate(
+        getLocalDateString()
+      )
+    }
+
+  // =======================================================
+  // CAMBIAR FECHA MANUALMENTE
+  // =======================================================
+
+  const handleDateChange =
+    (
+      value: string
+    ) => {
+
+      if (!value) {
+        return
+      }
+
+      setSelectedDate(
+        value
+      )
+    }
+
+  // =======================================================
+  // ACTIVIDADES DEL DÍA
+  // =======================================================
+
+  const selectedDayActivities =
     useMemo(
       () => {
 
-        return statusFilteredActivities
+        return activities
           .filter(
-            (activity: any) =>
+            (
+              activity: any
+            ) =>
               String(
-                activity.due_date || ''
-              ).slice(0, 10) ===
-              today
+                activity.due_date ||
+                  ''
+              ).slice(
+                0,
+                10
+              ) ===
+              selectedDate
           )
           .sort(
             (
@@ -295,12 +439,16 @@ export default function ActivitiesTable({
             ) => {
 
               const timeA =
-                a.due_time ||
-                '23:59:59'
+                String(
+                  a.due_time ||
+                    '23:59:59'
+                )
 
               const timeB =
-                b.due_time ||
-                '23:59:59'
+                String(
+                  b.due_time ||
+                    '23:59:59'
+                )
 
               return timeA.localeCompare(
                 timeB
@@ -310,11 +458,61 @@ export default function ActivitiesTable({
 
       },
       [
-        statusFilteredActivities,
-        today,
+        activities,
+        selectedDate,
       ]
     )
 
+  // =======================================================
+  // ESTADÍSTICAS DEL DÍA
+  // =======================================================
+
+  const dayStats =
+    useMemo(
+      () => {
+
+        const total =
+          selectedDayActivities.length
+
+        const pending =
+          selectedDayActivities.filter(
+            (
+              activity: any
+            ) =>
+              activity.status ===
+              'pending'
+          ).length
+
+        const inProgress =
+          selectedDayActivities.filter(
+            (
+              activity: any
+            ) =>
+              activity.status ===
+              'in_progress'
+          ).length
+
+        const completed =
+          selectedDayActivities.filter(
+            (
+              activity: any
+            ) =>
+              activity.status ===
+              'completed'
+          ).length
+
+        return {
+          total,
+          pending,
+          inProgress,
+          completed,
+        }
+
+      },
+      [
+        selectedDayActivities,
+      ]
+    )
 
   // =======================================================
   // ACTIVIDADES DEL MES
@@ -324,20 +522,24 @@ export default function ActivitiesTable({
     useMemo(
       () => {
 
-        return statusFilteredActivities
+        return activities
           .filter(
-            (activity: any) => {
+            (
+              activity: any
+            ) => {
 
               const date =
                 String(
                   activity.due_date ||
-                  ''
-                ).slice(0, 10)
+                    ''
+                ).slice(
+                  0,
+                  10
+                )
 
               return date.startsWith(
-                currentMonth
+                selectedMonth
               )
-
             }
           )
           .sort(
@@ -348,17 +550,21 @@ export default function ActivitiesTable({
 
               const dateA =
                 String(
-                  a.due_date || ''
+                  a.due_date ||
+                    ''
                 )
 
               const dateB =
                 String(
-                  b.due_date || ''
+                  b.due_date ||
+                    ''
                 )
 
               if (
-                dateA !== dateB
+                dateA !==
+                dateB
               ) {
+
                 return dateA.localeCompare(
                   dateB
                 )
@@ -366,11 +572,11 @@ export default function ActivitiesTable({
 
               return String(
                 a.due_time ||
-                '23:59:59'
+                  '23:59:59'
               ).localeCompare(
                 String(
                   b.due_time ||
-                  '23:59:59'
+                    '23:59:59'
                 )
               )
             }
@@ -378,11 +584,10 @@ export default function ActivitiesTable({
 
       },
       [
-        statusFilteredActivities,
-        currentMonth,
+        activities,
+        selectedMonth,
       ]
     )
-
 
   // =======================================================
   // CAMBIAR ESTADO
@@ -396,11 +601,16 @@ export default function ActivitiesTable({
 
       const previousActivity =
         activities.find(
-          (activity: any) =>
-            Number(activity.id) ===
-            Number(activityId)
+          (
+            activity: any
+          ) =>
+            Number(
+              activity.id
+            ) ===
+            Number(
+              activityId
+            )
         )
-
 
       try {
 
@@ -408,7 +618,9 @@ export default function ActivitiesTable({
           error,
         } =
           await supabase
-            .from('activities')
+            .from(
+              'activities'
+            )
             .update({
 
               status:
@@ -436,7 +648,6 @@ export default function ActivitiesTable({
               activityId
             )
 
-
         if (error) {
 
           console.error(
@@ -449,7 +660,6 @@ export default function ActivitiesTable({
 
           return
         }
-
 
         console.log(
           '✅ Estado actualizado:',
@@ -470,14 +680,11 @@ export default function ActivitiesTable({
         alert(
           'Ocurrió un error inesperado al actualizar la actividad.'
         )
-
       }
-
     }
 
-
   // =======================================================
-  // ELIMINAR
+  // ELIMINAR ACTIVIDAD
   // =======================================================
 
   const handleDeleteActivity =
@@ -493,17 +700,14 @@ export default function ActivitiesTable({
         return
       }
 
-
       const confirmed =
         window.confirm(
           `¿Seguro que quieres eliminar la actividad "${activityTitle}"?\n\nEsta acción no se puede deshacer.`
         )
 
-
       if (!confirmed) {
         return
       }
-
 
       try {
 
@@ -512,14 +716,15 @@ export default function ActivitiesTable({
           error,
         } =
           await supabase
-            .from('activities')
+            .from(
+              'activities'
+            )
             .delete()
             .eq(
               'id',
               activityId
             )
             .select('id')
-
 
         if (error) {
 
@@ -529,7 +734,6 @@ export default function ActivitiesTable({
 
           return
         }
-
 
         if (
           !data ||
@@ -543,18 +747,18 @@ export default function ActivitiesTable({
           return
         }
 
-
         if (
           Number(
             selectedActivity?.id
           ) ===
-          Number(activityId)
+          Number(
+            activityId
+          )
         ) {
 
           setSelectedActivity(
             null
           )
-
         }
 
       } catch (error) {
@@ -566,34 +770,28 @@ export default function ActivitiesTable({
         alert(
           'Ocurrió un error inesperado al eliminar la actividad.'
         )
-
       }
-
     }
-
 
   // =======================================================
   // ABRIR ACTIVIDAD
   // =======================================================
 
   const handleOpenActivity =
-    (activity: any) => {
+    (
+      activity: any
+    ) => {
 
-      /*
-       * Conservamos el sistema actual
-       * de actividades nuevas.
-       */
       markActivityAsSeen(
-        Number(activity.id)
+        Number(
+          activity.id
+        )
       )
-
 
       setSelectedActivity(
         activity
       )
-
     }
-
 
   // =======================================================
   // LOADING
@@ -605,6 +803,11 @@ export default function ActivitiesTable({
 
       <div className="flex items-center justify-center py-12">
 
+        <LoaderCircle
+          className="mr-2 animate-spin text-brand-orange"
+          size={24}
+        />
+
         <p className="text-gray-500 dark:text-gray-400">
           Cargando actividades...
         </p>
@@ -612,12 +815,10 @@ export default function ActivitiesTable({
       </div>
 
     )
-
   }
 
-
   // =======================================================
-  // FUNCIÓN PARA RENDERIZAR FILAS
+  // RENDER FILAS
   // =======================================================
 
   const renderRows =
@@ -626,30 +827,33 @@ export default function ActivitiesTable({
     ) => {
 
       return list.map(
-        (activity: any) => {
+        (
+          activity: any
+        ) => {
 
           const isNew =
             newActivityIds.includes(
-              Number(activity.id)
+              Number(
+                activity.id
+              )
             )
-
 
           const priorityStyles =
             getPriorityStyles(
               activity.priority
             )
 
-
           const statusStyles =
             getStatusStyles(
               activity.status
             )
 
-
           return (
 
             <tr
-              key={activity.id}
+              key={
+                activity.id
+              }
               className={`
                 transition-all
                 duration-300
@@ -673,7 +877,7 @@ export default function ActivitiesTable({
 
                     <div className="shrink-0">
 
-                      <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase">
+                      <div className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-bold uppercase text-white">
 
                         <Sparkles
                           size={11}
@@ -687,43 +891,47 @@ export default function ActivitiesTable({
 
                   )}
 
-
                   <div className="min-w-0">
 
-                    <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
 
-                      {activity.title}
+                      {
+                        activity.title
+                      }
 
                     </div>
 
-
                     {activity.description && (
 
-                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                      <div className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
 
-                        {activity.description}
+                        {
+                          activity.description
+                        }
 
                       </div>
 
                     )}
 
-
                     {activity.recurrence_type &&
                       activity.recurrence_type !==
                         'none' && (
 
-                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-purple-100 dark:bg-purple-950/40 px-2 py-1 text-[10px] font-semibold text-purple-700 dark:text-purple-300">
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-1 text-[10px] font-semibold text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
 
                         <CalendarDays
                           size={11}
                         />
 
                         Fija
+
                         {activity.recurrence_days?.length
                           ? ' · ' +
                             activity.recurrence_days
                               .map(
-                                (day: number) =>
+                                (
+                                  day: number
+                                ) =>
                                   [
                                     'D',
                                     'L',
@@ -732,9 +940,13 @@ export default function ActivitiesTable({
                                     'J',
                                     'V',
                                     'S',
-                                  ][day]
+                                  ][
+                                    day
+                                  ]
                               )
-                              .join(', ')
+                              .join(
+                                ', '
+                              )
                           : ''}
 
                       </div>
@@ -746,7 +958,6 @@ export default function ActivitiesTable({
                 </div>
 
               </td>
-
 
               {/* =====================================
                   ASIGNADO
@@ -762,40 +973,41 @@ export default function ActivitiesTable({
 
               </td>
 
-
               {/* =====================================
-                  FECHA + HORA
+                  FECHA / HORA
               ===================================== */}
 
               <td className="px-4 py-4">
 
                 <div className="text-sm text-gray-700 dark:text-gray-300">
 
-                  {formatDate(
-                    activity.due_date
-                  )}
+                  {
+                    formatDate(
+                      activity.due_date
+                    )
+                  }
 
                 </div>
 
-
                 {activity.due_time && (
 
-                  <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                  <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
 
                     <Clock
                       size={12}
                     />
 
-                    {formatTime(
-                      activity.due_time
-                    )}
+                    {
+                      formatTime(
+                        activity.due_time
+                      )
+                    }
 
                   </div>
 
                 )}
 
               </td>
-
 
               {/* =====================================
                   PRIORIDAD
@@ -806,9 +1018,9 @@ export default function ActivitiesTable({
                 <span
                   className={`
                     inline-flex
+                    rounded-full
                     px-2.5
                     py-1
-                    rounded-full
                     text-xs
                     font-semibold
                     ${priorityStyles.badge}
@@ -822,7 +1034,6 @@ export default function ActivitiesTable({
                 </span>
 
               </td>
-
 
               {/* =====================================
                   ESTADO
@@ -839,7 +1050,9 @@ export default function ActivitiesTable({
                     value={
                       activity.status
                     }
-                    onChange={(e) =>
+                    onChange={(
+                      e
+                    ) =>
                       handleStatusChange(
                         Number(
                           activity.id
@@ -848,12 +1061,12 @@ export default function ActivitiesTable({
                       )
                     }
                     className={`
+                      rounded-full
+                      border-0
                       px-2.5
                       py-1
-                      rounded-full
                       text-xs
                       font-semibold
-                      border-0
                       outline-none
                       ${statusStyles.badge}
                     `}
@@ -884,9 +1097,9 @@ export default function ActivitiesTable({
                       inline-flex
                       items-center
                       gap-1.5
+                      rounded-full
                       px-2.5
                       py-1
-                      rounded-full
                       text-xs
                       font-semibold
                       ${statusStyles.badge}
@@ -895,8 +1108,8 @@ export default function ActivitiesTable({
 
                     <span
                       className={`
-                        w-1.5
                         h-1.5
+                        w-1.5
                         rounded-full
                         ${statusStyles.dot}
                       `}
@@ -915,7 +1128,6 @@ export default function ActivitiesTable({
 
               </td>
 
-
               {/* =====================================
                   ACCIONES
               ===================================== */}
@@ -932,12 +1144,12 @@ export default function ActivitiesTable({
                       )
                     }
                     className={`
-                      text-blue-500
-                      text-sm
-                      font-semibold
                       inline-flex
                       items-center
                       gap-1
+                      text-sm
+                      font-semibold
+                      text-blue-500
                       ${
                         isNew
                           ? 'animate-pulse'
@@ -954,7 +1166,6 @@ export default function ActivitiesTable({
 
                   </button>
 
-
                   {user?.role ===
                     'admin' && (
 
@@ -968,7 +1179,7 @@ export default function ActivitiesTable({
                           activity.title
                         )
                       }
-                      className="text-red-500 hover:text-red-600 text-sm font-semibold inline-flex items-center gap-1"
+                      className="inline-flex items-center gap-1 text-sm font-semibold text-red-500 hover:text-red-600"
                     >
 
                       <Trash2
@@ -986,17 +1197,13 @@ export default function ActivitiesTable({
               </td>
 
             </tr>
-
           )
-
         }
       )
-
     }
 
-
   // =======================================================
-  // TABLA
+  // RENDER TABLA
   // =======================================================
 
   const renderTable =
@@ -1005,13 +1212,15 @@ export default function ActivitiesTable({
       emptyMessage: string
     ) => {
 
-      if (list.length === 0) {
+      if (
+        list.length === 0
+      ) {
 
         return (
 
-          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-surface p-8 text-center">
+          <div className="rounded-xl border border-gray-200 bg-surface p-8 text-center dark:border-gray-800">
 
-            <div className="text-3xl mb-2">
+            <div className="mb-2 text-3xl">
               📋
             </div>
 
@@ -1019,20 +1228,19 @@ export default function ActivitiesTable({
               No hay actividades
             </p>
 
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {emptyMessage}
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {
+                emptyMessage
+              }
             </p>
 
           </div>
-
         )
-
       }
-
 
       return (
 
-        <div className="w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800 bg-surface shadow-sm">
+        <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-surface shadow-sm dark:border-gray-800">
 
           <table className="w-full">
 
@@ -1040,27 +1248,27 @@ export default function ActivitiesTable({
 
               <tr>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
                   Actividad
                 </th>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
                   Asignado a
                 </th>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
                   Fecha / hora
                 </th>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
                   Prioridad
                 </th>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
                   Estado
                 </th>
 
-                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">
+                <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-gray-500">
                   Acciones
                 </th>
 
@@ -1068,21 +1276,21 @@ export default function ActivitiesTable({
 
             </thead>
 
-
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
 
-              {renderRows(list)}
+              {
+                renderRows(
+                  list
+                )
+              }
 
             </tbody>
 
           </table>
 
         </div>
-
       )
-
     }
-
 
   // =======================================================
   // RENDER
@@ -1090,10 +1298,301 @@ export default function ActivitiesTable({
 
   return (
 
-    <div className="space-y-10">
+    <div className="space-y-8">
 
       {/* =================================================
-          HOY
+          SELECTOR ÚNICO DE FECHA
+      ================================================= */}
+
+      <section>
+
+        <div className="rounded-2xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+            {/* =========================================
+                INFORMACIÓN
+            ========================================= */}
+
+            <div>
+
+              <div className="flex items-center gap-2">
+
+                <CalendarDays
+                  size={20}
+                  className="text-brand-orange"
+                />
+
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                  Actividades
+                </h2>
+
+              </div>
+
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Consulta actividades de cualquier día.
+              </p>
+
+            </div>
+
+            {/* =========================================
+                CONTROLES DE FECHA
+            ========================================= */}
+
+            <div className="flex flex-wrap items-center gap-2">
+
+              {/* ANTERIOR */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  changeDay(-1)
+                }
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+
+                <ChevronLeft
+                  size={16}
+                />
+
+                Anterior
+
+              </button>
+
+              {/* FECHA */}
+
+              <label className="relative">
+
+                <span className="sr-only">
+                  Seleccionar fecha
+                </span>
+
+                <input
+                  type="date"
+                  value={
+                    selectedDate
+                  }
+                  onChange={(
+                    e
+                  ) =>
+                    handleDateChange(
+                      e.target.value
+                    )
+                  }
+                  className="rounded-lg border border-gray-200 bg-background px-3 py-2 text-sm font-medium text-gray-900 outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20 dark:border-gray-700 dark:text-white"
+                />
+
+              </label>
+
+              {/* HOY */}
+
+              <button
+                type="button"
+                onClick={
+                  goToToday
+                }
+                className={`
+                  rounded-lg
+                  px-3
+                  py-2
+                  text-sm
+                  font-semibold
+                  transition
+                  ${
+                    selectedDate ===
+                    today
+                      ? 'bg-brand-orange text-white'
+                      : 'border border-gray-200 text-gray-700 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'
+                  }
+                `}
+              >
+                Hoy
+              </button>
+
+              {/* SIGUIENTE */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  changeDay(1)
+                }
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              >
+
+                Siguiente
+
+                <ChevronRight
+                  size={16}
+                />
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      {/* =================================================
+          CONTADORES
+          
+          IMPORTANTE:
+          YA NO SON BOTONES.
+          SOLO INFORMACIÓN.
+      ================================================= */}
+
+      <section>
+
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+
+          {/* TOTAL */}
+
+          <div className="rounded-xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+
+            <div className="flex items-center justify-between">
+
+              <div>
+
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Total
+                </p>
+
+                <p className="mt-1 text-3xl font-bold text-blue-500">
+                  {
+                    dayStats.total
+                  }
+                </p>
+
+                <p className="mt-1 text-xs text-gray-400">
+                  Este día
+                </p>
+
+              </div>
+
+              <div className="rounded-lg bg-blue-500/10 p-2">
+                <CalendarDays
+                  size={20}
+                  className="text-blue-500"
+                />
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* PENDIENTES */}
+
+          <div className="rounded-xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+
+            <div className="flex items-center justify-between">
+
+              <div>
+
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Pendientes
+                </p>
+
+                <p className="mt-1 text-3xl font-bold text-orange-500">
+                  {
+                    dayStats.pending
+                  }
+                </p>
+
+                <p className="mt-1 text-xs text-gray-400">
+                  Por realizar
+                </p>
+
+              </div>
+
+              <div className="rounded-lg bg-orange-500/10 p-2">
+                <Circle
+                  size={20}
+                  className="text-orange-500"
+                />
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* EN PROGRESO */}
+
+          <div className="rounded-xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+
+            <div className="flex items-center justify-between">
+
+              <div>
+
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  En progreso
+                </p>
+
+                <p className="mt-1 text-3xl font-bold text-yellow-500">
+                  {
+                    dayStats.inProgress
+                  }
+                </p>
+
+                <p className="mt-1 text-xs text-gray-400">
+                  Trabajando ahora
+                </p>
+
+              </div>
+
+              <div className="rounded-lg bg-yellow-500/10 p-2">
+                <LoaderCircle
+                  size={20}
+                  className="text-yellow-500"
+                />
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* COMPLETADAS */}
+
+          <div className="rounded-xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+
+            <div className="flex items-center justify-between">
+
+              <div>
+
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Completadas
+                </p>
+
+                <p className="mt-1 text-3xl font-bold text-green-500">
+                  {
+                    dayStats.completed
+                  }
+                </p>
+
+                <p className="mt-1 text-xs text-gray-400">
+                  Finalizadas
+                </p>
+
+              </div>
+
+              <div className="rounded-lg bg-green-500/10 p-2">
+                <CheckCircle2
+                  size={20}
+                  className="text-green-500"
+                />
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      {/* =================================================
+          ACTIVIDADES DEL DÍA
       ================================================= */}
 
       <section>
@@ -1109,56 +1608,64 @@ export default function ActivitiesTable({
                 className="text-brand-orange"
               />
 
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              <h2 className="text-xl font-bold capitalize text-gray-900 dark:text-white">
 
-                Actividades de hoy
+                {
+                  selectedDate ===
+                  today
+                    ? 'Actividades de hoy'
+                    : 'Actividades del día'
+                }
 
               </h2>
 
             </div>
 
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm capitalize text-gray-500 dark:text-gray-400">
 
-              {new Date().toLocaleDateString(
-                'es-MX',
-                {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                  year: 'numeric',
-                }
-              )}
+              {
+                formatLongDate(
+                  selectedDate
+                )
+              }
 
             </p>
 
           </div>
 
-
           <div className="rounded-full bg-brand-orange/10 px-3 py-1 text-sm font-semibold text-brand-orange">
 
-            {todayActivities.length}
+            {
+              selectedDayActivities.length
+            }
+
             {' '}
-            {todayActivities.length === 1
-              ? 'actividad'
-              : 'actividades'}
+
+            {
+              selectedDayActivities.length ===
+              1
+                ? 'actividad'
+                : 'actividades'
+            }
 
           </div>
 
         </div>
 
-
-        {renderTable(
-          todayActivities,
-          statusFilter === 'all'
-            ? 'No tienes actividades programadas para hoy.'
-            : 'No hay actividades de hoy con este estado.'
-        )}
+        {
+          renderTable(
+            selectedDayActivities,
+            selectedDate ===
+              today
+              ? 'No tienes actividades programadas para hoy.'
+              : `No tienes actividades programadas para el ${formatDate(selectedDate)}.`
+          )
+        }
 
       </section>
 
-
       {/* =================================================
-          RESTO DEL MES
+          ACTIVIDADES DEL MES
       ================================================= */}
 
       <section>
@@ -1174,12 +1681,15 @@ export default function ActivitiesTable({
                 className="text-purple-500"
               />
 
-              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              <h2 className="text-xl font-bold capitalize text-gray-900 dark:text-white">
 
                 Todas las actividades de{' '}
-                {formatMonthTitle(
-                  new Date()
-                )}
+
+                {
+                  formatMonthTitle(
+                    selectedDateObject
+                  )
+                }
 
               </h2>
 
@@ -1187,64 +1697,58 @@ export default function ActivitiesTable({
 
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
 
-              Aquí puedes consultar todas las actividades programadas durante el mes.
+              Todas las actividades programadas durante este mes.
 
             </p>
 
           </div>
 
-
           <div className="rounded-full bg-purple-500/10 px-3 py-1 text-sm font-semibold text-purple-600 dark:text-purple-400">
 
-            {monthActivities.length}
+            {
+              monthActivities.length
+            }
 
           </div>
 
         </div>
 
-
-        {renderTable(
-          monthActivities,
-          statusFilter === 'all'
-            ? 'No hay actividades programadas para este mes.'
-            : 'No hay actividades de este mes con este estado.'
-        )}
+        {
+          renderTable(
+            monthActivities,
+            'No hay actividades programadas durante este mes.'
+          )
+        }
 
       </section>
 
-
       {/* =================================================
-          MODAL
+          MODAL DETALLE
       ================================================= */}
 
-      {selectedActivity && (
+      {
+        selectedActivity && (
 
-        <ActivityDetailModal
+          <ActivityDetailModal
+            activity={
+              selectedActivity
+            }
+            currentUserRole={
+              user?.role
+            }
+            currentUserId={
+              user?.id
+            }
+            onClose={() =>
+              setSelectedActivity(
+                null
+              )
+            }
+          />
 
-          activity={
-            selectedActivity
-          }
-
-          currentUserRole={
-            user?.role
-          }
-
-          currentUserId={
-            user?.id
-          }
-
-          onClose={() =>
-            setSelectedActivity(
-              null
-            )
-          }
-
-        />
-
-      )}
+        )
+      }
 
     </div>
-
   )
-
 }
