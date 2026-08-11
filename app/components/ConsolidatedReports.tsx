@@ -148,7 +148,8 @@ export default function ConsolidatedReports() {
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
 
-  const [activities, setActivities] = useState<Activity[]>([]);
+  const [activities, setActivities] =
+    useState<Activity[]>([]);
 
   const [suggestions, setSuggestions] =
     useState<Suggestion[]>([]);
@@ -162,212 +163,240 @@ export default function ConsolidatedReports() {
   const [copying, setCopying] =
     useState(false);
 
-  const today = getLocalDateString();
+  const today =
+    getLocalDateString();
 
   // =====================================================
   // CARGAR DATOS
   // =====================================================
 
-  const loadConsolidatedReport = async () => {
-    setLoading(true);
+  const loadConsolidatedReport =
+    async () => {
+      setLoading(true);
 
-    try {
-      const [
-        profilesResponse,
-        activitiesResponse,
-        suggestionsResponse,
-        reportsResponse,
-      ] = await Promise.all([
-        // -----------------------------------------------
-        // USUARIOS
-        // -----------------------------------------------
+      try {
+        const [
+          profilesResponse,
+          activitiesResponse,
+          suggestionsResponse,
+          reportsResponse,
+        ] = await Promise.all([
+          // -----------------------------------------------
+          // USUARIOS
+          // -----------------------------------------------
 
-        supabase
-          .from("user_profiles")
-          .select(
-            "id, full_name, role"
-          )
-          .in("role", [
-            "executor",
-            "admin",
-          ]),
+          supabase
+            .from("user_profiles")
+            .select(
+              "id, full_name, role"
+            )
+            .in("role", [
+              "executor",
+              "admin",
+            ]),
 
-        // -----------------------------------------------
-        // ACTIVIDADES DEL DÍA
-        //
-        // IMPORTANTE:
-        // due_date normalmente es DATE.
-        // Por eso usamos eq() y NO timestamp.
-        // -----------------------------------------------
+          // -----------------------------------------------
+          // ACTIVIDADES DEL DÍA
+          // -----------------------------------------------
 
-        supabase
-          .from("activities")
-          .select("*")
-          .eq("due_date", today)
-          .order("due_date", {
-            ascending: true,
-          }),
+          supabase
+            .from("activities")
+            .select("*")
+            .eq(
+              "due_date",
+              today
+            )
+            .order(
+              "due_date",
+              {
+                ascending: true,
+              }
+            ),
 
-        // -----------------------------------------------
-        // SUGERENCIAS DEL DÍA
-        // -----------------------------------------------
+          // -----------------------------------------------
+          // SUGERENCIAS DEL DÍA
+          // -----------------------------------------------
 
-        supabase
-          .from("content_suggestions")
-          .select(
-            `
-              id,
-              title,
-              description,
-              content_type,
-              status,
-              created_by,
-              created_at
-            `
-          )
-          .gte(
-            "created_at",
-            `${today}T00:00:00`
-          )
-          .lt(
-            "created_at",
-            `${today}T23:59:59`
-          )
-          .order("created_at", {
-            ascending: true,
-          }),
+          supabase
+            .from(
+              "content_suggestions"
+            )
+            .select(
+              `
+                id,
+                title,
+                description,
+                content_type,
+                status,
+                created_by,
+                created_at
+              `
+            )
+            .gte(
+              "created_at",
+              `${today}T00:00:00`
+            )
+            .lt(
+              "created_at",
+              `${today}T23:59:59`
+            )
+            .order(
+              "created_at",
+              {
+                ascending: true,
+              }
+            ),
 
-        // -----------------------------------------------
-        // REPORTES DIARIOS
-        //
-        // ESTA ES LA FUENTE PRINCIPAL DEL
-        // REPORTE INDIVIDUAL.
-        // -----------------------------------------------
+          // -----------------------------------------------
+          // REPORTES DIARIOS
+          // -----------------------------------------------
 
-        supabase
-          .from("daily_reports")
-          .select("*")
-          .eq(
-            "report_date",
-            today
-          ),
-      ]);
+          supabase
+            .from("daily_reports")
+            .select("*")
+            .eq(
+              "report_date",
+              today
+            ),
+        ]);
 
-      // =================================================
-      // ERRORES
-      // =================================================
+        // =================================================
+        // ERRORES
+        // =================================================
 
-      if (profilesResponse.error) {
-        console.error(
-          "Error loading profiles:",
+        if (
           profilesResponse.error
-        );
-      }
-
-      if (activitiesResponse.error) {
-        console.error(
-          "Error loading activities:",
-          activitiesResponse.error
-        );
-      }
-
-      if (suggestionsResponse.error) {
-        console.error(
-          "Error loading suggestions:",
-          suggestionsResponse.error
-        );
-      }
-
-      if (reportsResponse.error) {
-        console.error(
-          "Error loading daily reports:",
-          reportsResponse.error
-        );
-      }
-
-      // =================================================
-      // PROFILES
-      // =================================================
-
-      const loadedProfiles =
-        profilesResponse.data || [];
-
-      const profileMap = new Map(
-        loadedProfiles.map((profile) => [
-          profile.id,
-          profile,
-        ])
-      );
-
-      // =================================================
-      // ACTIVIDADES
-      // =================================================
-
-      const loadedActivities = (
-        activitiesResponse.data || []
-      ).map((activity: any) => ({
-        ...activity,
-
-        assigned_to_name:
-          profileMap.get(
-            activity.assigned_to
-          )?.full_name ||
-          activity.assigned_to,
-      }));
-
-      // =================================================
-      // GUARDAR ESTADO
-      // =================================================
-
-      setProfiles(
-        loadedProfiles
-      );
-
-      setActivities(
-        loadedActivities
-      );
-
-      setSuggestions(
-        suggestionsResponse.data || []
-      );
-
-      setDailyReports(
-        reportsResponse.data || []
-      );
-
-      // =================================================
-      // DEBUG
-      // =================================================
-
-      console.log(
-        "📊 REPORTE CONSOLIDADO",
-        {
-          fecha: today,
-          perfiles:
-            loadedProfiles.length,
-          actividades:
-            loadedActivities.length,
-          sugerencias:
-            suggestionsResponse.data?.length || 0,
-          reportes:
-            reportsResponse.data?.length || 0,
+        ) {
+          console.error(
+            "Error loading profiles:",
+            profilesResponse.error
+          );
         }
-      );
 
-      console.log(
-        "📋 Reportes diarios:",
-        reportsResponse.data
-      );
+        if (
+          activitiesResponse.error
+        ) {
+          console.error(
+            "Error loading activities:",
+            activitiesResponse.error
+          );
+        }
 
-    } catch (error) {
-      console.error(
-        "Error loading consolidated report:",
-        error
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        if (
+          suggestionsResponse.error
+        ) {
+          console.error(
+            "Error loading suggestions:",
+            suggestionsResponse.error
+          );
+        }
+
+        if (
+          reportsResponse.error
+        ) {
+          console.error(
+            "Error loading daily reports:",
+            reportsResponse.error
+          );
+        }
+
+        // =================================================
+        // PROFILES
+        // =================================================
+
+        const loadedProfiles =
+          profilesResponse.data || [];
+
+        const profileMap =
+          new Map(
+            loadedProfiles.map(
+              (profile) => [
+                profile.id,
+                profile,
+              ]
+            )
+          );
+
+        // =================================================
+        // ACTIVIDADES
+        // =================================================
+
+        const loadedActivities =
+          (
+            activitiesResponse.data ||
+            []
+          ).map(
+            (activity: any) => ({
+              ...activity,
+
+              assigned_to_name:
+                profileMap.get(
+                  activity.assigned_to
+                )?.full_name ||
+                activity.assigned_to,
+            })
+          );
+
+        // =================================================
+        // GUARDAR ESTADO
+        // =================================================
+
+        setProfiles(
+          loadedProfiles
+        );
+
+        setActivities(
+          loadedActivities
+        );
+
+        setSuggestions(
+          suggestionsResponse.data ||
+            []
+        );
+
+        setDailyReports(
+          reportsResponse.data ||
+            []
+        );
+
+        // =================================================
+        // DEBUG
+        // =================================================
+
+        console.log(
+          "📊 REPORTE CONSOLIDADO",
+          {
+            fecha: today,
+
+            perfiles:
+              loadedProfiles.length,
+
+            actividades:
+              loadedActivities.length,
+
+            sugerencias:
+              suggestionsResponse.data
+                ?.length || 0,
+
+            reportes:
+              reportsResponse.data
+                ?.length || 0,
+          }
+        );
+
+        console.log(
+          "📋 Reportes diarios:",
+          reportsResponse.data
+        );
+      } catch (error) {
+        console.error(
+          "Error loading consolidated report:",
+          error
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   // =====================================================
   // CARGA INICIAL
@@ -381,10 +410,11 @@ export default function ConsolidatedReports() {
   // SOLO EJECUTORES
   // =====================================================
 
-  const executors = profiles.filter(
-    (profile) =>
-      profile.role === "executor"
-  );
+  const executors =
+    profiles.filter(
+      (profile) =>
+        profile.role === "executor"
+    );
 
   // =====================================================
   // ACTIVIDADES POR USUARIO
@@ -395,7 +425,8 @@ export default function ConsolidatedReports() {
   ) => {
     return activities.filter(
       (activity) =>
-        activity.assigned_to === userId
+        activity.assigned_to ===
+        userId
     );
   };
 
@@ -408,7 +439,8 @@ export default function ConsolidatedReports() {
   ) => {
     return suggestions.filter(
       (suggestion) =>
-        suggestion.created_by === userId
+        suggestion.created_by ===
+        userId
     );
   };
 
@@ -421,7 +453,8 @@ export default function ConsolidatedReports() {
   ) => {
     return dailyReports.find(
       (report) =>
-        report.user_id === userId
+        report.user_id ===
+        userId
     );
   };
 
@@ -432,49 +465,67 @@ export default function ConsolidatedReports() {
   const completedCount =
     activities.filter(
       (activity) =>
-        activity.status === "completed"
+        activity.status ===
+        "completed"
     ).length;
 
   const inProgressCount =
     activities.filter(
       (activity) =>
-        activity.status === "in_progress"
+        activity.status ===
+        "in_progress"
     ).length;
 
   const pendingCount =
     activities.filter(
       (activity) =>
-        activity.status === "pending"
+        activity.status ===
+        "pending"
     ).length;
 
   const approvedSuggestions =
     suggestions.filter(
       (suggestion) =>
-        suggestion.status === "approved"
+        suggestion.status ===
+        "approved"
     ).length;
 
   const pendingSuggestions =
     suggestions.filter(
       (suggestion) =>
-        suggestion.status === "pending"
+        suggestion.status ===
+        "pending"
     ).length;
 
   const rejectedSuggestions =
     suggestions.filter(
       (suggestion) =>
-        suggestion.status === "rejected"
+        suggestion.status ===
+        "rejected"
     ).length;
 
   // =====================================================
   // GENERAR REPORTE CONSOLIDADO
+  //
+  // REPORTE EJECUTIVO:
+  // - No incluye reportes diarios completos.
+  // - No incluye prioridad.
+  // - No incluye fechas repetidas.
+  // - Muestra actividades completadas.
+  // - Muestra actividades en progreso.
+  // - De pendientes solo muestra las primeras 5.
   // =====================================================
 
   const generateConsolidatedText =
     () => {
       const lines: string[] = [];
 
+      // =================================================
+      // ENCABEZADO
+      // =================================================
+
       lines.push(
-        `REPORTE CONSOLIDADO - ${formatDate(
+        `REPORTE CONSOLIDADO — ${formatDate(
           today
         )}`
       );
@@ -482,7 +533,7 @@ export default function ConsolidatedReports() {
       lines.push("");
 
       // =================================================
-      // RESUMEN
+      // RESUMEN GENERAL
       // =================================================
 
       lines.push(
@@ -490,41 +541,53 @@ export default function ConsolidatedReports() {
       );
 
       lines.push(
-        "═══════════════════════"
-      );
-
-      lines.push(
-        `• Actividades completadas: ${completedCount}`
-      );
-
-      lines.push(
-        `• Actividades en progreso: ${inProgressCount}`
-      );
-
-      lines.push(
-        `• Actividades pendientes: ${pendingCount}`
+        "━━━━━━━━━━━━━━━━━━━━"
       );
 
       lines.push(
         `• Total de actividades: ${activities.length}`
       );
 
-      lines.push("");
-
       lines.push(
-        `• Sugerencias aprobadas: ${approvedSuggestions}`
+        `• ✅ Completadas: ${completedCount}`
       );
 
       lines.push(
-        `• Sugerencias pendientes: ${pendingSuggestions}`
+        `• 🔵 En progreso: ${inProgressCount}`
       );
 
       lines.push(
-        `• Sugerencias rechazadas: ${rejectedSuggestions}`
+        `• 🟡 Pendientes: ${pendingCount}`
       );
 
       // =================================================
-      // REPORTES INDIVIDUALES
+      // SUGERENCIAS
+      // =================================================
+
+      if (
+        suggestions.length > 0
+      ) {
+        lines.push("");
+
+        lines.push(
+          `💡 Sugerencias: ${suggestions.length}`
+        );
+
+        lines.push(
+          `• Aprobadas: ${approvedSuggestions}`
+        );
+
+        lines.push(
+          `• Pendientes: ${pendingSuggestions}`
+        );
+
+        lines.push(
+          `• Rechazadas: ${rejectedSuggestions}`
+        );
+      }
+
+      // =================================================
+      // REPORTES POR PERSONA
       // =================================================
 
       executors.forEach(
@@ -539,155 +602,230 @@ export default function ConsolidatedReports() {
               executor.id
             );
 
-          const savedReport =
-            getUserDailyReport(
-              executor.id
+          const completed =
+            userActivities.filter(
+              (activity) =>
+                activity.status ===
+                "completed"
             );
+
+          const progress =
+            userActivities.filter(
+              (activity) =>
+                activity.status ===
+                "in_progress"
+            );
+
+          const pending =
+            userActivities.filter(
+              (activity) =>
+                activity.status ===
+                "pending"
+            );
+
+          const rejected =
+            userActivities.filter(
+              (activity) =>
+                activity.status ===
+                "rejected"
+            );
+
+          // =============================================
+          // USUARIO
+          // =============================================
 
           lines.push("");
 
           lines.push(
-            `👤 ${
+            `👤 ${(
               executor.full_name ||
               "Usuario"
-            }`
+            ).toUpperCase()}`
           );
 
           lines.push(
-            "═══════════════════════"
+            "━━━━━━━━━━━━━━━━━━━━"
           );
 
-          // =================================================
-          // SI EXISTE REPORTE GUARDADO
-          // =================================================
+          // =============================================
+          // RESUMEN USUARIO
+          // =============================================
 
-          if (savedReport?.report_content) {
+          const userSummary =
+            [
+              `${userActivities.length} actividades`,
+              completed.length > 0
+                ? `${completed.length} completadas`
+                : null,
+              progress.length > 0
+                ? `${progress.length} en progreso`
+                : null,
+              pending.length > 0
+                ? `${pending.length} pendientes`
+                : null,
+              rejected.length > 0
+                ? `${rejected.length} rechazadas`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+
+          lines.push(
+            userSummary ||
+              "Sin actividades registradas."
+          );
+
+          // =============================================
+          // COMPLETADAS
+          // =============================================
+
+          if (
+            completed.length > 0
+          ) {
             lines.push("");
 
             lines.push(
-              savedReport.report_content
+              "✅ COMPLETADAS"
             );
 
-            return;
-          }
-
-          // =================================================
-          // SI NO EXISTE REPORTE
-          // =================================================
-
-          lines.push("");
-
-          lines.push(
-            "REPORTE DIARIO"
-          );
-
-          lines.push(
-            "No ha generado su reporte diario."
-          );
-
-          // =================================================
-          // FALLBACK DE ACTIVIDADES
-          // =================================================
-
-          lines.push("");
-
-          lines.push(
-            "ACTIVIDADES REGISTRADAS"
-          );
-
-          if (
-            userActivities.length === 0
-          ) {
-            lines.push(
-              "No registró actividades."
-            );
-          } else {
-            userActivities.forEach(
+            completed.forEach(
               (activity) => {
-                const icon =
-                  activity.status ===
-                  "completed"
-                    ? "✅"
-                    : activity.status ===
-                        "in_progress"
-                    ? "🔵"
-                    : activity.status ===
-                        "pending"
-                    ? "🟡"
-                    : "🔴";
-
                 lines.push(
-                  `• ${icon} ${
+                  `• ${
                     activity.title ||
                     "Sin título"
                   }`
                 );
-
-                lines.push(
-                  `  Estado: ${statusLabel(
-                    activity.status
-                  )}`
-                );
-
-                if (
-                  activity.priority
-                ) {
-                  lines.push(
-                    `  Prioridad: ${activity.priority}`
-                  );
-                }
-
-                if (
-                  activity.result_notes
-                ) {
-                  lines.push(
-                    `  Notas: ${activity.result_notes}`
-                  );
-                }
               }
             );
           }
 
-          // =================================================
-          // SUGERENCIAS
-          // =================================================
-
-          lines.push("");
-
-          lines.push(
-            "SUGERENCIAS DE CONTENIDO"
-          );
+          // =============================================
+          // EN PROGRESO
+          // =============================================
 
           if (
-            userSuggestions.length === 0
+            progress.length > 0
           ) {
+            lines.push("");
+
             lines.push(
-              "No registró sugerencias."
+              "🔵 EN PROGRESO"
             );
-          } else {
+
+            progress.forEach(
+              (activity) => {
+                lines.push(
+                  `• ${
+                    activity.title ||
+                    "Sin título"
+                  }`
+                );
+              }
+            );
+          }
+
+          // =============================================
+          // PENDIENTES
+          // =============================================
+
+          if (
+            pending.length > 0
+          ) {
+            lines.push("");
+
+            lines.push(
+              `🟡 PENDIENTES — ${pending.length}`
+            );
+
+            // Solo mostramos las primeras 5
+            const pendingPreview =
+              pending.slice(0, 5);
+
+            pendingPreview.forEach(
+              (activity) => {
+                lines.push(
+                  `• ${
+                    activity.title ||
+                    "Sin título"
+                  }`
+                );
+              }
+            );
+
+            const remaining =
+              pending.length -
+              pendingPreview.length;
+
+            if (
+              remaining > 0
+            ) {
+              lines.push(
+                `• ... y ${remaining} más`
+              );
+            }
+          }
+
+          // =============================================
+          // RECHAZADAS
+          // =============================================
+
+          if (
+            rejected.length > 0
+          ) {
+            lines.push("");
+
+            lines.push(
+              `🔴 RECHAZADAS — ${rejected.length}`
+            );
+
+            rejected
+              .slice(0, 5)
+              .forEach(
+                (activity) => {
+                  lines.push(
+                    `• ${
+                      activity.title ||
+                      "Sin título"
+                    }`
+                  );
+                }
+              );
+
+            if (
+              rejected.length > 5
+            ) {
+              lines.push(
+                `• ... y ${
+                  rejected.length - 5
+                } más`
+              );
+            }
+          }
+
+          // =============================================
+          // SUGERENCIAS DEL USUARIO
+          // =============================================
+
+          if (
+            userSuggestions.length > 0
+          ) {
+            lines.push("");
+
+            lines.push(
+              `💡 SUGERENCIAS — ${userSuggestions.length}`
+            );
+
             userSuggestions.forEach(
               (suggestion) => {
                 lines.push(
-                  `• 💡 ${suggestion.title}`
-                );
-
-                lines.push(
-                  `  Tipo: ${suggestion.content_type}`
-                );
-
-                lines.push(
-                  `  Estado: ${suggestionStatusLabel(
+                  `• ${
+                    suggestion.title ||
+                    "Sin título"
+                  } — ${suggestionStatusLabel(
                     suggestion.status
                   )}`
                 );
-
-                if (
-                  suggestion.description
-                ) {
-                  lines.push(
-                    `  Descripción: ${suggestion.description}`
-                  );
-                }
               }
             );
           }
@@ -701,7 +839,11 @@ export default function ConsolidatedReports() {
       lines.push("");
 
       lines.push(
-        "REPORTE GENERADO AUTOMÁTICAMENTE POR EAGLES GEAR CRM"
+        "━━━━━━━━━━━━━━━━━━━━"
+      );
+
+      lines.push(
+        "Generado automáticamente por Eagles Gear CRM."
       );
 
       return lines.join("\n");
@@ -711,32 +853,31 @@ export default function ConsolidatedReports() {
   // COPIAR
   // =====================================================
 
-  const copyReport = async () => {
-    try {
-      setCopying(true);
+  const copyReport =
+    async () => {
+      try {
+        setCopying(true);
 
-      await navigator.clipboard.writeText(
-        generateConsolidatedText()
-      );
+        await navigator.clipboard.writeText(
+          generateConsolidatedText()
+        );
 
-      alert(
-        "📋 Reporte consolidado copiado."
-      );
+        alert(
+          "📋 Reporte consolidado copiado."
+        );
+      } catch (error) {
+        console.error(
+          "Error copying consolidated report:",
+          error
+        );
 
-    } catch (error) {
-      console.error(
-        "Error copying consolidated report:",
-        error
-      );
-
-      alert(
-        "No se pudo copiar el reporte."
-      );
-
-    } finally {
-      setCopying(false);
-    }
-  };
+        alert(
+          "No se pudo copiar el reporte."
+        );
+      } finally {
+        setCopying(false);
+      }
+    };
 
   // =====================================================
   // LOADING
@@ -745,7 +886,6 @@ export default function ConsolidatedReports() {
   if (loading) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow p-8 text-center">
-
         <RefreshCw
           size={24}
           className="mx-auto animate-spin text-blue-600 mb-3"
@@ -754,7 +894,6 @@ export default function ConsolidatedReports() {
         <p className="text-gray-500">
           Generando reporte consolidado...
         </p>
-
       </div>
     );
   }
@@ -807,7 +946,9 @@ export default function ConsolidatedReports() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 font-semibold"
           >
 
-            <RefreshCw size={17} />
+            <RefreshCw
+              size={17}
+            />
 
             Actualizar
 
@@ -820,7 +961,9 @@ export default function ConsolidatedReports() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50"
           >
 
-            <Copy size={17} />
+            <Copy
+              size={17}
+            />
 
             {copying
               ? "Copiando..."
@@ -838,10 +981,12 @@ export default function ConsolidatedReports() {
 
       <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3">
 
-        <CheckCircle2 size={18} />
+        <CheckCircle2
+          size={18}
+        />
 
-        El reporte consolidado utiliza los reportes diarios
-        guardados de Marcos y Ursula.
+        El reporte consolidado muestra un resumen ejecutivo
+        de las actividades y sugerencias del día.
 
       </div>
 
@@ -850,6 +995,8 @@ export default function ConsolidatedReports() {
       ================================================= */}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+
+        {/* COMPLETADAS */}
 
         <div className="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg border border-green-200 dark:border-green-800">
 
@@ -868,6 +1015,8 @@ export default function ConsolidatedReports() {
 
         </div>
 
+        {/* EN PROGRESO */}
+
         <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
 
           <Clock
@@ -884,6 +1033,8 @@ export default function ConsolidatedReports() {
           </p>
 
         </div>
+
+        {/* PENDIENTES */}
 
         <div className="bg-yellow-50 dark:bg-yellow-950/30 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
 
@@ -902,6 +1053,8 @@ export default function ConsolidatedReports() {
 
         </div>
 
+        {/* SUGERENCIAS */}
+
         <div className="bg-purple-50 dark:bg-purple-950/30 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
 
           <Lightbulb
@@ -918,6 +1071,8 @@ export default function ConsolidatedReports() {
           </p>
 
         </div>
+
+        {/* TOTAL */}
 
         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
 
@@ -985,7 +1140,9 @@ export default function ConsolidatedReports() {
 
             return (
               <div
-                key={executor.id}
+                key={
+                  executor.id
+                }
                 className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-200 dark:border-gray-800 p-5"
               >
 
@@ -996,12 +1153,14 @@ export default function ConsolidatedReports() {
                   <div>
 
                     <h3 className="text-lg font-bold">
-                      {executor.full_name ||
-                        "Usuario"}
+                      {
+                        executor.full_name ||
+                        "Usuario"
+                      }
                     </h3>
 
                     <p className="text-xs text-gray-500">
-                      Reporte individual
+                      Resumen del día
                     </p>
 
                   </div>
@@ -1077,7 +1236,9 @@ export default function ConsolidatedReports() {
                     </span>
 
                     <strong>
-                      {userActivities.length}
+                      {
+                        userActivities.length
+                      }
                     </strong>
 
                   </div>
@@ -1089,7 +1250,9 @@ export default function ConsolidatedReports() {
                     </span>
 
                     <strong>
-                      {userSuggestions.length}
+                      {
+                        userSuggestions.length
+                      }
                     </strong>
 
                   </div>
@@ -1101,9 +1264,11 @@ export default function ConsolidatedReports() {
                     </span>
 
                     <strong>
-                      {savedReport
-                        ? "Sí"
-                        : "No"}
+                      {
+                        savedReport
+                          ? "Sí"
+                          : "No"
+                      }
                     </strong>
 
                   </div>
@@ -1130,7 +1295,7 @@ export default function ConsolidatedReports() {
           </h3>
 
           <p className="text-sm text-gray-500 mt-1">
-            Listo para copiar y compartir.
+            Versión ejecutiva lista para copiar y compartir.
           </p>
 
         </div>
@@ -1138,7 +1303,9 @@ export default function ConsolidatedReports() {
         <div className="p-5">
 
           <pre className="bg-gray-50 dark:bg-gray-800 rounded-lg p-5 text-sm whitespace-pre-wrap font-mono overflow-x-auto">
-            {generateConsolidatedText()}
+            {
+              generateConsolidatedText()
+            }
           </pre>
 
         </div>
@@ -1148,3 +1315,4 @@ export default function ConsolidatedReports() {
     </div>
   );
 }
+
