@@ -25,7 +25,6 @@ import {
   createClient,
 } from '@/lib/supabase/client'
 
-
 // =======================================================
 // TIPOS
 // =======================================================
@@ -36,13 +35,11 @@ type ActivityIdeaPriority =
   | 'high'
   | 'urgent'
 
-
 interface UserProfile {
   id: string
   full_name: string
   role: string
 }
-
 
 interface ReviewActivityIdeaModalProps {
   isOpen: boolean
@@ -50,7 +47,6 @@ interface ReviewActivityIdeaModalProps {
   onClose: () => void
   onSuccess: () => void
 }
-
 
 // =======================================================
 // COMPONENTE
@@ -63,9 +59,9 @@ export default function ReviewActivityIdeaModal({
   onSuccess,
 }: ReviewActivityIdeaModalProps) {
 
-  // =======================================================
+  // =====================================================
   // FORMULARIO
-  // =======================================================
+  // =====================================================
 
   const [
     title,
@@ -97,10 +93,9 @@ export default function ReviewActivityIdeaModal({
     setPriority,
   ] = useState<ActivityIdeaPriority>('medium')
 
-
-  // =======================================================
+  // =====================================================
   // USUARIOS
-  // =======================================================
+  // =====================================================
 
   const [
     users,
@@ -112,10 +107,9 @@ export default function ReviewActivityIdeaModal({
     setLoadingUsers,
   ] = useState(false)
 
-
-  // =======================================================
+  // =====================================================
   // ESTADOS
-  // =======================================================
+  // =====================================================
 
   const [
     saving,
@@ -127,13 +121,11 @@ export default function ReviewActivityIdeaModal({
     setError,
   ] = useState<string | null>(null)
 
-
-  // =======================================================
+  // =====================================================
   // CARGAR IDEA
-  // =======================================================
+  // =====================================================
 
   useEffect(() => {
-
     if (!isOpen || !idea) {
       return
     }
@@ -146,8 +138,34 @@ export default function ReviewActivityIdeaModal({
       idea.description || '',
     )
 
+    /*
+     * IMPORTANTE:
+     *
+     * Si la idea ya tiene assigned_to,
+     * usamos ese responsable.
+     *
+     * Si no tiene assigned_to,
+     * usamos created_by como responsable
+     * por defecto.
+     *
+     * Esto hace que:
+     *
+     * Marcos crea idea
+     *        ↓
+     * Hugo aprueba
+     *        ↓
+     * actividad para Marcos
+     *
+     * Úrsula crea idea
+     *        ↓
+     * Hugo aprueba
+     *        ↓
+     * actividad para Úrsula
+     */
     setAssignedTo(
-      idea.assigned_to || '',
+      idea.assigned_to ||
+      idea.created_by ||
+      '',
     )
 
     setDueDate(
@@ -161,7 +179,8 @@ export default function ReviewActivityIdeaModal({
     )
 
     setPriority(
-      (idea.priority as ActivityIdeaPriority) || 'medium',
+      (idea.priority as ActivityIdeaPriority) ||
+      'medium',
     )
 
     setError(null)
@@ -171,10 +190,9 @@ export default function ReviewActivityIdeaModal({
     idea,
   ])
 
-
-  // =======================================================
+  // =====================================================
   // CARGAR USUARIOS
-  // =======================================================
+  // =====================================================
 
   useEffect(() => {
 
@@ -227,7 +245,6 @@ export default function ReviewActivityIdeaModal({
         setLoadingUsers(false)
 
       }
-
     }
 
     loadUsers()
@@ -236,10 +253,9 @@ export default function ReviewActivityIdeaModal({
     isOpen,
   ])
 
-
-  // =======================================================
+  // =====================================================
   // CERRAR
-  // =======================================================
+  // =====================================================
 
   const handleClose = () => {
 
@@ -250,13 +266,11 @@ export default function ReviewActivityIdeaModal({
     setError(null)
 
     onClose()
-
   }
 
-
-  // =======================================================
+  // =====================================================
   // APROBAR Y CREAR ACTIVIDAD
-  // =======================================================
+  // =====================================================
 
   const handleSubmit = async (
     event: FormEvent<HTMLFormElement>,
@@ -275,13 +289,20 @@ export default function ReviewActivityIdeaModal({
       )
 
       return
-
     }
+
+    /*
+     * Si por alguna razón assignedTo está vacío,
+     * intentamos utilizar al creador de la idea.
+     */
+    const finalAssignedTo =
+      assignedTo ||
+      idea.created_by ||
+      null
 
     try {
 
       setSaving(true)
-
       setError(null)
 
       await approveActivityIdea({
@@ -297,8 +318,7 @@ export default function ReviewActivityIdeaModal({
           null,
 
         assigned_to:
-          assignedTo ||
-          null,
+          finalAssignedTo,
 
         due_date:
           dueDate ||
@@ -312,6 +332,15 @@ export default function ReviewActivityIdeaModal({
 
       })
 
+      /*
+       * El hook debe encargarse de:
+       *
+       * 1. Crear la actividad.
+       * 2. Marcar la idea como approved.
+       *
+       * Después avisamos al dashboard para
+       * actualizar la información.
+       */
       onSuccess()
 
     } catch (err) {
@@ -332,22 +361,19 @@ export default function ReviewActivityIdeaModal({
       setSaving(false)
 
     }
-
   }
 
-
-  // =======================================================
+  // =====================================================
   // NO MOSTRAR MODAL
-  // =======================================================
+  // =====================================================
 
   if (!isOpen || !idea) {
     return null
   }
 
-
-  // =======================================================
+  // =====================================================
   // RENDER
-  // =======================================================
+  // =====================================================
 
   return (
 
@@ -476,7 +502,6 @@ export default function ReviewActivityIdeaModal({
 
         </div>
 
-
         {/* =================================================
             CONTENIDO
         ================================================= */}
@@ -523,7 +548,6 @@ export default function ReviewActivityIdeaModal({
               </p>
 
             </div>
-
 
             {/* =================================================
                 TÍTULO
@@ -574,7 +598,6 @@ export default function ReviewActivityIdeaModal({
 
             </div>
 
-
             {/* =================================================
                 DESCRIPCIÓN
             ================================================= */}
@@ -624,7 +647,6 @@ export default function ReviewActivityIdeaModal({
               />
 
             </div>
-
 
             {/* =================================================
                 RESPONSABLE
@@ -687,21 +709,37 @@ export default function ReviewActivityIdeaModal({
                   Sin asignar
                 </option>
 
-                {users.map((user) => (
+                {users.map(
+                  (user) => (
 
-                  <option
-                    key={user.id}
-                    value={user.id}
-                  >
-                    {user.full_name}
-                  </option>
+                    <option
+                      key={user.id}
+                      value={user.id}
+                    >
+                      {user.full_name}
+                    </option>
 
-                ))}
+                  ),
+                )}
 
               </select>
 
-            </div>
+              {idea.created_by && (
 
+                <p
+                  className="
+                    mt-1
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                  "
+                >
+                  Por defecto se asigna al creador de la idea.
+                </p>
+
+              )}
+
+            </div>
 
             {/* =================================================
                 FECHA / HORA
@@ -769,7 +807,6 @@ export default function ReviewActivityIdeaModal({
 
               </div>
 
-
               <div>
 
                 <label
@@ -816,7 +853,6 @@ export default function ReviewActivityIdeaModal({
               </div>
 
             </div>
-
 
             {/* =================================================
                 PRIORIDAD
@@ -892,7 +928,6 @@ export default function ReviewActivityIdeaModal({
 
             </div>
 
-
             {/* =================================================
                 ERROR
             ================================================= */}
@@ -919,7 +954,6 @@ export default function ReviewActivityIdeaModal({
             )}
 
           </div>
-
 
           {/* =================================================
               BOTONES
@@ -962,7 +996,6 @@ export default function ReviewActivityIdeaModal({
             >
               Cancelar
             </button>
-
 
             <button
               type="submit"
@@ -1007,7 +1040,6 @@ export default function ReviewActivityIdeaModal({
       </div>
 
     </div>
-
   )
 }
 
