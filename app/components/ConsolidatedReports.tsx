@@ -63,14 +63,8 @@ function getLocalDateString() {
   const now = new Date();
 
   const year = now.getFullYear();
-
-  const month = String(
-    now.getMonth() + 1
-  ).padStart(2, "0");
-
-  const day = String(
-    now.getDate()
-  ).padStart(2, "0");
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 }
@@ -80,18 +74,19 @@ function getLocalDateString() {
 // =======================================================
 
 function formatDate(dateString: string) {
-  return new Date(
-    `${dateString}T12:00:00`
-  ).toLocaleDateString("es-MX", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  return new Date(`${dateString}T12:00:00`).toLocaleDateString(
+    "es-MX",
+    {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }
+  );
 }
 
 // =======================================================
-// STATUS ACTIVIDADES
+// STATUS
 // =======================================================
 
 function statusLabel(status: string) {
@@ -113,9 +108,24 @@ function statusLabel(status: string) {
   }
 }
 
-// =======================================================
-// STATUS SUGERENCIAS
-// =======================================================
+function statusIcon(status: string) {
+  switch (status) {
+    case "completed":
+      return "✅";
+
+    case "in_progress":
+      return "🔵";
+
+    case "pending":
+      return "🟡";
+
+    case "rejected":
+      return "🔴";
+
+    default:
+      return "•";
+  }
+}
 
 function suggestionStatusLabel(status: string) {
   switch (status) {
@@ -147,256 +157,184 @@ export default function ConsolidatedReports() {
   const supabase = createClient();
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [dailyReports, setDailyReports] = useState<DailyReport[]>([]);
 
-  const [activities, setActivities] =
-    useState<Activity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [copying, setCopying] = useState(false);
 
-  const [suggestions, setSuggestions] =
-    useState<Suggestion[]>([]);
-
-  const [dailyReports, setDailyReports] =
-    useState<DailyReport[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [copying, setCopying] =
-    useState(false);
-
-  const today =
-    getLocalDateString();
+  const today = getLocalDateString();
 
   // =====================================================
   // CARGAR DATOS
   // =====================================================
 
-  const loadConsolidatedReport =
-    async () => {
-      setLoading(true);
+  const loadConsolidatedReport = async () => {
+    setLoading(true);
 
-      try {
-        const [
-          profilesResponse,
-          activitiesResponse,
-          suggestionsResponse,
-          reportsResponse,
-        ] = await Promise.all([
-          // -----------------------------------------------
-          // USUARIOS
-          // -----------------------------------------------
+    try {
+      const [
+        profilesResponse,
+        activitiesResponse,
+        suggestionsResponse,
+        reportsResponse,
+      ] = await Promise.all([
+        // -------------------------------------------------
+        // USUARIOS
+        // -------------------------------------------------
 
-          supabase
-            .from("user_profiles")
-            .select(
-              "id, full_name, role"
-            )
-            .in("role", [
-              "executor",
-              "admin",
-            ]),
+        supabase
+          .from("user_profiles")
+          .select("id, full_name, role")
+          .in("role", ["executor", "admin"]),
 
-          // -----------------------------------------------
-          // ACTIVIDADES DEL DÍA
-          // -----------------------------------------------
+        // -------------------------------------------------
+        // ACTIVIDADES DEL DÍA
+        // -------------------------------------------------
 
-          supabase
-            .from("activities")
-            .select("*")
-            .eq(
-              "due_date",
-              today
-            )
-            .order(
-              "due_date",
-              {
-                ascending: true,
-              }
-            ),
+        supabase
+          .from("activities")
+          .select("*")
+          .eq("due_date", today)
+          .order("due_date", {
+            ascending: true,
+          }),
 
-          // -----------------------------------------------
-          // SUGERENCIAS DEL DÍA
-          // -----------------------------------------------
+        // -------------------------------------------------
+        // SUGERENCIAS DEL DÍA
+        // -------------------------------------------------
 
-          supabase
-            .from(
-              "content_suggestions"
-            )
-            .select(
-              `
-                id,
-                title,
-                description,
-                content_type,
-                status,
-                created_by,
-                created_at
-              `
-            )
-            .gte(
-              "created_at",
-              `${today}T00:00:00`
-            )
-            .lt(
-              "created_at",
-              `${today}T23:59:59`
-            )
-            .order(
-              "created_at",
-              {
-                ascending: true,
-              }
-            ),
+        supabase
+          .from("content_suggestions")
+          .select(
+            `
+              id,
+              title,
+              description,
+              content_type,
+              status,
+              created_by,
+              created_at
+            `
+          )
+          .gte(
+            "created_at",
+            `${today}T00:00:00`
+          )
+          .lt(
+            "created_at",
+            `${today}T23:59:59`
+          )
+          .order("created_at", {
+            ascending: true,
+          }),
 
-          // -----------------------------------------------
-          // REPORTES DIARIOS
-          // -----------------------------------------------
+        // -------------------------------------------------
+        // REPORTES DIARIOS
+        // -------------------------------------------------
 
-          supabase
-            .from("daily_reports")
-            .select("*")
-            .eq(
-              "report_date",
-              today
-            ),
-        ]);
+        supabase
+          .from("daily_reports")
+          .select("*")
+          .eq("report_date", today),
+      ]);
 
-        // =================================================
-        // ERRORES
-        // =================================================
-
-        if (
-          profilesResponse.error
-        ) {
-          console.error(
-            "Error loading profiles:",
-            profilesResponse.error
-          );
-        }
-
-        if (
-          activitiesResponse.error
-        ) {
-          console.error(
-            "Error loading activities:",
-            activitiesResponse.error
-          );
-        }
-
-        if (
-          suggestionsResponse.error
-        ) {
-          console.error(
-            "Error loading suggestions:",
-            suggestionsResponse.error
-          );
-        }
-
-        if (
-          reportsResponse.error
-        ) {
-          console.error(
-            "Error loading daily reports:",
-            reportsResponse.error
-          );
-        }
-
-        // =================================================
-        // PROFILES
-        // =================================================
-
-        const loadedProfiles =
-          profilesResponse.data || [];
-
-        const profileMap =
-          new Map(
-            loadedProfiles.map(
-              (profile) => [
-                profile.id,
-                profile,
-              ]
-            )
-          );
-
-        // =================================================
-        // ACTIVIDADES
-        // =================================================
-
-        const loadedActivities =
-          (
-            activitiesResponse.data ||
-            []
-          ).map(
-            (activity: any) => ({
-              ...activity,
-
-              assigned_to_name:
-                profileMap.get(
-                  activity.assigned_to
-                )?.full_name ||
-                activity.assigned_to,
-            })
-          );
-
-        // =================================================
-        // GUARDAR ESTADO
-        // =================================================
-
-        setProfiles(
-          loadedProfiles
-        );
-
-        setActivities(
-          loadedActivities
-        );
-
-        setSuggestions(
-          suggestionsResponse.data ||
-            []
-        );
-
-        setDailyReports(
-          reportsResponse.data ||
-            []
-        );
-
-        // =================================================
-        // DEBUG
-        // =================================================
-
-        console.log(
-          "📊 REPORTE CONSOLIDADO",
-          {
-            fecha: today,
-
-            perfiles:
-              loadedProfiles.length,
-
-            actividades:
-              loadedActivities.length,
-
-            sugerencias:
-              suggestionsResponse.data
-                ?.length || 0,
-
-            reportes:
-              reportsResponse.data
-                ?.length || 0,
-          }
-        );
-
-        console.log(
-          "📋 Reportes diarios:",
-          reportsResponse.data
-        );
-      } catch (error) {
+      if (profilesResponse.error) {
         console.error(
-          "Error loading consolidated report:",
-          error
+          "Error loading profiles:",
+          profilesResponse.error
         );
-      } finally {
-        setLoading(false);
       }
-    };
+
+      if (activitiesResponse.error) {
+        console.error(
+          "Error loading activities:",
+          activitiesResponse.error
+        );
+      }
+
+      if (suggestionsResponse.error) {
+        console.error(
+          "Error loading suggestions:",
+          suggestionsResponse.error
+        );
+      }
+
+      if (reportsResponse.error) {
+        console.error(
+          "Error loading daily reports:",
+          reportsResponse.error
+        );
+      }
+
+      // ===================================================
+      // PROFILES
+      // ===================================================
+
+      const loadedProfiles =
+        profilesResponse.data || [];
+
+      const profileMap = new Map(
+        loadedProfiles.map((profile) => [
+          profile.id,
+          profile,
+        ])
+      );
+
+      // ===================================================
+      // ACTIVIDADES
+      // ===================================================
+
+      const loadedActivities = (
+        activitiesResponse.data || []
+      ).map((activity: any) => ({
+        ...activity,
+
+        assigned_to_name:
+          profileMap.get(
+            activity.assigned_to
+          )?.full_name ||
+          activity.assigned_to,
+      }));
+
+      // ===================================================
+      // GUARDAR
+      // ===================================================
+
+      setProfiles(loadedProfiles);
+      setActivities(loadedActivities);
+      setSuggestions(
+        suggestionsResponse.data || []
+      );
+      setDailyReports(
+        reportsResponse.data || []
+      );
+
+      console.log(
+        "📊 REPORTE CONSOLIDADO",
+        {
+          fecha: today,
+          perfiles: loadedProfiles.length,
+          actividades:
+            loadedActivities.length,
+          sugerencias:
+            suggestionsResponse.data?.length ||
+            0,
+          reportes:
+            reportsResponse.data?.length ||
+            0,
+        }
+      );
+    } catch (error) {
+      console.error(
+        "Error loading consolidated report:",
+        error
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // =====================================================
   // CARGA INICIAL
@@ -407,14 +345,18 @@ export default function ConsolidatedReports() {
   }, []);
 
   // =====================================================
-  // SOLO EJECUTORES
+  // USUARIOS
   // =====================================================
 
-  const executors =
-    profiles.filter(
-      (profile) =>
-        profile.role === "executor"
-    );
+  const executors = profiles.filter(
+    (profile) =>
+      profile.role === "executor"
+  );
+
+  const hugo = profiles.find(
+    (profile) =>
+      profile.role === "admin"
+  );
 
   // =====================================================
   // ACTIVIDADES POR USUARIO
@@ -425,8 +367,7 @@ export default function ConsolidatedReports() {
   ) => {
     return activities.filter(
       (activity) =>
-        activity.assigned_to ===
-        userId
+        activity.assigned_to === userId
     );
   };
 
@@ -439,13 +380,12 @@ export default function ConsolidatedReports() {
   ) => {
     return suggestions.filter(
       (suggestion) =>
-        suggestion.created_by ===
-        userId
+        suggestion.created_by === userId
     );
   };
 
   // =====================================================
-  // REPORTE GUARDADO POR USUARIO
+  // REPORTE GUARDADO
   // =====================================================
 
   const getUserDailyReport = (
@@ -453,8 +393,7 @@ export default function ConsolidatedReports() {
   ) => {
     return dailyReports.find(
       (report) =>
-        report.user_id ===
-        userId
+        report.user_id === userId
     );
   };
 
@@ -465,364 +404,347 @@ export default function ConsolidatedReports() {
   const completedCount =
     activities.filter(
       (activity) =>
-        activity.status ===
-        "completed"
+        activity.status === "completed"
     ).length;
 
   const inProgressCount =
     activities.filter(
       (activity) =>
-        activity.status ===
-        "in_progress"
+        activity.status === "in_progress"
     ).length;
 
   const pendingCount =
     activities.filter(
       (activity) =>
-        activity.status ===
-        "pending"
+        activity.status === "pending"
     ).length;
 
   const approvedSuggestions =
     suggestions.filter(
       (suggestion) =>
-        suggestion.status ===
-        "approved"
+        suggestion.status === "approved"
     ).length;
 
   const pendingSuggestions =
     suggestions.filter(
       (suggestion) =>
-        suggestion.status ===
-        "pending"
+        suggestion.status === "pending"
     ).length;
 
   const rejectedSuggestions =
     suggestions.filter(
       (suggestion) =>
-        suggestion.status ===
-        "rejected"
+        suggestion.status === "rejected"
     ).length;
 
   // =====================================================
+  // GENERAR RESUMEN DE USUARIO
+  // =====================================================
+
+  const generateUserSummary = (
+    userId: string
+  ) => {
+    const userActivities =
+      getUserActivities(userId);
+
+    const completed =
+      userActivities.filter(
+        (activity) =>
+          activity.status ===
+          "completed"
+      );
+
+    const inProgress =
+      userActivities.filter(
+        (activity) =>
+          activity.status ===
+          "in_progress"
+      );
+
+    const pending =
+      userActivities.filter(
+        (activity) =>
+          activity.status ===
+          "pending"
+      );
+
+    return {
+      userActivities,
+      completed,
+      inProgress,
+      pending,
+    };
+  };
+
+  // =====================================================
   // GENERAR REPORTE CONSOLIDADO
-  //
-  // REPORTE EJECUTIVO:
-  // - No incluye reportes diarios completos.
-  // - No incluye prioridad.
-  // - No incluye fechas repetidas.
-  // - Muestra actividades completadas.
-  // - Muestra actividades en progreso.
-  // - De pendientes solo muestra las primeras 5.
   // =====================================================
 
   const generateConsolidatedText =
     () => {
       const lines: string[] = [];
 
-      // =================================================
-      // ENCABEZADO
-      // =================================================
-
       lines.push(
-        `REPORTE CONSOLIDADO — ${formatDate(
+        `📊 REPORTE CONSOLIDADO — ${formatDate(
           today
         )}`
       );
 
       lines.push("");
 
-      // =================================================
+      // -------------------------------------------------
       // RESUMEN GENERAL
-      // =================================================
+      // -------------------------------------------------
 
       lines.push(
         "RESUMEN GENERAL"
       );
 
       lines.push(
-        "━━━━━━━━━━━━━━━━━━━━"
+        `• ${completedCount} completadas`
       );
 
       lines.push(
-        `• Total de actividades: ${activities.length}`
+        `• ${inProgressCount} en progreso`
       );
 
       lines.push(
-        `• ✅ Completadas: ${completedCount}`
+        `• ${pendingCount} pendientes`
       );
 
       lines.push(
-        `• 🔵 En progreso: ${inProgressCount}`
+        `• ${activities.length} actividades totales`
       );
 
-      lines.push(
-        `• 🟡 Pendientes: ${pendingCount}`
-      );
+      lines.push("");
 
-      // =================================================
+      // -------------------------------------------------
       // SUGERENCIAS
-      // =================================================
+      // -------------------------------------------------
 
-      if (
-        suggestions.length > 0
-      ) {
+      lines.push(
+        "SUGERENCIAS"
+      );
+
+      lines.push(
+        `• ${approvedSuggestions} aprobadas`
+      );
+
+      lines.push(
+        `• ${pendingSuggestions} pendientes`
+      );
+
+      lines.push(
+        `• ${rejectedSuggestions} rechazadas`
+      );
+
+      lines.push(
+        "\n────────────────────"
+      );
+
+      // -------------------------------------------------
+      // HUGO
+      // -------------------------------------------------
+
+      if (hugo) {
+        const summary =
+          generateUserSummary(
+            hugo.id
+          );
+
         lines.push("");
-
         lines.push(
-          `💡 Sugerencias: ${suggestions.length}`
+          `👤 ${
+            hugo.full_name || "Hugo"
+          }`
         );
 
         lines.push(
-          `• Aprobadas: ${approvedSuggestions}`
+          "REPORTE DE ACTIVIDADES"
         );
 
         lines.push(
-          `• Pendientes: ${pendingSuggestions}`
+          `Actividades: ${summary.userActivities.length}`
         );
 
         lines.push(
-          `• Rechazadas: ${rejectedSuggestions}`
+          `✅ ${summary.completed.length} completadas`
         );
+
+        lines.push(
+          `🔵 ${summary.inProgress.length} en progreso`
+        );
+
+        lines.push(
+          `🟡 ${summary.pending.length} pendientes`
+        );
+
+        if (
+          summary.completed.length >
+          0
+        ) {
+          lines.push("");
+          lines.push("Completadas:");
+
+          summary.completed.forEach(
+            (activity) => {
+              lines.push(
+                `• ${activity.title}`
+              );
+            }
+          );
+        }
+
+        if (
+          summary.inProgress.length >
+          0
+        ) {
+          lines.push("");
+          lines.push("En progreso:");
+
+          summary.inProgress.forEach(
+            (activity) => {
+              lines.push(
+                `• ${activity.title}`
+              );
+            }
+          );
+        }
+
+        if (
+          summary.pending.length >
+          0
+        ) {
+          lines.push("");
+          lines.push("Pendientes:");
+
+          summary.pending.forEach(
+            (activity) => {
+              lines.push(
+                `• ${activity.title}`
+              );
+            }
+          );
+        }
       }
 
-      // =================================================
-      // REPORTES POR PERSONA
-      // =================================================
+      // -------------------------------------------------
+      // EJECUTORES
+      // -------------------------------------------------
 
       executors.forEach(
         (executor) => {
-          const userActivities =
-            getUserActivities(
+          const summary =
+            generateUserSummary(
               executor.id
             );
+
+          lines.push(
+            "\n────────────────────"
+          );
+
+          lines.push("");
+          lines.push(
+            `👤 ${
+              executor.full_name ||
+              "Usuario"
+            }`
+          );
+
+          lines.push(
+            "REPORTE DE ACTIVIDADES"
+          );
+
+          lines.push(
+            `Actividades: ${summary.userActivities.length}`
+          );
+
+          lines.push(
+            `✅ ${summary.completed.length} completadas`
+          );
+
+          lines.push(
+            `🔵 ${summary.inProgress.length} en progreso`
+          );
+
+          lines.push(
+            `🟡 ${summary.pending.length} pendientes`
+          );
+
+          // ---------------------------------------------
+          // SOLO MOSTRAR DETALLES CUANDO EXISTAN
+          // ---------------------------------------------
+
+          if (
+            summary.completed.length >
+            0
+          ) {
+            lines.push("");
+            lines.push("Completadas:");
+
+            summary.completed.forEach(
+              (activity) => {
+                lines.push(
+                  `• ${activity.title}`
+                );
+              }
+            );
+          }
+
+          if (
+            summary.inProgress.length >
+            0
+          ) {
+            lines.push("");
+            lines.push("En progreso:");
+
+            summary.inProgress.forEach(
+              (activity) => {
+                lines.push(
+                  `• ${activity.title}`
+                );
+              }
+            );
+          }
+
+          if (
+            summary.pending.length >
+            0
+          ) {
+            lines.push("");
+            lines.push("Pendientes:");
+
+            summary.pending.forEach(
+              (activity) => {
+                lines.push(
+                  `• ${activity.title}`
+                );
+              }
+            );
+          }
+
+          // ---------------------------------------------
+          // SUGERENCIAS
+          // ---------------------------------------------
 
           const userSuggestions =
             getUserSuggestions(
               executor.id
             );
 
-          const completed =
-            userActivities.filter(
-              (activity) =>
-                activity.status ===
-                "completed"
-            );
-
-          const progress =
-            userActivities.filter(
-              (activity) =>
-                activity.status ===
-                "in_progress"
-            );
-
-          const pending =
-            userActivities.filter(
-              (activity) =>
-                activity.status ===
-                "pending"
-            );
-
-          const rejected =
-            userActivities.filter(
-              (activity) =>
-                activity.status ===
-                "rejected"
-            );
-
-          // =============================================
-          // USUARIO
-          // =============================================
-
-          lines.push("");
-
-          lines.push(
-            `👤 ${(
-              executor.full_name ||
-              "Usuario"
-            ).toUpperCase()}`
-          );
-
-          lines.push(
-            "━━━━━━━━━━━━━━━━━━━━"
-          );
-
-          // =============================================
-          // RESUMEN USUARIO
-          // =============================================
-
-          const userSummary =
-            [
-              `${userActivities.length} actividades`,
-              completed.length > 0
-                ? `${completed.length} completadas`
-                : null,
-              progress.length > 0
-                ? `${progress.length} en progreso`
-                : null,
-              pending.length > 0
-                ? `${pending.length} pendientes`
-                : null,
-              rejected.length > 0
-                ? `${rejected.length} rechazadas`
-                : null,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-
-          lines.push(
-            userSummary ||
-              "Sin actividades registradas."
-          );
-
-          // =============================================
-          // COMPLETADAS
-          // =============================================
-
           if (
-            completed.length > 0
+            userSuggestions.length >
+            0
           ) {
             lines.push("");
-
             lines.push(
-              "✅ COMPLETADAS"
-            );
-
-            completed.forEach(
-              (activity) => {
-                lines.push(
-                  `• ${
-                    activity.title ||
-                    "Sin título"
-                  }`
-                );
-              }
-            );
-          }
-
-          // =============================================
-          // EN PROGRESO
-          // =============================================
-
-          if (
-            progress.length > 0
-          ) {
-            lines.push("");
-
-            lines.push(
-              "🔵 EN PROGRESO"
-            );
-
-            progress.forEach(
-              (activity) => {
-                lines.push(
-                  `• ${
-                    activity.title ||
-                    "Sin título"
-                  }`
-                );
-              }
-            );
-          }
-
-          // =============================================
-          // PENDIENTES
-          // =============================================
-
-          if (
-            pending.length > 0
-          ) {
-            lines.push("");
-
-            lines.push(
-              `🟡 PENDIENTES — ${pending.length}`
-            );
-
-            // Solo mostramos las primeras 5
-            const pendingPreview =
-              pending.slice(0, 5);
-
-            pendingPreview.forEach(
-              (activity) => {
-                lines.push(
-                  `• ${
-                    activity.title ||
-                    "Sin título"
-                  }`
-                );
-              }
-            );
-
-            const remaining =
-              pending.length -
-              pendingPreview.length;
-
-            if (
-              remaining > 0
-            ) {
-              lines.push(
-                `• ... y ${remaining} más`
-              );
-            }
-          }
-
-          // =============================================
-          // RECHAZADAS
-          // =============================================
-
-          if (
-            rejected.length > 0
-          ) {
-            lines.push("");
-
-            lines.push(
-              `🔴 RECHAZADAS — ${rejected.length}`
-            );
-
-            rejected
-              .slice(0, 5)
-              .forEach(
-                (activity) => {
-                  lines.push(
-                    `• ${
-                      activity.title ||
-                      "Sin título"
-                    }`
-                  );
-                }
-              );
-
-            if (
-              rejected.length > 5
-            ) {
-              lines.push(
-                `• ... y ${
-                  rejected.length - 5
-                } más`
-              );
-            }
-          }
-
-          // =============================================
-          // SUGERENCIAS DEL USUARIO
-          // =============================================
-
-          if (
-            userSuggestions.length > 0
-          ) {
-            lines.push("");
-
-            lines.push(
-              `💡 SUGERENCIAS — ${userSuggestions.length}`
+              "Sugerencias:"
             );
 
             userSuggestions.forEach(
               (suggestion) => {
                 lines.push(
-                  `• ${
-                    suggestion.title ||
-                    "Sin título"
-                  } — ${suggestionStatusLabel(
+                  `• 💡 ${suggestion.title} — ${suggestionStatusLabel(
                     suggestion.status
                   )}`
                 );
@@ -832,16 +754,15 @@ export default function ConsolidatedReports() {
         }
       );
 
-      // =================================================
+      // -------------------------------------------------
       // FOOTER
-      // =================================================
-
-      lines.push("");
+      // -------------------------------------------------
 
       lines.push(
-        "━━━━━━━━━━━━━━━━━━━━"
+        "\n────────────────────"
       );
 
+      lines.push("");
       lines.push(
         "Generado automáticamente por Eagles Gear CRM."
       );
@@ -853,31 +774,30 @@ export default function ConsolidatedReports() {
   // COPIAR
   // =====================================================
 
-  const copyReport =
-    async () => {
-      try {
-        setCopying(true);
+  const copyReport = async () => {
+    try {
+      setCopying(true);
 
-        await navigator.clipboard.writeText(
-          generateConsolidatedText()
-        );
+      await navigator.clipboard.writeText(
+        generateConsolidatedText()
+      );
 
-        alert(
-          "📋 Reporte consolidado copiado."
-        );
-      } catch (error) {
-        console.error(
-          "Error copying consolidated report:",
-          error
-        );
+      alert(
+        "📋 Reporte consolidado copiado."
+      );
+    } catch (error) {
+      console.error(
+        "Error copying consolidated report:",
+        error
+      );
 
-        alert(
-          "No se pudo copiar el reporte."
-        );
-      } finally {
-        setCopying(false);
-      }
-    };
+      alert(
+        "No se pudo copiar el reporte."
+      );
+    } finally {
+      setCopying(false);
+    }
+  };
 
   // =====================================================
   // LOADING
@@ -946,9 +866,7 @@ export default function ConsolidatedReports() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 font-semibold"
           >
 
-            <RefreshCw
-              size={17}
-            />
+            <RefreshCw size={17} />
 
             Actualizar
 
@@ -961,9 +879,7 @@ export default function ConsolidatedReports() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50"
           >
 
-            <Copy
-              size={17}
-            />
+            <Copy size={17} />
 
             {copying
               ? "Copiando..."
@@ -981,12 +897,11 @@ export default function ConsolidatedReports() {
 
       <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg px-4 py-3">
 
-        <CheckCircle2
-          size={18}
-        />
+        <CheckCircle2 size={18} />
 
-        El reporte consolidado muestra un resumen ejecutivo
-        de las actividades y sugerencias del día.
+        Consolidado de actividades de hoy,
+        incluyendo el reporte de Hugo y los
+        reportes diarios disponibles.
 
       </div>
 
@@ -995,8 +910,6 @@ export default function ConsolidatedReports() {
       ================================================= */}
 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-
-        {/* COMPLETADAS */}
 
         <div className="bg-green-50 dark:bg-green-950/30 p-4 rounded-lg border border-green-200 dark:border-green-800">
 
@@ -1015,8 +928,6 @@ export default function ConsolidatedReports() {
 
         </div>
 
-        {/* EN PROGRESO */}
-
         <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
 
           <Clock
@@ -1033,8 +944,6 @@ export default function ConsolidatedReports() {
           </p>
 
         </div>
-
-        {/* PENDIENTES */}
 
         <div className="bg-yellow-50 dark:bg-yellow-950/30 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
 
@@ -1053,8 +962,6 @@ export default function ConsolidatedReports() {
 
         </div>
 
-        {/* SUGERENCIAS */}
-
         <div className="bg-purple-50 dark:bg-purple-950/30 p-4 rounded-lg border border-purple-200 dark:border-purple-800">
 
           <Lightbulb
@@ -1071,8 +978,6 @@ export default function ConsolidatedReports() {
           </p>
 
         </div>
-
-        {/* TOTAL */}
 
         <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
 
@@ -1092,6 +997,141 @@ export default function ConsolidatedReports() {
         </div>
 
       </div>
+
+      {/* =================================================
+          HUGO
+      ================================================= */}
+
+      {hugo && (() => {
+        const userActivities =
+          getUserActivities(hugo.id);
+
+        const completed =
+          userActivities.filter(
+            (activity) =>
+              activity.status ===
+              "completed"
+          ).length;
+
+        const progress =
+          userActivities.filter(
+            (activity) =>
+              activity.status ===
+              "in_progress"
+          ).length;
+
+        const pending =
+          userActivities.filter(
+            (activity) =>
+              activity.status ===
+              "pending"
+          ).length;
+
+        return (
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-200 dark:border-gray-800 p-5">
+
+            <div className="flex items-center justify-between mb-4">
+
+              <div>
+                <h3 className="text-lg font-bold">
+                  👤 {hugo.full_name || "Hugo"}
+                </h3>
+
+                <p className="text-xs text-gray-500">
+                  Reporte de actividades de hoy
+                </p>
+              </div>
+
+              <span className="text-xs font-medium text-gray-500">
+                Admin
+              </span>
+
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 mb-4">
+
+              <div className="text-center bg-green-50 dark:bg-green-950/20 rounded-lg p-3">
+                <p className="text-xs text-gray-500">
+                  Completadas
+                </p>
+                <p className="font-bold text-green-600">
+                  {completed}
+                </p>
+              </div>
+
+              <div className="text-center bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3">
+                <p className="text-xs text-gray-500">
+                  En progreso
+                </p>
+                <p className="font-bold text-blue-600">
+                  {progress}
+                </p>
+              </div>
+
+              <div className="text-center bg-yellow-50 dark:bg-yellow-950/20 rounded-lg p-3">
+                <p className="text-xs text-gray-500">
+                  Pendientes
+                </p>
+                <p className="font-bold text-yellow-600">
+                  {pending}
+                </p>
+              </div>
+
+              <div className="text-center bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+                <p className="text-xs text-gray-500">
+                  Total
+                </p>
+                <p className="font-bold">
+                  {userActivities.length}
+                </p>
+              </div>
+
+            </div>
+
+            <div className="space-y-2">
+
+              {userActivities
+                .slice(0, 8)
+                .map((activity) => (
+                  <div
+                    key={activity.id}
+                    className="flex items-center gap-2 text-sm"
+                  >
+
+                    <span>
+                      {statusIcon(
+                        activity.status
+                      )}
+                    </span>
+
+                    <span className="flex-1">
+                      {activity.title}
+                    </span>
+
+                    <span className="text-xs text-gray-400">
+                      {statusLabel(
+                        activity.status
+                      )}
+                    </span>
+
+                  </div>
+                ))}
+
+              {userActivities.length >
+                8 && (
+                <p className="text-xs text-gray-400 pt-2">
+                  -{" "}
+                  {userActivities.length -
+                    8}{" "}
+                  actividades más
+                </p>
+              )}
+
+            </div>
+
+          </div>
+        );
+      })()}
 
       {/* =================================================
           REPORTES INDIVIDUALES
@@ -1140,40 +1180,31 @@ export default function ConsolidatedReports() {
 
             return (
               <div
-                key={
-                  executor.id
-                }
+                key={executor.id}
                 className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-200 dark:border-gray-800 p-5"
               >
-
-                {/* HEADER */}
 
                 <div className="flex items-center justify-between mb-4">
 
                   <div>
 
                     <h3 className="text-lg font-bold">
-                      {
-                        executor.full_name ||
-                        "Usuario"
-                      }
+                      {executor.full_name ||
+                        "Usuario"}
                     </h3>
 
                     <p className="text-xs text-gray-500">
-                      Resumen del día
+                      Reporte individual
                     </p>
 
                   </div>
 
                   {savedReport ? (
                     <span className="inline-flex items-center gap-1 text-xs text-green-600">
-
                       <CheckCircle2
                         size={15}
                       />
-
                       Guardado
-
                     </span>
                   ) : (
                     <span className="text-xs text-yellow-600">
@@ -1182,8 +1213,6 @@ export default function ConsolidatedReports() {
                   )}
 
                 </div>
-
-                {/* ESTADÍSTICAS */}
 
                 <div className="grid grid-cols-3 gap-2 mb-4">
 
@@ -1225,8 +1254,6 @@ export default function ConsolidatedReports() {
 
                 </div>
 
-                {/* INFO */}
-
                 <div className="text-sm space-y-2">
 
                   <div className="flex justify-between">
@@ -1236,9 +1263,7 @@ export default function ConsolidatedReports() {
                     </span>
 
                     <strong>
-                      {
-                        userActivities.length
-                      }
+                      {userActivities.length}
                     </strong>
 
                   </div>
@@ -1250,9 +1275,7 @@ export default function ConsolidatedReports() {
                     </span>
 
                     <strong>
-                      {
-                        userSuggestions.length
-                      }
+                      {userSuggestions.length}
                     </strong>
 
                   </div>
@@ -1264,11 +1287,9 @@ export default function ConsolidatedReports() {
                     </span>
 
                     <strong>
-                      {
-                        savedReport
-                          ? "Sí"
-                          : "No"
-                      }
+                      {savedReport
+                        ? "Sí"
+                        : "No"}
                     </strong>
 
                   </div>
@@ -1283,7 +1304,7 @@ export default function ConsolidatedReports() {
       </div>
 
       {/* =================================================
-          TEXTO COMPLETO
+          REPORTE PARA COMPARTIR
       ================================================= */}
 
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-200 dark:border-gray-800">
@@ -1291,11 +1312,11 @@ export default function ConsolidatedReports() {
         <div className="p-5 border-b border-gray-200 dark:border-gray-800">
 
           <h3 className="font-bold text-lg">
-            Reporte completo
+            Reporte para compartir
           </h3>
 
           <p className="text-sm text-gray-500 mt-1">
-            Versión ejecutiva lista para copiar y compartir.
+            Versión resumida del reporte consolidado.
           </p>
 
         </div>
@@ -1303,9 +1324,7 @@ export default function ConsolidatedReports() {
         <div className="p-5">
 
           <pre className="bg-gray-50 dark:bg-gray-800 rounded-lg p-5 text-sm whitespace-pre-wrap font-mono overflow-x-auto">
-            {
-              generateConsolidatedText()
-            }
+            {generateConsolidatedText()}
           </pre>
 
         </div>
