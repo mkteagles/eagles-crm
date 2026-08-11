@@ -1,20 +1,34 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import {
+  useEffect,
+  useState,
+} from 'react'
+
+import {
+  createClient,
+} from '@/lib/supabase/client'
+
 import {
   X,
   Save,
   Trash2,
   Calendar,
+  Clock,
   User,
   Flag,
   FileText,
+  Repeat,
 } from 'lucide-react'
 
 import {
   ActivityStatus,
 } from '@/lib/marketing-types'
+
+
+// =========================================================
+// TIPOS
+// =========================================================
 
 type Props = {
   activity: any
@@ -23,6 +37,58 @@ type Props = {
   onClose: () => void
 }
 
+
+type RecurrenceType =
+  | 'none'
+  | 'daily'
+  | 'weekly'
+  | 'biweekly'
+  | 'monthly'
+
+
+const WEEK_DAYS = [
+  {
+    value: 1,
+    label: 'L',
+    name: 'Lunes',
+  },
+  {
+    value: 2,
+    label: 'M',
+    name: 'Martes',
+  },
+  {
+    value: 3,
+    label: 'X',
+    name: 'Miércoles',
+  },
+  {
+    value: 4,
+    label: 'J',
+    name: 'Jueves',
+  },
+  {
+    value: 5,
+    label: 'V',
+    name: 'Viernes',
+  },
+  {
+    value: 6,
+    label: 'S',
+    name: 'Sábado',
+  },
+  {
+    value: 0,
+    label: 'D',
+    name: 'Domingo',
+  },
+]
+
+
+// =========================================================
+// COMPONENTE
+// =========================================================
+
 export default function ActivityDetailModal({
   activity,
   currentUserRole,
@@ -30,47 +96,158 @@ export default function ActivityDetailModal({
   onClose,
 }: Props) {
 
-  const supabase = createClient()
+  const supabase =
+    createClient()
+
 
   const isAdmin =
-    currentUserRole === 'admin'
+    currentUserRole ===
+    'admin'
 
-  // =====================================================
+
+  // =======================================================
   // ESTADOS
-  // =====================================================
+  // =======================================================
 
-  const [title, setTitle] =
-    useState(activity?.title || '')
-
-  const [description, setDescription] =
-    useState(activity?.description || '')
-
-  const [assignedTo, setAssignedTo] =
-    useState(activity?.assigned_to || '')
-
-  const [dueDate, setDueDate] =
-    useState(activity?.due_date || '')
-
-  const [priority, setPriority] =
-    useState(activity?.priority || 'medium')
-
-  const [status, setStatus] =
-    useState<ActivityStatus>(
-      activity?.status || 'pending'
+  const [
+    title,
+    setTitle,
+  ] =
+    useState(
+      activity?.title ||
+      ''
     )
 
-  const [users, setUsers] =
+
+  const [
+    description,
+    setDescription,
+  ] =
+    useState(
+      activity?.description ||
+      ''
+    )
+
+
+  const [
+    assignedTo,
+    setAssignedTo,
+  ] =
+    useState(
+      activity?.assigned_to ||
+      ''
+    )
+
+
+  const [
+    dueDate,
+    setDueDate,
+  ] =
+    useState(
+      activity?.due_date
+        ? String(
+            activity.due_date
+          ).slice(0, 10)
+        : ''
+    )
+
+
+  const [
+    dueTime,
+    setDueTime,
+  ] =
+    useState(
+      activity?.due_time
+        ? String(
+            activity.due_time
+          ).slice(0, 5)
+        : ''
+    )
+
+
+  const [
+    priority,
+    setPriority,
+  ] =
+    useState(
+      activity?.priority ||
+      'medium'
+    )
+
+
+  const [
+    status,
+    setStatus,
+  ] =
+    useState<ActivityStatus>(
+      activity?.status ||
+      'pending'
+    )
+
+
+  const [
+    recurrence,
+    setRecurrence,
+  ] =
+    useState<RecurrenceType>(
+      activity?.recurrence_type ||
+      'none'
+    )
+
+
+  const [
+    selectedDays,
+    setSelectedDays,
+  ] =
+    useState<number[]>(
+      Array.isArray(
+        activity?.recurrence_days
+      )
+        ? activity.recurrence_days.map(
+            (day: any) =>
+              Number(day)
+          )
+        : []
+    )
+
+
+  const [
+    recurrenceEndDate,
+    setRecurrenceEndDate,
+  ] =
+    useState(
+      activity?.recurrence_end_date
+        ? String(
+            activity.recurrence_end_date
+          ).slice(0, 10)
+        : ''
+    )
+
+
+  const [
+    users,
+    setUsers,
+  ] =
     useState<any[]>([])
 
-  const [saving, setSaving] =
+
+  const [
+    saving,
+    setSaving,
+  ] =
     useState(false)
 
-  const [deleting, setDeleting] =
+
+  const [
+    deleting,
+    setDeleting,
+  ] =
     useState(false)
 
-  // =====================================================
+
+  // =======================================================
   // CARGAR USUARIOS
-  // =====================================================
+  // =======================================================
 
   useEffect(() => {
 
@@ -78,92 +255,231 @@ export default function ActivityDetailModal({
       return
     }
 
-    const loadUsers = async () => {
 
-      const {
-        data,
-        error,
-      } = await supabase
-        .from('user_profiles')
-        .select('id, full_name')
-        .order('full_name', {
-          ascending: true,
-        })
+    const loadUsers =
+      async () => {
 
-      if (error) {
-        console.error(
-          'Error cargando usuarios:',
-          error
-        )
+        try {
 
-        return
+          const {
+            data,
+            error,
+          } =
+            await supabase
+              .from(
+                'user_profiles'
+              )
+              .select(
+                'id, full_name'
+              )
+              .order(
+                'full_name',
+                {
+                  ascending: true,
+                }
+              )
+
+
+          if (error) {
+
+            console.error(
+              'Error cargando usuarios:',
+              error
+            )
+
+            return
+          }
+
+
+          setUsers(
+            data || []
+          )
+
+        } catch (error) {
+
+          console.error(
+            'Error cargando usuarios:',
+            error
+          )
+
+        }
+
       }
 
-      setUsers(data || [])
-    }
 
     loadUsers()
 
-  }, [isAdmin])
+  }, [
+    isAdmin,
+    supabase,
+  ])
 
-  // =====================================================
-  // CERRAR CON ESC
-  // =====================================================
+
+  // =======================================================
+  // ESC
+  // =======================================================
 
   useEffect(() => {
 
-    const handleKeyDown = (
-      event: KeyboardEvent
-    ) => {
+    const handleKeyDown =
+      (
+        event: KeyboardEvent
+      ) => {
 
-      if (event.key === 'Escape') {
-        onClose()
+        if (
+          event.key ===
+          'Escape'
+        ) {
+
+          onClose()
+
+        }
+
       }
 
-    }
 
     document.addEventListener(
       'keydown',
       handleKeyDown
     )
 
+
     return () => {
+
       document.removeEventListener(
         'keydown',
         handleKeyDown
       )
+
     }
 
-  }, [onClose])
+  }, [
+    onClose,
+  ])
 
-  // =====================================================
-  // GUARDAR
-  // =====================================================
 
-  const handleSave = async () => {
+  // =======================================================
+  // CAMBIAR DÍA
+  // =======================================================
 
-    if (!isAdmin) {
-      return
-    }
+  const toggleDay =
+    (
+      day: number
+    ) => {
 
-    if (!title.trim()) {
+      setSelectedDays(
+        previous => {
 
-      alert(
-        'El título de la actividad es obligatorio.'
+          if (
+            previous.includes(
+              day
+            )
+          ) {
+
+            return previous.filter(
+              item =>
+                item !== day
+            )
+
+          }
+
+
+          return [
+            ...previous,
+            day,
+          ].sort(
+            (a, b) =>
+              a - b
+          )
+
+        }
       )
 
-      return
     }
 
-    setSaving(true)
 
-    try {
+  // =======================================================
+  // GUARDAR
+  // =======================================================
 
-      const {
-        error,
-      } = await supabase
-        .from('activities')
-        .update({
+  const handleSave =
+    async () => {
+
+      if (!isAdmin) {
+        return
+      }
+
+
+      if (
+        !title.trim()
+      ) {
+
+        alert(
+          'El título de la actividad es obligatorio.'
+        )
+
+        return
+
+      }
+
+
+      if (!dueDate) {
+
+        alert(
+          'La fecha de la actividad es obligatoria.'
+        )
+
+        return
+
+      }
+
+
+      if (
+        (
+          recurrence ===
+            'weekly' ||
+          recurrence ===
+            'biweekly'
+        ) &&
+        selectedDays.length === 0
+      ) {
+
+        alert(
+          'Selecciona al menos un día de la semana para la actividad fija.'
+        )
+
+        return
+
+      }
+
+
+      if (
+        recurrence !==
+          'none' &&
+        recurrenceEndDate &&
+        recurrenceEndDate <
+          dueDate
+      ) {
+
+        alert(
+          'La fecha final de repetición no puede ser anterior a la fecha inicial.'
+        )
+
+        return
+
+      }
+
+
+      setSaving(true)
+
+
+      try {
+
+        const updateData: Record<
+          string,
+          any
+        > = {
+
           title:
             title.trim(),
 
@@ -176,22 +492,94 @@ export default function ActivityDetailModal({
             null,
 
           due_date:
-            dueDate ||
+            dueDate,
+
+          due_time:
+            dueTime ||
             null,
 
           priority,
 
           status,
 
+          recurrence_type:
+            recurrence,
+
+          recurrence_days:
+            (
+              recurrence ===
+                'weekly' ||
+              recurrence ===
+                'biweekly'
+            ) &&
+            selectedDays.length
+              ? selectedDays
+              : null,
+
+          recurrence_end_date:
+            recurrence !==
+              'none'
+              ? (
+                  recurrenceEndDate ||
+                  null
+                )
+              : null,
+
           updated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          'id',
+            new Date()
+              .toISOString(),
+
+        }
+
+
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              'activities'
+            )
+            .update(
+              updateData
+            )
+            .eq(
+              'id',
+              activity.id
+            )
+
+
+        if (error) {
+
+          console.error(
+            'Error actualizando actividad:',
+            error
+          )
+
+          alert(
+            `No se pudo guardar la actividad:\n\n${error.message}`
+          )
+
+          return
+
+        }
+
+
+        console.log(
+          '✅ Actividad actualizada:',
           activity.id
         )
 
-      if (error) {
+
+        onClose()
+
+        /*
+         * Recargamos la página para que
+         * la tabla refleje inmediatamente
+         * la nueva fecha/hora.
+         */
+        window.location.reload()
+
+      } catch (error) {
 
         console.error(
           'Error actualizando actividad:',
@@ -199,71 +587,87 @@ export default function ActivityDetailModal({
         )
 
         alert(
-          `No se pudo guardar la actividad: ${error.message}`
+          'Ocurrió un error al guardar la actividad.'
         )
 
+      } finally {
+
+        setSaving(false)
+
+      }
+
+    }
+
+
+  // =======================================================
+  // ELIMINAR
+  // =======================================================
+
+  const handleDelete =
+    async () => {
+
+      if (!isAdmin) {
         return
       }
 
-      console.log(
-        '✅ Actividad actualizada:',
-        activity.id
-      )
 
-      onClose()
+      const confirmed =
+        window.confirm(
+          `¿Seguro que quieres eliminar "${activity.title}"?\n\nEsta acción no se puede deshacer.`
+        )
 
-    } catch (error) {
 
-      console.error(
-        'Error actualizando actividad:',
-        error
-      )
+      if (!confirmed) {
+        return
+      }
 
-      alert(
-        'Ocurrió un error al guardar la actividad.'
-      )
 
-    } finally {
+      setDeleting(true)
 
-      setSaving(false)
 
-    }
-  }
+      try {
 
-  // =====================================================
-  // ELIMINAR
-  // =====================================================
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              'activities'
+            )
+            .delete()
+            .eq(
+              'id',
+              activity.id
+            )
 
-  const handleDelete = async () => {
 
-    if (!isAdmin) {
-      return
-    }
+        if (error) {
 
-    const confirmed =
-      window.confirm(
-        `¿Seguro que quieres eliminar "${activity.title}"?\n\nEsta acción no se puede deshacer.`
-      )
+          console.error(
+            'Error eliminando actividad:',
+            error
+          )
 
-    if (!confirmed) {
-      return
-    }
+          alert(
+            `No se pudo eliminar la actividad:\n\n${error.message}`
+          )
 
-    setDeleting(true)
+          return
 
-    try {
+        }
 
-      const {
-        error,
-      } = await supabase
-        .from('activities')
-        .delete()
-        .eq(
-          'id',
+
+        console.log(
+          '🗑️ Actividad eliminada:',
           activity.id
         )
 
-      if (error) {
+
+        onClose()
+
+        window.location.reload()
+
+      } catch (error) {
 
         console.error(
           'Error eliminando actividad:',
@@ -271,40 +675,52 @@ export default function ActivityDetailModal({
         )
 
         alert(
-          `No se pudo eliminar la actividad: ${error.message}`
+          'Ocurrió un error al eliminar la actividad.'
         )
 
-        return
+      } finally {
+
+        setDeleting(false)
+
       }
 
-      console.log(
-        '🗑️ Actividad eliminada:',
-        activity.id
-      )
+    }
 
-      onClose()
 
-    } catch (error) {
+  // =======================================================
+  // NOMBRE RECURRENCIA
+  // =======================================================
 
-      console.error(
-        'Error eliminando actividad:',
-        error
-      )
+  const recurrenceLabel =
+    () => {
 
-      alert(
-        'Ocurrió un error al eliminar la actividad.'
-      )
+      switch (
+        recurrence
+      ) {
 
-    } finally {
+        case 'daily':
+          return 'Todos los días'
 
-      setDeleting(false)
+        case 'weekly':
+          return 'Cada semana'
+
+        case 'biweekly':
+          return 'Cada 2 semanas'
+
+        case 'monthly':
+          return 'Cada mes'
+
+        default:
+          return 'No repetir'
+
+      }
 
     }
-  }
 
-  // =====================================================
-  // MODAL
-  // =====================================================
+
+  // =======================================================
+  // RENDER
+  // =======================================================
 
   return (
 
@@ -318,21 +734,23 @@ export default function ActivityDetailModal({
         justify-center
         p-4
       "
-      onMouseDown={(event) => {
+      onMouseDown={(
+        event
+      ) => {
 
         if (
           event.target ===
           event.currentTarget
         ) {
+
           onClose()
+
         }
 
       }}
     >
 
-      {/* ===============================================
-          BACKDROP
-      =============================================== */}
+      {/* BACKDROP */}
 
       <div
         className="
@@ -343,9 +761,8 @@ export default function ActivityDetailModal({
         "
       />
 
-      {/* ===============================================
-          VENTANA
-      =============================================== */}
+
+      {/* VENTANA */}
 
       <div
         className="
@@ -353,7 +770,7 @@ export default function ActivityDetailModal({
           z-10
           w-full
           max-w-2xl
-          max-h-[90vh]
+          max-h-[92vh]
           overflow-y-auto
           rounded-2xl
           bg-white
@@ -365,9 +782,9 @@ export default function ActivityDetailModal({
         "
       >
 
-        {/* =============================================
+        {/* =================================================
             HEADER
-        ============================================= */}
+        ================================================= */}
 
         <div
           className="
@@ -397,10 +814,13 @@ export default function ActivityDetailModal({
                 dark:text-white
               "
             >
+
               {isAdmin
                 ? 'Editar actividad'
                 : 'Detalle de actividad'}
+
             </h2>
+
 
             <p
               className="
@@ -409,10 +829,13 @@ export default function ActivityDetailModal({
                 text-gray-500
               "
             >
+
               ID: {activity.id}
+
             </p>
 
           </div>
+
 
           <button
             type="button"
@@ -433,36 +856,33 @@ export default function ActivityDetailModal({
             "
           >
 
-            <X size={20} />
+            <X
+              size={20}
+            />
 
           </button>
 
         </div>
 
-        {/* =============================================
+
+        {/* =================================================
             CONTENIDO
-        ============================================= */}
+        ================================================= */}
 
-        <div className="p-6 space-y-5">
+        <div className="p-6 space-y-6">
 
-          {/* ===========================================
+          {/* =================================================
               TÍTULO
-          =========================================== */}
+          ================================================= */}
 
           <div>
 
-            <label
-              className="
-                mb-2
-                block
-                text-sm
-                font-semibold
-                text-gray-700
-                dark:text-gray-300
-              "
-            >
+            <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+
               Actividad
+
             </label>
+
 
             {isAdmin ? (
 
@@ -470,7 +890,9 @@ export default function ActivityDetailModal({
                 type="text"
                 value={title}
                 onChange={(e) =>
-                  setTitle(e.target.value)
+                  setTitle(
+                    e.target.value
+                  )
                 }
                 className="
                   w-full
@@ -493,50 +915,33 @@ export default function ActivityDetailModal({
 
             ) : (
 
-              <div
-                className="
-                  rounded-lg
-                  bg-gray-50
-                  dark:bg-gray-800/60
-                  px-4
-                  py-3
-                  text-sm
-                  font-semibold
-                  text-gray-900
-                  dark:text-white
-                "
-              >
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
+
                 {activity.title}
+
               </div>
 
             )}
 
           </div>
 
-          {/* ===========================================
+
+          {/* =================================================
               DESCRIPCIÓN
-          =========================================== */}
+          ================================================= */}
 
           <div>
 
-            <label
-              className="
-                mb-2
-                flex
-                items-center
-                gap-2
-                text-sm
-                font-semibold
-                text-gray-700
-                dark:text-gray-300
-              "
-            >
+            <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
 
-              <FileText size={15} />
+              <FileText
+                size={15}
+              />
 
               Descripción
 
             </label>
+
 
             {isAdmin ? (
 
@@ -571,69 +976,45 @@ export default function ActivityDetailModal({
 
             ) : (
 
-              <div
-                className="
-                  rounded-lg
-                  bg-gray-50
-                  dark:bg-gray-800/60
-                  px-4
-                  py-3
-                  text-sm
-                  text-gray-700
-                  dark:text-gray-300
-                  whitespace-pre-wrap
-                "
-              >
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-4 py-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+
                 {activity.description ||
                   'Sin descripción'}
+
               </div>
 
             )}
 
           </div>
 
-          {/* ===========================================
-              GRID
-          =========================================== */}
 
-          <div
-            className="
-              grid
-              grid-cols-1
-              md:grid-cols-2
-              gap-4
-            "
-          >
+          {/* =================================================
+              ASIGNADO / FECHA
+          ================================================= */}
 
-            {/* =========================================
-                ASIGNADO
-            ========================================= */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            {/* ASIGNADO */}
 
             <div>
 
-              <label
-                className="
-                  mb-2
-                  flex
-                  items-center
-                  gap-2
-                  text-sm
-                  font-semibold
-                  text-gray-700
-                  dark:text-gray-300
-                "
-              >
+              <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
 
-                <User size={15} />
+                <User
+                  size={15}
+                />
 
                 Asignado a
 
               </label>
 
+
               {isAdmin ? (
 
                 <select
-                  value={assignedTo}
+                  value={
+                    assignedTo
+                  }
                   onChange={(e) =>
                     setAssignedTo(
                       e.target.value
@@ -652,9 +1033,6 @@ export default function ActivityDetailModal({
                     text-sm
                     text-gray-900
                     dark:text-white
-                    outline-none
-                    focus:ring-2
-                    focus:ring-blue-500
                   "
                 >
 
@@ -662,14 +1040,25 @@ export default function ActivityDetailModal({
                     Sin asignar
                   </option>
 
+
                   {users.map(
-                    (user) => (
+                    (
+                      user
+                    ) => (
 
                       <option
-                        key={user.id}
-                        value={user.id}
+                        key={
+                          user.id
+                        }
+                        value={
+                          user.id
+                        }
                       >
-                        {user.full_name}
+
+                        {
+                          user.full_name
+                        }
+
                       </option>
 
                     )
@@ -679,51 +1068,35 @@ export default function ActivityDetailModal({
 
               ) : (
 
-                <div
-                  className="
-                    rounded-lg
-                    bg-gray-50
-                    dark:bg-gray-800/60
-                    px-4
-                    py-2.5
-                    text-sm
-                    text-gray-700
-                    dark:text-gray-300
-                  "
-                >
-                  {activity.assigned_to_name ||
+                <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+
+                  {
+                    activity.assigned_to_name ||
                     activity.assigned_to ||
-                    'Sin asignar'}
+                    'Sin asignar'
+                  }
+
                 </div>
 
               )}
 
             </div>
 
-            {/* =========================================
-                FECHA
-            ========================================= */}
+
+            {/* FECHA */}
 
             <div>
 
-              <label
-                className="
-                  mb-2
-                  flex
-                  items-center
-                  gap-2
-                  text-sm
-                  font-semibold
-                  text-gray-700
-                  dark:text-gray-300
-                "
-              >
+              <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
 
-                <Calendar size={15} />
+                <Calendar
+                  size={15}
+                />
 
-                Fecha de vencimiento
+                Día
 
               </label>
+
 
               {isAdmin ? (
 
@@ -731,13 +1104,6 @@ export default function ActivityDetailModal({
                   type="date"
                   value={
                     dueDate
-                      ? String(
-                          dueDate
-                        ).slice(
-                          0,
-                          10
-                        )
-                      : ''
                   }
                   onChange={(e) =>
                     setDueDate(
@@ -757,63 +1123,103 @@ export default function ActivityDetailModal({
                     text-sm
                     text-gray-900
                     dark:text-white
-                    outline-none
-                    focus:ring-2
-                    focus:ring-blue-500
                   "
                 />
 
               ) : (
 
-                <div
-                  className="
-                    rounded-lg
-                    bg-gray-50
-                    dark:bg-gray-800/60
-                    px-4
-                    py-2.5
-                    text-sm
-                    text-gray-700
-                    dark:text-gray-300
-                  "
-                >
-                  {activity.due_date ||
-                    'Sin fecha'}
+                <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+
+                  {
+                    activity.due_date ||
+                    'Sin fecha'
+                  }
+
                 </div>
 
               )}
 
             </div>
 
-            {/* =========================================
-                PRIORIDAD
-            ========================================= */}
+
+            {/* HORA */}
 
             <div>
 
-              <label
-                className="
-                  mb-2
-                  flex
-                  items-center
-                  gap-2
-                  text-sm
-                  font-semibold
-                  text-gray-700
-                  dark:text-gray-300
-                "
-              >
+              <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
 
-                <Flag size={15} />
+                <Clock
+                  size={15}
+                />
+
+                Horario
+
+              </label>
+
+
+              {isAdmin ? (
+
+                <input
+                  type="time"
+                  value={
+                    dueTime
+                  }
+                  onChange={(e) =>
+                    setDueTime(
+                      e.target.value
+                    )
+                  }
+                  className="
+                    w-full
+                    rounded-lg
+                    border
+                    border-gray-300
+                    dark:border-gray-700
+                    bg-white
+                    dark:bg-gray-800
+                    px-3
+                    py-2.5
+                    text-sm
+                    text-gray-900
+                    dark:text-white
+                  "
+                />
+
+              ) : (
+
+                <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+
+                  {activity.due_time ||
+                    'Sin horario'}
+
+                </div>
+
+              )}
+
+            </div>
+
+
+            {/* PRIORIDAD */}
+
+            <div>
+
+              <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+
+                <Flag
+                  size={15}
+                />
 
                 Prioridad
 
               </label>
 
+
               {isAdmin ? (
 
                 <select
-                  value={priority}
+                  value={
+                    priority
+                  }
                   onChange={(e) =>
                     setPriority(
                       e.target.value
@@ -832,9 +1238,6 @@ export default function ActivityDetailModal({
                     text-sm
                     text-gray-900
                     dark:text-white
-                    outline-none
-                    focus:ring-2
-                    focus:ring-blue-500
                   "
                 >
 
@@ -858,51 +1261,66 @@ export default function ActivityDetailModal({
 
               ) : (
 
-                <div
-                  className="
-                    rounded-lg
-                    bg-gray-50
-                    dark:bg-gray-800/60
-                    px-4
-                    py-2.5
-                    text-sm
-                    text-gray-700
-                    dark:text-gray-300
-                  "
-                >
-                  {activity.priority}
+                <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+
+                  {
+                    activity.priority
+                  }
+
                 </div>
 
               )}
 
             </div>
 
-            {/* =========================================
-                ESTADO
-            ========================================= */}
+          </div>
 
-            <div>
 
-              <label
-                className="
-                  mb-2
-                  block
-                  text-sm
-                  font-semibold
-                  text-gray-700
-                  dark:text-gray-300
-                "
-              >
-                Estado
-              </label>
+          {/* =================================================
+              ACTIVIDAD FIJA
+          ================================================= */}
 
-              {isAdmin ? (
+          <div className="rounded-xl border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 p-4">
+
+            <div className="mb-4 flex items-center gap-2">
+
+              <Repeat
+                size={18}
+                className="text-purple-600"
+              />
+
+              <div>
+
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+
+                  Horario y día fijo
+
+                </h3>
+
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+
+                  Configura si esta actividad se repite.
+
+                </p>
+
+              </div>
+
+            </div>
+
+
+            {isAdmin ? (
+
+              <>
+
+                {/* RECURRENCIA */}
 
                 <select
-                  value={status}
+                  value={
+                    recurrence
+                  }
                   onChange={(e) =>
-                    setStatus(
-                      e.target.value as ActivityStatus
+                    setRecurrence(
+                      e.target.value as RecurrenceType
                     )
                   }
                   className="
@@ -918,78 +1336,319 @@ export default function ActivityDetailModal({
                     text-sm
                     text-gray-900
                     dark:text-white
-                    outline-none
-                    focus:ring-2
-                    focus:ring-blue-500
                   "
                 >
 
-                  <option value="pending">
-                    Pendiente
+                  <option value="none">
+                    No repetir
                   </option>
 
-                  <option value="in_progress">
-                    En progreso
+                  <option value="daily">
+                    Todos los días
                   </option>
 
-                  <option value="completed">
-                    Completada
+                  <option value="weekly">
+                    Cada semana
                   </option>
 
-                  <option value="rejected">
-                    Rechazada
+                  <option value="biweekly">
+                    Cada 2 semanas
+                  </option>
+
+                  <option value="monthly">
+                    Cada mes
                   </option>
 
                 </select>
 
-              ) : (
 
-                <div
-                  className="
-                    rounded-lg
-                    bg-gray-50
-                    dark:bg-gray-800/60
-                    px-4
-                    py-2.5
-                    text-sm
-                    text-gray-700
-                    dark:text-gray-300
-                  "
-                >
-                  {activity.status}
+                {/* DÍAS */}
+
+                {(
+                  recurrence ===
+                    'weekly' ||
+                  recurrence ===
+                    'biweekly'
+                ) && (
+
+                  <div className="mt-4">
+
+                    <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+
+                      Días de la semana
+
+                    </p>
+
+
+                    <div className="flex flex-wrap gap-2">
+
+                      {WEEK_DAYS.map(
+                        (day) => {
+
+                          const active =
+                            selectedDays.includes(
+                              day.value
+                            )
+
+
+                          return (
+
+                            <button
+                              key={
+                                day.value
+                              }
+                              type="button"
+                              onClick={() =>
+                                toggleDay(
+                                  day.value
+                                )
+                              }
+                              title={
+                                day.name
+                              }
+                              className={`
+                                h-10
+                                w-10
+                                rounded-full
+                                text-xs
+                                font-bold
+                                transition
+                                ${
+                                  active
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                                }
+                              `}
+                            >
+
+                              {
+                                day.label
+                              }
+
+                            </button>
+
+                          )
+
+                        }
+                      )}
+
+                    </div>
+
+                  </div>
+
+                )}
+
+
+                {/* FECHA FINAL */}
+
+                {recurrence !==
+                  'none' && (
+
+                  <div className="mt-4">
+
+                    <label className="mb-2 block text-xs font-medium text-gray-500 dark:text-gray-400">
+
+                      Repetir hasta
+
+                    </label>
+
+
+                    <input
+                      type="date"
+                      value={
+                        recurrenceEndDate
+                      }
+                      min={
+                        dueDate
+                      }
+                      onChange={(e) =>
+                        setRecurrenceEndDate(
+                          e.target.value
+                        )
+                      }
+                      className="
+                        w-full
+                        rounded-lg
+                        border
+                        border-gray-300
+                        dark:border-gray-700
+                        bg-white
+                        dark:bg-gray-800
+                        px-3
+                        py-2.5
+                        text-sm
+                        text-gray-900
+                        dark:text-white
+                      "
+                    />
+
+                  </div>
+
+                )}
+
+              </>
+
+            ) : (
+
+              <div className="space-y-2 text-sm">
+
+                <div className="flex justify-between">
+
+                  <span className="text-gray-500">
+                    Repetición
+                  </span>
+
+                  <span className="font-medium text-gray-900 dark:text-white">
+
+                    {
+                      recurrenceLabel()
+                    }
+
+                  </span>
+
                 </div>
 
-              )}
 
-            </div>
+                {selectedDays.length >
+                  0 && (
+
+                  <div className="flex justify-between">
+
+                    <span className="text-gray-500">
+                      Días
+                    </span>
+
+                    <span className="font-medium text-gray-900 dark:text-white">
+
+                      {
+                        selectedDays
+                          .map(
+                            day =>
+                              WEEK_DAYS.find(
+                                item =>
+                                  item.value ===
+                                  day
+                              )?.name
+                          )
+                          .join(
+                            ', '
+                          )
+                      }
+
+                    </span>
+
+                  </div>
+
+                )}
+
+
+                {recurrenceEndDate && (
+
+                  <div className="flex justify-between">
+
+                    <span className="text-gray-500">
+                      Hasta
+                    </span>
+
+                    <span className="font-medium text-gray-900 dark:text-white">
+
+                      {
+                        recurrenceEndDate
+                      }
+
+                    </span>
+
+                  </div>
+
+                )}
+
+              </div>
+
+            )}
 
           </div>
 
-          {/* ===========================================
-              INFORMACIÓN EXTRA
-          =========================================== */}
 
-          <div
-            className="
-              rounded-lg
-              border
-              border-gray-200
-              dark:border-gray-800
-              bg-gray-50
-              dark:bg-gray-800/40
-              p-4
-            "
-          >
+          {/* =================================================
+              ESTADO
+          ================================================= */}
 
-            <div
-              className="
-                grid
-                grid-cols-1
-                md:grid-cols-2
-                gap-3
-                text-xs
-              "
-            >
+          <div>
+
+            <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-gray-300">
+
+              Estado
+
+            </label>
+
+
+            {isAdmin ? (
+
+              <select
+                value={
+                  status
+                }
+                onChange={(e) =>
+                  setStatus(
+                    e.target.value as ActivityStatus
+                  )
+                }
+                className="
+                  w-full
+                  rounded-lg
+                  border
+                  border-gray-300
+                  dark:border-gray-700
+                  bg-white
+                  dark:bg-gray-800
+                  px-3
+                  py-2.5
+                  text-sm
+                  text-gray-900
+                  dark:text-white
+                "
+              >
+
+                <option value="pending">
+                  Pendiente
+                </option>
+
+                <option value="in_progress">
+                  En progreso
+                </option>
+
+                <option value="completed">
+                  Completada
+                </option>
+
+                <option value="rejected">
+                  Rechazada
+                </option>
+
+              </select>
+
+            ) : (
+
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-800/60 px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300">
+
+                {
+                  activity.status
+                }
+
+              </div>
+
+            )}
+
+          </div>
+
+
+          {/* =================================================
+              INFORMACIÓN
+          ================================================= */}
+
+          <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/40 p-4">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
 
               <div>
 
@@ -997,13 +1656,8 @@ export default function ActivityDetailModal({
                   Creada:
                 </span>
 
-                <span
-                  className="
-                    ml-2
-                    text-gray-700
-                    dark:text-gray-300
-                  "
-                >
+                <span className="ml-2 text-gray-700 dark:text-gray-300">
+
                   {activity.created_at
                     ? new Date(
                         activity.created_at
@@ -1011,9 +1665,11 @@ export default function ActivityDetailModal({
                         'es-MX'
                       )
                     : '—'}
+
                 </span>
 
               </div>
+
 
               <div>
 
@@ -1021,13 +1677,8 @@ export default function ActivityDetailModal({
                   Actualizada:
                 </span>
 
-                <span
-                  className="
-                    ml-2
-                    text-gray-700
-                    dark:text-gray-300
-                  "
-                >
+                <span className="ml-2 text-gray-700 dark:text-gray-300">
+
                   {activity.updated_at
                     ? new Date(
                         activity.updated_at
@@ -1035,6 +1686,7 @@ export default function ActivityDetailModal({
                         'es-MX'
                       )
                     : '—'}
+
                 </span>
 
               </div>
@@ -1045,9 +1697,10 @@ export default function ActivityDetailModal({
 
         </div>
 
-        {/* =============================================
+
+        {/* =================================================
             FOOTER
-        ============================================= */}
+        ================================================= */}
 
         <div
           className="
@@ -1073,7 +1726,9 @@ export default function ActivityDetailModal({
 
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={
+                handleDelete
+              }
               disabled={
                 saving ||
                 deleting
@@ -1091,11 +1746,12 @@ export default function ActivityDetailModal({
                 hover:bg-red-50
                 dark:hover:bg-red-950/30
                 disabled:opacity-50
-                transition
               "
             >
 
-              <Trash2 size={17} />
+              <Trash2
+                size={17}
+              />
 
               {deleting
                 ? 'Eliminando...'
@@ -1109,13 +1765,16 @@ export default function ActivityDetailModal({
 
           )}
 
+
           {/* BOTONES */}
 
           <div className="flex items-center gap-3">
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={
+                onClose
+              }
               disabled={
                 saving ||
                 deleting
@@ -1133,18 +1792,21 @@ export default function ActivityDetailModal({
                 dark:text-gray-300
                 hover:bg-gray-50
                 dark:hover:bg-gray-800
-                disabled:opacity-50
-                transition
               "
             >
+
               Cerrar
+
             </button>
+
 
             {isAdmin && (
 
               <button
                 type="button"
-                onClick={handleSave}
+                onClick={
+                  handleSave
+                }
                 disabled={
                   saving ||
                   deleting
@@ -1162,11 +1824,12 @@ export default function ActivityDetailModal({
                   text-white
                   hover:bg-blue-700
                   disabled:opacity-50
-                  transition
                 "
               >
 
-                <Save size={17} />
+                <Save
+                  size={17}
+                />
 
                 {saving
                   ? 'Guardando...'
@@ -1183,5 +1846,7 @@ export default function ActivityDetailModal({
       </div>
 
     </div>
+
   )
+
 }

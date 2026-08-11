@@ -19,6 +19,7 @@ import {
   Trash2,
   Sparkles,
   Clock,
+  CalendarDays,
 } from 'lucide-react'
 
 import {
@@ -29,17 +30,178 @@ import {
 import ActivityDetailModal from './ActivityDetailModal'
 
 
+// =========================================================
+// TIPOS
+// =========================================================
+
 type StatusFilter =
   | 'all'
   | 'pending'
   | 'in_progress'
   | 'completed'
 
-
 interface ActivitiesTableProps {
   statusFilter?: StatusFilter
 }
 
+
+// =========================================================
+// HELPERS
+// =========================================================
+
+function getLocalDateString(
+  date: Date = new Date()
+): string {
+
+  const year =
+    date.getFullYear()
+
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(2, '0')
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+
+function getMonthKey(
+  date: Date = new Date()
+): string {
+
+  const year =
+    date.getFullYear()
+
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(2, '0')
+
+  return `${year}-${month}`
+}
+
+
+function formatTime(
+  time?: string | null
+) {
+
+  if (!time) {
+    return ''
+  }
+
+  const [
+    hours,
+    minutes,
+  ] =
+    time
+      .split(':')
+      .map(Number)
+
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes)
+  ) {
+    return time
+  }
+
+  const date =
+    new Date()
+
+  date.setHours(
+    hours,
+    minutes,
+    0,
+    0
+  )
+
+  return date.toLocaleTimeString(
+    'es-MX',
+    {
+      hour: 'numeric',
+      minute: '2-digit',
+    }
+  )
+}
+
+
+function formatDate(
+  date?: string | null
+) {
+
+  if (!date) {
+    return 'Sin fecha'
+  }
+
+  const [
+    year,
+    month,
+    day,
+  ] =
+    String(date)
+      .slice(0, 10)
+      .split('-')
+
+  if (
+    !year ||
+    !month ||
+    !day
+  ) {
+    return date
+  }
+
+  return `${day}/${month}/${year}`
+}
+
+
+function formatMonthTitle(
+  date: Date
+) {
+
+  return date.toLocaleDateString(
+    'es-MX',
+    {
+      month: 'long',
+      year: 'numeric',
+    }
+  )
+}
+
+
+function getStatusLabel(
+  status?: string | null
+) {
+
+  switch (status) {
+
+    case 'pending':
+      return 'Pendiente'
+
+    case 'in_progress':
+      return 'En progreso'
+
+    case 'completed':
+      return 'Completada'
+
+    case 'rejected':
+      return 'Rechazada'
+
+    case 'approved':
+      return 'Aprobada'
+
+    default:
+      return status || 'Sin estado'
+  }
+}
+
+
+// =========================================================
+// COMPONENTE
+// =========================================================
 
 export default function ActivitiesTable({
   statusFilter = 'all',
@@ -71,11 +233,22 @@ export default function ActivitiesTable({
     createClient()
 
 
-  // =====================================================
-  // FILTRAR
-  // =====================================================
+  // =======================================================
+  // FECHA ACTUAL
+  // =======================================================
 
-  const filteredActivities =
+  const today =
+    getLocalDateString()
+
+  const currentMonth =
+    getMonthKey()
+
+
+  // =======================================================
+  // FILTRO POR ESTADO
+  // =======================================================
+
+  const statusFilteredActivities =
     useMemo(
       () => {
 
@@ -99,50 +272,121 @@ export default function ActivitiesTable({
     )
 
 
-  // =====================================================
-  // FORMATEAR HORA
-  // =====================================================
+  // =======================================================
+  // ACTIVIDADES DE HOY
+  // =======================================================
 
-  const formatTime =
-    (
-      time?: string | null
-    ) => {
+  const todayActivities =
+    useMemo(
+      () => {
 
-      if (!time) {
-        return ''
-      }
+        return statusFilteredActivities
+          .filter(
+            (activity: any) =>
+              String(
+                activity.due_date || ''
+              ).slice(0, 10) ===
+              today
+          )
+          .sort(
+            (
+              a: any,
+              b: any
+            ) => {
 
-      const [
-        hours,
-        minutes,
-      ] =
-        time
-          .split(':')
-          .map(Number)
+              const timeA =
+                a.due_time ||
+                '23:59:59'
 
-      const date =
-        new Date()
+              const timeB =
+                b.due_time ||
+                '23:59:59'
 
-      date.setHours(
-        hours,
-        minutes,
-        0,
-        0
-      )
+              return timeA.localeCompare(
+                timeB
+              )
+            }
+          )
 
-      return date.toLocaleTimeString(
-        'es-MX',
-        {
-          hour: 'numeric',
-          minute: '2-digit',
-        }
-      )
-    }
+      },
+      [
+        statusFilteredActivities,
+        today,
+      ]
+    )
 
 
-  // =====================================================
+  // =======================================================
+  // ACTIVIDADES DEL MES
+  // =======================================================
+
+  const monthActivities =
+    useMemo(
+      () => {
+
+        return statusFilteredActivities
+          .filter(
+            (activity: any) => {
+
+              const date =
+                String(
+                  activity.due_date ||
+                  ''
+                ).slice(0, 10)
+
+              return date.startsWith(
+                currentMonth
+              )
+
+            }
+          )
+          .sort(
+            (
+              a: any,
+              b: any
+            ) => {
+
+              const dateA =
+                String(
+                  a.due_date || ''
+                )
+
+              const dateB =
+                String(
+                  b.due_date || ''
+                )
+
+              if (
+                dateA !== dateB
+              ) {
+                return dateA.localeCompare(
+                  dateB
+                )
+              }
+
+              return String(
+                a.due_time ||
+                '23:59:59'
+              ).localeCompare(
+                String(
+                  b.due_time ||
+                  '23:59:59'
+                )
+              )
+            }
+          )
+
+      },
+      [
+        statusFilteredActivities,
+        currentMonth,
+      ]
+    )
+
+
+  // =======================================================
   // CAMBIAR ESTADO
-  // =====================================================
+  // =======================================================
 
   const handleStatusChange =
     async (
@@ -166,6 +410,7 @@ export default function ActivitiesTable({
           await supabase
             .from('activities')
             .update({
+
               status:
                 newStatus,
 
@@ -180,7 +425,11 @@ export default function ActivitiesTable({
                       new Date()
                         .toISOString(),
                   }
-                : {}),
+                : {
+                    completed_at:
+                      null,
+                  }),
+
             })
             .eq(
               'id',
@@ -227,9 +476,9 @@ export default function ActivitiesTable({
     }
 
 
-  // =====================================================
+  // =======================================================
   // ELIMINAR
-  // =====================================================
+  // =======================================================
 
   const handleDeleteActivity =
     async (
@@ -323,16 +572,21 @@ export default function ActivitiesTable({
     }
 
 
-  // =====================================================
-  // ABRIR
-  // =====================================================
+  // =======================================================
+  // ABRIR ACTIVIDAD
+  // =======================================================
 
   const handleOpenActivity =
     (activity: any) => {
 
+      /*
+       * Conservamos el sistema actual
+       * de actividades nuevas.
+       */
       markActivityAsSeen(
         Number(activity.id)
       )
+
 
       setSelectedActivity(
         activity
@@ -341,9 +595,9 @@ export default function ActivitiesTable({
     }
 
 
-  // =====================================================
+  // =======================================================
   // LOADING
-  // =====================================================
+  // =======================================================
 
   if (loading) {
 
@@ -362,402 +616,611 @@ export default function ActivitiesTable({
   }
 
 
-  // =====================================================
-  // VACÍO
-  // =====================================================
+  // =======================================================
+  // FUNCIÓN PARA RENDERIZAR FILAS
+  // =======================================================
 
-  if (
-    filteredActivities.length === 0
-  ) {
+  const renderRows =
+    (
+      list: any[]
+    ) => {
 
-    return (
+      return list.map(
+        (activity: any) => {
 
-      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-surface p-10 text-center">
-
-        <div className="text-4xl mb-3">
-          📋
-        </div>
-
-        <h3 className="font-semibold text-gray-900 dark:text-white">
-          No hay actividades
-        </h3>
-
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {statusFilter === 'all'
-            ? 'Todavía no hay actividades registradas.'
-            : 'No hay actividades con este estado.'}
-        </p>
-
-      </div>
-
-    )
-
-  }
+          const isNew =
+            newActivityIds.includes(
+              Number(activity.id)
+            )
 
 
-  // =====================================================
-  // TABLA
-  // =====================================================
-
-  return (
-
-    <>
-
-      <div className="w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800 bg-surface shadow-sm">
-
-        <table className="w-full">
-
-          <thead className="border-b border-gray-200 dark:border-gray-800">
-
-            <tr>
-
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                Actividad
-              </th>
-
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                Asignado a
-              </th>
-
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                Vencimiento
-              </th>
-
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                Prioridad
-              </th>
-
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
-                Estado
-              </th>
-
-              <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">
-                Acciones
-              </th>
-
-            </tr>
-
-          </thead>
+          const priorityStyles =
+            getPriorityStyles(
+              activity.priority
+            )
 
 
-          <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-
-            {filteredActivities.map(
-              (activity: any) => {
-
-                const isNew =
-                  newActivityIds.includes(
-                    Number(activity.id)
-                  )
+          const statusStyles =
+            getStatusStyles(
+              activity.status
+            )
 
 
-                const priorityStyles =
-                  getPriorityStyles(
-                    activity.priority
-                  )
+          return (
+
+            <tr
+              key={activity.id}
+              className={`
+                transition-all
+                duration-300
+                ${
+                  isNew
+                    ? 'bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-400/40'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-900/50'
+                }
+              `}
+            >
+
+              {/* =====================================
+                  ACTIVIDAD
+              ===================================== */}
+
+              <td className="px-4 py-4">
+
+                <div className="flex items-start gap-3">
+
+                  {isNew && (
+
+                    <div className="shrink-0">
+
+                      <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase">
+
+                        <Sparkles
+                          size={11}
+                        />
+
+                        Nueva
+
+                      </div>
+
+                    </div>
+
+                  )}
 
 
-                const statusStyles =
-                  getStatusStyles(
-                    activity.status
-                  )
+                  <div className="min-w-0">
+
+                    <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+
+                      {activity.title}
+
+                    </div>
 
 
-                return (
+                    {activity.description && (
 
-                  <tr
-                    key={activity.id}
+                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+
+                        {activity.description}
+
+                      </div>
+
+                    )}
+
+
+                    {activity.recurrence_type &&
+                      activity.recurrence_type !==
+                        'none' && (
+
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-purple-100 dark:bg-purple-950/40 px-2 py-1 text-[10px] font-semibold text-purple-700 dark:text-purple-300">
+
+                        <CalendarDays
+                          size={11}
+                        />
+
+                        Fija
+                        {activity.recurrence_days?.length
+                          ? ' · ' +
+                            activity.recurrence_days
+                              .map(
+                                (day: number) =>
+                                  [
+                                    'D',
+                                    'L',
+                                    'M',
+                                    'X',
+                                    'J',
+                                    'V',
+                                    'S',
+                                  ][day]
+                              )
+                              .join(', ')
+                          : ''}
+
+                      </div>
+
+                    )}
+
+                  </div>
+
+                </div>
+
+              </td>
+
+
+              {/* =====================================
+                  ASIGNADO
+              ===================================== */}
+
+              <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
+
+                {
+                  activity.assigned_to_name ||
+                  activity.assigned_to ||
+                  'Sin asignar'
+                }
+
+              </td>
+
+
+              {/* =====================================
+                  FECHA + HORA
+              ===================================== */}
+
+              <td className="px-4 py-4">
+
+                <div className="text-sm text-gray-700 dark:text-gray-300">
+
+                  {formatDate(
+                    activity.due_date
+                  )}
+
+                </div>
+
+
+                {activity.due_time && (
+
+                  <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+
+                    <Clock
+                      size={12}
+                    />
+
+                    {formatTime(
+                      activity.due_time
+                    )}
+
+                  </div>
+
+                )}
+
+              </td>
+
+
+              {/* =====================================
+                  PRIORIDAD
+              ===================================== */}
+
+              <td className="px-4 py-4">
+
+                <span
+                  className={`
+                    inline-flex
+                    px-2.5
+                    py-1
+                    rounded-full
+                    text-xs
+                    font-semibold
+                    ${priorityStyles.badge}
+                  `}
+                >
+
+                  {
+                    priorityStyles.label
+                  }
+
+                </span>
+
+              </td>
+
+
+              {/* =====================================
+                  ESTADO
+              ===================================== */}
+
+              <td className="px-4 py-4">
+
+                {user?.role ===
+                  'executor' &&
+                activity.assigned_to ===
+                  user.id ? (
+
+                  <select
+                    value={
+                      activity.status
+                    }
+                    onChange={(e) =>
+                      handleStatusChange(
+                        Number(
+                          activity.id
+                        ),
+                        e.target.value as ActivityStatus
+                      )
+                    }
                     className={`
-                      transition-all
-                      duration-300
+                      px-2.5
+                      py-1
+                      rounded-full
+                      text-xs
+                      font-semibold
+                      border-0
+                      outline-none
+                      ${statusStyles.badge}
+                    `}
+                  >
+
+                    <option value="pending">
+                      Pendiente
+                    </option>
+
+                    <option value="in_progress">
+                      En progreso
+                    </option>
+
+                    <option value="completed">
+                      Completada
+                    </option>
+
+                    <option value="rejected">
+                      Rechazada
+                    </option>
+
+                  </select>
+
+                ) : (
+
+                  <span
+                    className={`
+                      inline-flex
+                      items-center
+                      gap-1.5
+                      px-2.5
+                      py-1
+                      rounded-full
+                      text-xs
+                      font-semibold
+                      ${statusStyles.badge}
+                    `}
+                  >
+
+                    <span
+                      className={`
+                        w-1.5
+                        h-1.5
+                        rounded-full
+                        ${statusStyles.dot}
+                      `}
+                    />
+
+                    {
+                      statusStyles.label ||
+                      getStatusLabel(
+                        activity.status
+                      )
+                    }
+
+                  </span>
+
+                )}
+
+              </td>
+
+
+              {/* =====================================
+                  ACCIONES
+              ===================================== */}
+
+              <td className="px-4 py-4 text-center">
+
+                <div className="flex items-center justify-center gap-3">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleOpenActivity(
+                        activity
+                      )
+                    }
+                    className={`
+                      text-blue-500
+                      text-sm
+                      font-semibold
+                      inline-flex
+                      items-center
+                      gap-1
                       ${
                         isNew
-                          ? 'bg-blue-50 dark:bg-blue-950/20 ring-1 ring-inset ring-blue-400/40'
-                          : 'hover:bg-gray-50 dark:hover:bg-gray-900/50'
+                          ? 'animate-pulse'
+                          : ''
                       }
                     `}
                   >
 
-                    {/* ACTIVIDAD */}
+                    <Eye
+                      size={16}
+                    />
 
-                    <td className="px-4 py-4">
+                    Ver
 
-                      <div className="flex items-start gap-3">
-
-                        {isNew && (
-
-                          <div>
-
-                            <div className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-600 text-white text-[10px] font-bold uppercase">
-
-                              <Sparkles
-                                size={11}
-                              />
-
-                              Nueva
-
-                            </div>
-
-                          </div>
-
-                        )}
-
-                        <div className="min-w-0">
-
-                          <div className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                            {activity.title}
-                          </div>
-
-                          {activity.description && (
-
-                            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
-                              {activity.description}
-                            </div>
-
-                          )}
-
-                        </div>
-
-                      </div>
-
-                    </td>
+                  </button>
 
 
-                    {/* ASIGNADO */}
+                  {user?.role ===
+                    'admin' && (
 
-                    <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
-
-                      {
-                        activity.assigned_to_name ||
-                        activity.assigned_to ||
-                        'Sin asignar'
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDeleteActivity(
+                          Number(
+                            activity.id
+                          ),
+                          activity.title
+                        )
                       }
+                      className="text-red-500 hover:text-red-600 text-sm font-semibold inline-flex items-center gap-1"
+                    >
 
-                    </td>
+                      <Trash2
+                        size={16}
+                      />
 
+                      Eliminar
 
-                    {/* FECHA + HORA */}
+                    </button>
 
-                    <td className="px-4 py-4">
+                  )}
 
-                      <div className="text-sm text-gray-700 dark:text-gray-300">
+                </div>
 
-                        {activity.due_date ||
-                          'Sin fecha'}
+              </td>
 
-                      </div>
+            </tr>
 
-                      {activity.due_time && (
+          )
 
-                        <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+        }
+      )
 
-                          <Clock
-                            size={12}
-                          />
-
-                          {formatTime(
-                            activity.due_time
-                          )}
-
-                        </div>
-
-                      )}
-
-                    </td>
+    }
 
 
-                    {/* PRIORIDAD */}
+  // =======================================================
+  // TABLA
+  // =======================================================
 
-                    <td className="px-4 py-4">
+  const renderTable =
+    (
+      list: any[],
+      emptyMessage: string
+    ) => {
 
-                      <span
-                        className={`
-                          inline-flex
-                          px-2.5
-                          py-1
-                          rounded-full
-                          text-xs
-                          font-semibold
-                          ${priorityStyles.badge}
-                        `}
-                      >
-                        {
-                          priorityStyles.label
-                        }
-                      </span>
+      if (list.length === 0) {
 
-                    </td>
+        return (
 
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-surface p-8 text-center">
 
-                    {/* ESTADO */}
+            <div className="text-3xl mb-2">
+              📋
+            </div>
 
-                    <td className="px-4 py-4">
+            <p className="font-semibold text-gray-900 dark:text-white">
+              No hay actividades
+            </p>
 
-                      {user?.role ===
-                        'executor' &&
-                      activity.assigned_to ===
-                        user.id ? (
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+              {emptyMessage}
+            </p>
 
-                        <select
-                          value={
-                            activity.status
-                          }
-                          onChange={(e) =>
-                            handleStatusChange(
-                              activity.id,
-                              e.target.value as ActivityStatus
-                            )
-                          }
-                          className={`
-                            px-2.5
-                            py-1
-                            rounded-full
-                            text-xs
-                            font-semibold
-                            border-0
-                            outline-none
-                            ${statusStyles.badge}
-                          `}
-                        >
+          </div>
 
-                          <option value="pending">
-                            Pendiente
-                          </option>
+        )
 
-                          <option value="in_progress">
-                            En progreso
-                          </option>
-
-                          <option value="completed">
-                            Completada
-                          </option>
-
-                          <option value="rejected">
-                            Rechazada
-                          </option>
-
-                        </select>
-
-                      ) : (
-
-                        <span
-                          className={`
-                            inline-flex
-                            items-center
-                            gap-1.5
-                            px-2.5
-                            py-1
-                            rounded-full
-                            text-xs
-                            font-semibold
-                            ${statusStyles.badge}
-                          `}
-                        >
-
-                          <span
-                            className={`
-                              w-1.5
-                              h-1.5
-                              rounded-full
-                              ${statusStyles.dot}
-                            `}
-                          />
-
-                          {
-                            statusStyles.label
-                          }
-
-                        </span>
-
-                      )}
-
-                    </td>
+      }
 
 
-                    {/* ACCIONES */}
+      return (
 
-                    <td className="px-4 py-4 text-center">
+        <div className="w-full overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800 bg-surface shadow-sm">
 
-                      <div className="flex items-center justify-center gap-3">
+          <table className="w-full">
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleOpenActivity(
-                              activity
-                            )
-                          }
-                          className={`
-                            text-blue-500
-                            text-sm
-                            font-semibold
-                            inline-flex
-                            items-center
-                            gap-1
-                            ${
-                              isNew
-                                ? 'animate-pulse'
-                                : ''
-                            }
-                          `}
-                        >
+            <thead className="border-b border-gray-200 dark:border-gray-800">
 
-                          <Eye
-                            size={16}
-                          />
+              <tr>
 
-                          Ver
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                  Actividad
+                </th>
 
-                        </button>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                  Asignado a
+                </th>
+
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                  Fecha / hora
+                </th>
+
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                  Prioridad
+                </th>
+
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">
+                  Estado
+                </th>
+
+                <th className="px-4 py-3 text-xs font-semibold text-gray-500 uppercase text-center">
+                  Acciones
+                </th>
+
+              </tr>
+
+            </thead>
 
 
-                        {user?.role ===
-                          'admin' && (
+            <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDeleteActivity(
-                                Number(
-                                  activity.id
-                                ),
-                                activity.title
-                              )
-                            }
-                            className="text-red-500 hover:text-red-600 text-sm font-semibold inline-flex items-center gap-1"
-                          >
+              {renderRows(list)}
 
-                            <Trash2
-                              size={16}
-                            />
+            </tbody>
 
-                            Eliminar
+          </table>
 
-                          </button>
+        </div>
 
-                        )}
+      )
 
-                      </div>
+    }
 
-                    </td>
 
-                  </tr>
+  // =======================================================
+  // RENDER
+  // =======================================================
 
-                )
+  return (
 
-              }
-            )}
+    <div className="space-y-10">
 
-          </tbody>
+      {/* =================================================
+          HOY
+      ================================================= */}
 
-        </table>
+      <section>
 
-      </div>
+        <div className="mb-4 flex items-center justify-between">
 
+          <div>
+
+            <div className="flex items-center gap-2">
+
+              <CalendarDays
+                size={20}
+                className="text-brand-orange"
+              />
+
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+
+                Actividades de hoy
+
+              </h2>
+
+            </div>
+
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+
+              {new Date().toLocaleDateString(
+                'es-MX',
+                {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                }
+              )}
+
+            </p>
+
+          </div>
+
+
+          <div className="rounded-full bg-brand-orange/10 px-3 py-1 text-sm font-semibold text-brand-orange">
+
+            {todayActivities.length}
+            {' '}
+            {todayActivities.length === 1
+              ? 'actividad'
+              : 'actividades'}
+
+          </div>
+
+        </div>
+
+
+        {renderTable(
+          todayActivities,
+          statusFilter === 'all'
+            ? 'No tienes actividades programadas para hoy.'
+            : 'No hay actividades de hoy con este estado.'
+        )}
+
+      </section>
+
+
+      {/* =================================================
+          RESTO DEL MES
+      ================================================= */}
+
+      <section>
+
+        <div className="mb-4 flex items-center justify-between">
+
+          <div>
+
+            <div className="flex items-center gap-2">
+
+              <CalendarDays
+                size={20}
+                className="text-purple-500"
+              />
+
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+
+                Todas las actividades de{' '}
+                {formatMonthTitle(
+                  new Date()
+                )}
+
+              </h2>
+
+            </div>
+
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+
+              Aquí puedes consultar todas las actividades programadas durante el mes.
+
+            </p>
+
+          </div>
+
+
+          <div className="rounded-full bg-purple-500/10 px-3 py-1 text-sm font-semibold text-purple-600 dark:text-purple-400">
+
+            {monthActivities.length}
+
+          </div>
+
+        </div>
+
+
+        {renderTable(
+          monthActivities,
+          statusFilter === 'all'
+            ? 'No hay actividades programadas para este mes.'
+            : 'No hay actividades de este mes con este estado.'
+        )}
+
+      </section>
+
+
+      {/* =================================================
+          MODAL
+      ================================================= */}
 
       {selectedActivity && (
 
         <ActivityDetailModal
+
           activity={
             selectedActivity
           }
@@ -775,11 +1238,13 @@ export default function ActivitiesTable({
               null
             )
           }
+
         />
 
       )}
 
-    </>
+    </div>
 
   )
+
 }

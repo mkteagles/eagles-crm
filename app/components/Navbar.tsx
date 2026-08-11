@@ -132,13 +132,14 @@ export function Navbar() {
             href="/app1"
             className="flex items-center gap-2"
           >
-            <Image
-              src="/logo.png"
-              alt="Eagles Gear CRM"
-              width={36}
-              height={36}
-              className="rounded-md"
-            />
+          <Image
+  src="/public/logo-banner.jpg"
+  alt="Eagles Gear CRM"
+  width={36}
+  height={36}
+  className="rounded-md"
+  loading="eager"
+/>
 
             <span className="font-semibold text-foreground">
               Eagles Gear CRM
