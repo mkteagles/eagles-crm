@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -95,7 +94,9 @@ export default function ActivityIdeas({
   const [
     reviewIdea,
     setReviewIdea,
-  ] = useState<ActivityIdea | null>(null)
+  ] = useState<ActivityIdea | null>(
+    null,
+  )
 
   // =======================================================
   // PROCESANDO
@@ -104,7 +105,9 @@ export default function ActivityIdeas({
   const [
     processingId,
     setProcessingId,
-  ] = useState<string | null>(null)
+  ] = useState<string | null>(
+    null,
+  )
 
   // =======================================================
   // RECHAZO
@@ -113,12 +116,32 @@ export default function ActivityIdeas({
   const [
     rejectionIdea,
     setRejectionIdea,
-  ] = useState<ActivityIdea | null>(null)
+  ] = useState<ActivityIdea | null>(
+    null,
+  )
 
   const [
     rejectionReason,
     setRejectionReason,
   ] = useState('')
+
+  // =======================================================
+  // REFRESH EXTERNO
+  //
+  // Esto permite que MarketingDashboard fuerce la
+  // actualización de las ideas cuando cambia refreshKey.
+  // =======================================================
+
+  useEffect(() => {
+
+    if (refreshKey > 0) {
+      refresh()
+    }
+
+  }, [
+    refreshKey,
+    refresh,
+  ])
 
   // =======================================================
   // FILTRAR IDEAS VISIBLES
@@ -129,23 +152,36 @@ export default function ActivityIdeas({
       () => {
 
         // -------------------------------------------------
-        // HUGO / ADMIN
-        // Solo ve ideas pendientes
+        // SOLO MOSTRAMOS IDEAS PENDIENTES
+        //
+        // approved -> ya se convirtió en actividad
+        // rejected -> ya fue rechazada
         // -------------------------------------------------
 
-        if (isAdmin) {
-          return ideas.filter(
+        const pendingIdeas =
+          ideas.filter(
             (idea) =>
               idea.status === 'pending',
           )
+
+        // -------------------------------------------------
+        // ADMIN / HUGO
+        //
+        // Ve todas las ideas pendientes.
+        // -------------------------------------------------
+
+        if (isAdmin) {
+          return pendingIdeas
         }
 
         // -------------------------------------------------
         // USUARIOS NORMALES
-        // Solo ven sus propias ideas
+        //
+        // Marcos / Úrsula solamente ven sus propias
+        // ideas pendientes.
         // -------------------------------------------------
 
-        return ideas.filter(
+        return pendingIdeas.filter(
           (idea) =>
             idea.created_by === userId,
         )
@@ -156,24 +192,6 @@ export default function ActivityIdeas({
         userId,
       ],
     )
-
-  // =======================================================
-  // REFRESH EXTERNO
-  // =======================================================
-
-  useEffect(
-    () => {
-
-      if (refreshKey > 0) {
-        refresh()
-      }
-
-    },
-    [
-      refreshKey,
-      refresh,
-    ],
-  )
 
   // =======================================================
   // ABRIR REVISIÓN
@@ -276,7 +294,6 @@ export default function ActivityIdeas({
         setProcessingId(
           null,
         )
-
       }
     }
 
@@ -524,7 +541,7 @@ export default function ActivityIdeas({
 
               {isAdmin
                 ? 'No hay ideas pendientes.'
-                : 'Todavía no tienes ideas propuestas.'}
+                : 'No tienes ideas pendientes.'}
 
             </p>
 
@@ -547,7 +564,7 @@ export default function ActivityIdeas({
                   "
                 >
 
-                  Crear mi primera idea
+                  Crear una nueva idea
 
                 </button>
 
@@ -624,7 +641,6 @@ export default function ActivityIdeas({
             )
 
             await refresh()
-
           }
         }
       />
@@ -676,8 +692,6 @@ export default function ActivityIdeas({
             "
           >
 
-            {/* TITULO */}
-
             <h3
               className="
                 text-lg
@@ -691,8 +705,6 @@ export default function ActivityIdeas({
 
             </h3>
 
-            {/* IDEA */}
-
             <p
               className="
                 mt-1
@@ -705,8 +717,6 @@ export default function ActivityIdeas({
               {rejectionIdea.title}
 
             </p>
-
-            {/* MOTIVO */}
 
             <textarea
               value={
@@ -737,8 +747,6 @@ export default function ActivityIdeas({
                 dark:text-white
               "
             />
-
-            {/* BOTONES */}
 
             <div
               className="
@@ -835,9 +843,7 @@ export default function ActivityIdeas({
 
 interface IdeaCardProps {
   idea: ActivityIdea
-
   isAdmin: boolean
-
   processing: boolean
 
   onApprove: (
@@ -897,8 +903,6 @@ function IdeaCard({
           "
         >
 
-          {/* TITULO */}
-
           <div
             className="
               flex flex-wrap
@@ -918,8 +922,6 @@ function IdeaCard({
               {idea.title}
 
             </h3>
-
-            {/* STATUS */}
 
             <span
               className="
@@ -941,13 +943,7 @@ function IdeaCard({
                 size={12}
               />
 
-              {idea.status ===
-              'pending'
-                ? 'Pendiente'
-                : idea.status ===
-                    'approved'
-                  ? 'Aprobada'
-                  : 'Rechazada'}
+              Pendiente
 
             </span>
 
@@ -1120,7 +1116,7 @@ function IdeaCard({
         </div>
 
         {/* =================================================
-            ACCIONES HUGO
+            ACCIONES ADMIN
         ================================================= */}
 
         {isAdmin &&
@@ -1284,4 +1280,3 @@ function getPriorityLabel(
       return priority
   }
 }
-
