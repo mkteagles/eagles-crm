@@ -1,3 +1,4 @@
+
 'use client'
 
 import {
@@ -45,25 +46,15 @@ import ActivityDetailModal from './ActivityDetailModal'
 function getLocalDateString(
   date: Date = new Date()
 ): string {
+  const year = date.getFullYear()
 
-  const year =
-    date.getFullYear()
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, '0')
 
-  const month =
-    String(
-      date.getMonth() + 1
-    ).padStart(
-      2,
-      '0'
-    )
-
-  const day =
-    String(
-      date.getDate()
-    ).padStart(
-      2,
-      '0'
-    )
+  const day = String(
+    date.getDate()
+  ).padStart(2, '0')
 
   return `${year}-${month}-${day}`
 }
@@ -75,17 +66,11 @@ function getLocalDateString(
 function getMonthKey(
   date: Date
 ): string {
+  const year = date.getFullYear()
 
-  const year =
-    date.getFullYear()
-
-  const month =
-    String(
-      date.getMonth() + 1
-    ).padStart(
-      2,
-      '0'
-    )
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, '0')
 
   return `${year}-${month}`
 }
@@ -98,15 +83,13 @@ function getMonthKey(
 function dateFromString(
   dateString: string
 ): Date {
-
   const [
     year,
     month,
     day,
-  ] =
-    dateString
-      .split('-')
-      .map(Number)
+  ] = dateString
+    .split('-')
+    .map(Number)
 
   return new Date(
     year,
@@ -122,7 +105,6 @@ function dateFromString(
 function formatLongDate(
   dateString: string
 ) {
-
   const date =
     dateFromString(
       dateString
@@ -146,7 +128,6 @@ function formatLongDate(
 function formatTime(
   time?: string | null
 ) {
-
   if (!time) {
     return ''
   }
@@ -154,10 +135,9 @@ function formatTime(
   const [
     hours,
     minutes,
-  ] =
-    time
-      .split(':')
-      .map(Number)
+  ] = time
+    .split(':')
+    .map(Number)
 
   if (
     Number.isNaN(hours) ||
@@ -192,7 +172,6 @@ function formatTime(
 function formatDate(
   date?: string | null
 ) {
-
   if (!date) {
     return 'Sin fecha'
   }
@@ -201,10 +180,9 @@ function formatDate(
     year,
     month,
     day,
-  ] =
-    String(date)
-      .slice(0, 10)
-      .split('-')
+  ] = String(date)
+    .slice(0, 10)
+    .split('-')
 
   if (
     !year ||
@@ -224,7 +202,6 @@ function formatDate(
 function formatMonthTitle(
   date: Date
 ) {
-
   return date.toLocaleDateString(
     'es-MX',
     {
@@ -241,9 +218,7 @@ function formatMonthTitle(
 function getStatusLabel(
   status?: string | null
 ) {
-
   switch (status) {
-
     case 'pending':
       return 'Pendiente'
 
@@ -260,10 +235,19 @@ function getStatusLabel(
       return 'Aprobada'
 
     default:
-      return status ||
-        'Sin estado'
+      return status || 'Sin estado'
   }
 }
+
+// =========================================================
+// TIPO FILTRO
+// =========================================================
+
+type ActivityFilter =
+  | 'all'
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
 
 // =========================================================
 // COMPONENTE
@@ -280,8 +264,7 @@ export default function ActivitiesTable() {
     loading,
     newActivityIds,
     markActivityAsSeen,
-  } =
-    useActivities()
+  } = useActivities()
 
   // =======================================================
   // USUARIO
@@ -289,8 +272,7 @@ export default function ActivitiesTable() {
 
   const {
     user,
-  } =
-    useCurrentUser()
+  } = useCurrentUser()
 
   // =======================================================
   // SUPABASE
@@ -306,10 +288,9 @@ export default function ActivitiesTable() {
   const [
     selectedActivity,
     setSelectedActivity,
-  ] =
-    useState<any | null>(
-      null
-    )
+  ] = useState<any | null>(
+    null
+  )
 
   // =======================================================
   // FECHA ACTUAL
@@ -325,10 +306,20 @@ export default function ActivitiesTable() {
   const [
     selectedDate,
     setSelectedDate,
-  ] =
-    useState(
-      today
-    )
+  ] = useState(
+    today
+  )
+
+  // =======================================================
+  // FILTRO DE ESTADO
+  // =======================================================
+
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] = useState<ActivityFilter>(
+    'all'
+  )
 
   // =======================================================
   // DATE DE LA FECHA SELECCIONADA
@@ -515,6 +506,36 @@ export default function ActivitiesTable() {
     )
 
   // =======================================================
+  // ACTIVIDADES FILTRADAS DEL DÍA
+  // =======================================================
+
+  const filteredDayActivities =
+    useMemo(
+      () => {
+
+        if (
+          statusFilter ===
+          'all'
+        ) {
+          return selectedDayActivities
+        }
+
+        return selectedDayActivities.filter(
+          (
+            activity: any
+          ) =>
+            activity.status ===
+            statusFilter
+        )
+
+      },
+      [
+        selectedDayActivities,
+        statusFilter,
+      ]
+    )
+
+  // =======================================================
   // ACTIVIDADES DEL MES
   // =======================================================
 
@@ -564,7 +585,6 @@ export default function ActivitiesTable() {
                 dateA !==
                 dateB
               ) {
-
                 return dateA.localeCompare(
                   dateB
                 )
@@ -794,6 +814,20 @@ export default function ActivitiesTable() {
     }
 
   // =======================================================
+  // CAMBIAR FILTRO
+  // =======================================================
+
+  const handleFilterChange =
+    (
+      filter: ActivityFilter
+    ) => {
+
+      setStatusFilter(
+        filter
+      )
+    }
+
+  // =======================================================
   // LOADING
   // =======================================================
 
@@ -865,9 +899,7 @@ export default function ActivitiesTable() {
               `}
             >
 
-              {/* =====================================
-                  ACTIVIDAD
-              ===================================== */}
+              {/* ACTIVIDAD */}
 
               <td className="px-4 py-4">
 
@@ -959,9 +991,7 @@ export default function ActivitiesTable() {
 
               </td>
 
-              {/* =====================================
-                  ASIGNADO
-              ===================================== */}
+              {/* ASIGNADO */}
 
               <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
 
@@ -973,9 +1003,7 @@ export default function ActivitiesTable() {
 
               </td>
 
-              {/* =====================================
-                  FECHA / HORA
-              ===================================== */}
+              {/* FECHA / HORA */}
 
               <td className="px-4 py-4">
 
@@ -1009,9 +1037,7 @@ export default function ActivitiesTable() {
 
               </td>
 
-              {/* =====================================
-                  PRIORIDAD
-              ===================================== */}
+              {/* PRIORIDAD */}
 
               <td className="px-4 py-4">
 
@@ -1035,9 +1061,7 @@ export default function ActivitiesTable() {
 
               </td>
 
-              {/* =====================================
-                  ESTADO
-              ===================================== */}
+              {/* ESTADO */}
 
               <td className="px-4 py-4">
 
@@ -1128,9 +1152,7 @@ export default function ActivitiesTable() {
 
               </td>
 
-              {/* =====================================
-                  ACCIONES
-              ===================================== */}
+              {/* ACCIONES */}
 
               <td className="px-4 py-4 text-center">
 
@@ -1197,6 +1219,7 @@ export default function ActivitiesTable() {
               </td>
 
             </tr>
+
           )
         }
       )
@@ -1235,6 +1258,7 @@ export default function ActivitiesTable() {
             </p>
 
           </div>
+
         )
       }
 
@@ -1289,6 +1313,7 @@ export default function ActivitiesTable() {
           </table>
 
         </div>
+
       )
     }
 
@@ -1301,7 +1326,7 @@ export default function ActivitiesTable() {
     <div className="space-y-8">
 
       {/* =================================================
-          SELECTOR ÚNICO DE FECHA
+          SELECTOR DE FECHA
       ================================================= */}
 
       <section>
@@ -1309,10 +1334,6 @@ export default function ActivitiesTable() {
         <div className="rounded-2xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-
-            {/* =========================================
-                INFORMACIÓN
-            ========================================= */}
 
             <div>
 
@@ -1335,13 +1356,7 @@ export default function ActivitiesTable() {
 
             </div>
 
-            {/* =========================================
-                CONTROLES DE FECHA
-            ========================================= */}
-
             <div className="flex flex-wrap items-center gap-2">
-
-              {/* ANTERIOR */}
 
               <button
                 type="button"
@@ -1358,8 +1373,6 @@ export default function ActivitiesTable() {
                 Anterior
 
               </button>
-
-              {/* FECHA */}
 
               <label className="relative">
 
@@ -1384,8 +1397,6 @@ export default function ActivitiesTable() {
 
               </label>
 
-              {/* HOY */}
-
               <button
                 type="button"
                 onClick={
@@ -1408,8 +1419,6 @@ export default function ActivitiesTable() {
               >
                 Hoy
               </button>
-
-              {/* SIGUIENTE */}
 
               <button
                 type="button"
@@ -1436,11 +1445,7 @@ export default function ActivitiesTable() {
       </section>
 
       {/* =================================================
-          CONTADORES
-          
-          IMPORTANTE:
-          YA NO SON BOTONES.
-          SOLO INFORMACIÓN.
+          CONTADORES / FILTROS
       ================================================= */}
 
       <section>
@@ -1449,7 +1454,30 @@ export default function ActivitiesTable() {
 
           {/* TOTAL */}
 
-          <div className="rounded-xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() =>
+              handleFilterChange(
+                'all'
+              )
+            }
+            className={`
+              rounded-xl
+              border
+              bg-surface
+              p-4
+              text-left
+              shadow-sm
+              transition
+              dark:border-gray-800
+              ${
+                statusFilter ===
+                'all'
+                  ? 'border-blue-500 ring-2 ring-blue-500/20'
+                  : 'border-gray-200 hover:border-blue-300 dark:hover:border-blue-800'
+              }
+            `}
+          >
 
             <div className="flex items-center justify-between">
 
@@ -1466,7 +1494,12 @@ export default function ActivitiesTable() {
                 </p>
 
                 <p className="mt-1 text-xs text-gray-400">
-                  Este día
+                  {
+                    statusFilter ===
+                    'all'
+                      ? 'Mostrando todas'
+                      : 'Ver todas'
+                  }
                 </p>
 
               </div>
@@ -1480,11 +1513,34 @@ export default function ActivitiesTable() {
 
             </div>
 
-          </div>
+          </button>
 
           {/* PENDIENTES */}
 
-          <div className="rounded-xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() =>
+              handleFilterChange(
+                'pending'
+              )
+            }
+            className={`
+              rounded-xl
+              border
+              bg-surface
+              p-4
+              text-left
+              shadow-sm
+              transition
+              dark:border-gray-800
+              ${
+                statusFilter ===
+                'pending'
+                  ? 'border-orange-500 ring-2 ring-orange-500/20'
+                  : 'border-gray-200 hover:border-orange-300 dark:hover:border-orange-800'
+              }
+            `}
+          >
 
             <div className="flex items-center justify-between">
 
@@ -1501,7 +1557,12 @@ export default function ActivitiesTable() {
                 </p>
 
                 <p className="mt-1 text-xs text-gray-400">
-                  Por realizar
+                  {
+                    statusFilter ===
+                    'pending'
+                      ? 'Mostrando pendientes'
+                      : 'Ver pendientes'
+                  }
                 </p>
 
               </div>
@@ -1515,11 +1576,34 @@ export default function ActivitiesTable() {
 
             </div>
 
-          </div>
+          </button>
 
           {/* EN PROGRESO */}
 
-          <div className="rounded-xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() =>
+              handleFilterChange(
+                'in_progress'
+              )
+            }
+            className={`
+              rounded-xl
+              border
+              bg-surface
+              p-4
+              text-left
+              shadow-sm
+              transition
+              dark:border-gray-800
+              ${
+                statusFilter ===
+                'in_progress'
+                  ? 'border-yellow-500 ring-2 ring-yellow-500/20'
+                  : 'border-gray-200 hover:border-yellow-300 dark:hover:border-yellow-800'
+              }
+            `}
+          >
 
             <div className="flex items-center justify-between">
 
@@ -1536,7 +1620,12 @@ export default function ActivitiesTable() {
                 </p>
 
                 <p className="mt-1 text-xs text-gray-400">
-                  Trabajando ahora
+                  {
+                    statusFilter ===
+                    'in_progress'
+                      ? 'Mostrando en progreso'
+                      : 'Ver en progreso'
+                  }
                 </p>
 
               </div>
@@ -1550,11 +1639,34 @@ export default function ActivitiesTable() {
 
             </div>
 
-          </div>
+          </button>
 
           {/* COMPLETADAS */}
 
-          <div className="rounded-xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() =>
+              handleFilterChange(
+                'completed'
+              )
+            }
+            className={`
+              rounded-xl
+              border
+              bg-surface
+              p-4
+              text-left
+              shadow-sm
+              transition
+              dark:border-gray-800
+              ${
+                statusFilter ===
+                'completed'
+                  ? 'border-green-500 ring-2 ring-green-500/20'
+                  : 'border-gray-200 hover:border-green-300 dark:hover:border-green-800'
+              }
+            `}
+          >
 
             <div className="flex items-center justify-between">
 
@@ -1571,7 +1683,12 @@ export default function ActivitiesTable() {
                 </p>
 
                 <p className="mt-1 text-xs text-gray-400">
-                  Finalizadas
+                  {
+                    statusFilter ===
+                    'completed'
+                      ? 'Mostrando completadas'
+                      : 'Ver completadas'
+                  }
                 </p>
 
               </div>
@@ -1585,11 +1702,58 @@ export default function ActivitiesTable() {
 
             </div>
 
-          </div>
+          </button>
 
         </div>
 
       </section>
+
+      {/* =================================================
+          INDICADOR DE FILTRO
+      ================================================= */}
+
+      {statusFilter !==
+        'all' && (
+
+        <div className="flex items-center justify-between rounded-lg border border-brand-orange/20 bg-brand-orange/5 px-4 py-3">
+
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+
+            Mostrando únicamente:
+
+            <span className="ml-1 font-bold text-brand-orange">
+
+              {statusFilter ===
+                'pending' &&
+                'Pendientes'}
+
+              {statusFilter ===
+                'in_progress' &&
+                'En progreso'}
+
+              {statusFilter ===
+                'completed' &&
+                'Completadas'}
+
+            </span>
+
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              handleFilterChange(
+                'all'
+              )
+            }
+            className="text-sm font-semibold text-brand-orange hover:underline"
+          >
+            Ver todas
+          </button>
+
+        </div>
+
+      )}
 
       {/* =================================================
           ACTIVIDADES DEL DÍA
@@ -1636,13 +1800,13 @@ export default function ActivitiesTable() {
           <div className="rounded-full bg-brand-orange/10 px-3 py-1 text-sm font-semibold text-brand-orange">
 
             {
-              selectedDayActivities.length
+              filteredDayActivities.length
             }
 
             {' '}
 
             {
-              selectedDayActivities.length ===
+              filteredDayActivities.length ===
               1
                 ? 'actividad'
                 : 'actividades'
@@ -1654,11 +1818,16 @@ export default function ActivitiesTable() {
 
         {
           renderTable(
-            selectedDayActivities,
-            selectedDate ===
-              today
-              ? 'No tienes actividades programadas para hoy.'
-              : `No tienes actividades programadas para el ${formatDate(selectedDate)}.`
+            filteredDayActivities,
+            statusFilter ===
+              'all'
+              ? (
+                  selectedDate ===
+                  today
+                    ? 'No tienes actividades programadas para hoy.'
+                    : `No tienes actividades programadas para el ${formatDate(selectedDate)}.`
+                )
+              : `No hay actividades con estado "${getStatusLabel(statusFilter)}" para este día.`
           )
         }
 
@@ -1750,5 +1919,7 @@ export default function ActivitiesTable() {
       }
 
     </div>
+
   )
 }
+
