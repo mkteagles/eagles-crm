@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -16,13 +15,56 @@ import { createClient } from '@/lib/supabase/client'
 
 export interface ActivityLike {
   id: number | string
+
   title?: string | null
+
   description?: string | null
+
   assigned_to?: string | null
+
   created_by?: string | null
+
   approved_by?: string | null
+
   status?: string | null
+
   created_at?: string | null
+
+  updated_at?: string | null
+}
+
+// =========================================================
+// IDEA DE ACTIVIDAD
+// =========================================================
+
+export interface ActivityIdeaLike {
+  id: string
+
+  title?: string | null
+
+  description?: string | null
+
+  created_by?: string | null
+
+  assigned_to?: string | null
+
+  status?: string | null
+
+  priority?: string | null
+
+  due_date?: string | null
+
+  due_time?: string | null
+
+  reviewed_by?: string | null
+
+  reviewed_at?: string | null
+
+  rejection_reason?: string | null
+
+  created_at?: string | null
+
+  updated_at?: string | null
 }
 
 // =========================================================
@@ -38,13 +80,21 @@ export type NotificationType =
 
 export interface NotificationItem {
   id: string
+
   type: NotificationType
-  activityId: number
+
+  activityId: number | string
+
   title: string
+
   message: string
+
   activity: ActivityLike
+
   createdAt: string
+
   notificationKey: string
+
   read: boolean
 }
 
@@ -100,8 +150,7 @@ export function getSeenActivities(
           (
             item
           ): item is string =>
-            typeof item ===
-            'string'
+            typeof item === 'string'
         )
       : []
   } catch (error) {
@@ -115,7 +164,7 @@ export function getSeenActivities(
 }
 
 // =========================================================
-// MARCAR ACTIVIDAD COMO VISTA
+// MARCAR ACTIVIDAD / IDEA COMO VISTA
 // =========================================================
 
 export function markActivityAsSeen(
@@ -163,7 +212,7 @@ export function markActivityAsSeen(
     )
   } catch (error) {
     console.error(
-      'Error guardando actividad como vista:',
+      'Error guardando actividad vista:',
       error
     )
   }
@@ -214,7 +263,9 @@ export function isActivityNew(
 
 interface UserProfile {
   id: string
+
   full_name?: string | null
+
   role?: string | null
 }
 
@@ -296,7 +347,61 @@ export function useActivityNotifications(
     )
 
   // =======================================================
-  // CREAR NOTIFICACIÓN
+  // MOSTRAR NOTIFICACIÓN DEL NAVEGADOR
+  // =======================================================
+
+  const showBrowserNotification =
+    useCallback(
+      (
+        title: string,
+        message: string,
+        notificationId: string
+      ) => {
+        if (
+          typeof window ===
+            'undefined'
+        ) {
+          return
+        }
+
+        if (
+          !(
+            'Notification' in
+            window
+          )
+        ) {
+          return
+        }
+
+        if (
+          Notification.permission !==
+          'granted'
+        ) {
+          return
+        }
+
+        try {
+          new Notification(
+            title,
+            {
+              body: message,
+
+              tag:
+                notificationId,
+            }
+          )
+        } catch (error) {
+          console.error(
+            'Error creando notificación del navegador:',
+            error
+          )
+        }
+      },
+      []
+    )
+
+  // =======================================================
+  // CREAR NOTIFICACIÓN DE ACTIVIDAD
   // =======================================================
 
   const createNotification =
@@ -310,7 +415,10 @@ export function useActivityNotifications(
           return
         }
 
-        // No notificarse a sí mismo
+        // -------------------------------------------------
+        // NO NOTIFICARSE A SÍ MISMO
+        // -------------------------------------------------
+
         if (
           actorId &&
           actorId === user.id
@@ -410,6 +518,10 @@ export function useActivityNotifications(
             `${actorName} actualizó la actividad "${activity.title}"`
         }
 
+        // =================================================
+        // SI NO DEBE NOTIFICARSE
+        // =================================================
+
         if (!shouldNotify) {
           return
         }
@@ -427,7 +539,8 @@ export function useActivityNotifications(
         // CREAR OBJETO
         // =================================================
 
-        const notification: NotificationItem =
+        const notification:
+          NotificationItem =
           {
             id:
               `${notificationKey}:${type}:${Date.now()}`,
@@ -435,9 +548,7 @@ export function useActivityNotifications(
             type,
 
             activityId:
-              Number(
-                activity.id
-              ),
+              activity.id,
 
             title:
               activity.title ||
@@ -452,10 +563,11 @@ export function useActivityNotifications(
 
             notificationKey,
 
-            read: isActivitySeen(
-              activity,
-              user.id
-            ),
+            read:
+              isActivitySeen(
+                activity,
+                user.id
+              ),
           }
 
         // =================================================
@@ -490,38 +602,175 @@ export function useActivityNotifications(
         // NOTIFICACIÓN DEL NAVEGADOR
         // =================================================
 
-        if (
-          typeof window !==
-            'undefined' &&
-          'Notification' in
-            window &&
-          Notification.permission ===
-            'granted'
-        ) {
-          try {
-            new Notification(
-              'Nueva actividad',
-              {
-                body: message,
-                tag: notification.id,
-              }
-            )
-          } catch (error) {
-            console.error(
-              'Error creando notificación del navegador:',
-              error
-            )
-          }
-        }
+        showBrowserNotification(
+          'Nueva actividad',
+          message,
+          notification.id
+        )
       },
       [
         user?.id,
         getUserName,
+        showBrowserNotification,
       ]
     )
 
   // =======================================================
-  // PROCESAR CAMBIOS DE SUPABASE
+  // CREAR NOTIFICACIÓN DE IDEA
+  // =======================================================
+
+  const createIdeaNotification =
+    useCallback(
+      async (
+        idea: ActivityIdeaLike
+      ) => {
+        if (!user?.id) {
+          return
+        }
+
+        // -------------------------------------------------
+        // SOLO SI LA IDEA ESTÁ ASIGNADA AL USUARIO
+        // -------------------------------------------------
+
+        if (
+          idea.assigned_to !==
+          user.id
+        ) {
+          return
+        }
+
+        // -------------------------------------------------
+        // NO NOTIFICARSE A SÍ MISMO
+        // -------------------------------------------------
+
+        if (
+          idea.created_by ===
+          user.id
+        ) {
+          return
+        }
+
+        const actorName =
+          await getUserName(
+            idea.created_by
+          )
+
+        // -------------------------------------------------
+        // CONVERTIR IDEA AL FORMATO DE ACTIVIDAD
+        // -------------------------------------------------
+
+        const activity:
+          ActivityLike =
+          {
+            id: idea.id,
+
+            title:
+              idea.title,
+
+            description:
+              idea.description,
+
+            assigned_to:
+              idea.assigned_to,
+
+            created_by:
+              idea.created_by,
+
+            status:
+              idea.status,
+
+            created_at:
+              idea.created_at,
+
+            updated_at:
+              idea.updated_at,
+          }
+
+        // -------------------------------------------------
+        // KEY ESPECÍFICA PARA IDEAS
+        // -------------------------------------------------
+
+        const notificationKey =
+          `idea:${idea.id}:${idea.assigned_to}`
+
+        const message =
+          `${actorName} te envió la idea "${idea.title || 'Sin título'}"`
+
+        const notification:
+          NotificationItem =
+          {
+            id:
+              `${notificationKey}:assigned:${Date.now()}`,
+
+            type:
+              'assigned',
+
+            activityId:
+              idea.id,
+
+            title:
+              idea.title ||
+              'Nueva idea',
+
+            message,
+
+            activity,
+
+            createdAt:
+              new Date().toISOString(),
+
+            notificationKey,
+
+            read:
+              isActivitySeen(
+                activity,
+                user.id
+              ),
+          }
+
+        // -------------------------------------------------
+        // EVITAR DUPLICADOS
+        // -------------------------------------------------
+
+        setNotifications(
+          previous => {
+            const exists =
+              previous.some(
+                item =>
+                  item.notificationKey ===
+                  notificationKey
+              )
+
+            if (exists) {
+              return previous
+            }
+
+            return [
+              notification,
+              ...previous,
+            ]
+          }
+        )
+
+        // -------------------------------------------------
+        // NOTIFICACIÓN DEL NAVEGADOR
+        // -------------------------------------------------
+
+        showBrowserNotification(
+          'Nueva idea',
+          message,
+          notification.id
+        )
+      },
+      [
+        user?.id,
+        getUserName,
+        showBrowserNotification,
+      ]
+    )
+
+  // =======================================================
+  // PROCESAR CAMBIOS DE ACTIVIDADES
   // =======================================================
 
   const processActivityChange =
@@ -736,6 +985,7 @@ export function useActivityNotifications(
   useEffect(() => {
     if (!user?.id) {
       setNotifications([])
+
       setLoading(false)
 
       return
@@ -748,11 +998,17 @@ export function useActivityNotifications(
         `activity_notifications_${user.id}`
       )
 
+    // =====================================================
+    // ACTIVIDADES
+    // =====================================================
+
     channel.on(
       'postgres_changes',
       {
         event: '*',
+
         schema: 'public',
+
         table: 'activities',
       },
       async payload => {
@@ -770,6 +1026,42 @@ export function useActivityNotifications(
         )
       }
     )
+
+    // =====================================================
+    // IDEAS DE ACTIVIDADES
+    // =====================================================
+
+    channel.on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+
+        schema: 'public',
+
+        table: 'activity_ideas',
+      },
+      async payload => {
+        if (!active) {
+          return
+        }
+
+        console.log(
+          '💡 Nueva idea recibida:',
+          payload
+        )
+
+        const idea =
+          payload.new as ActivityIdeaLike
+
+        await createIdeaNotification(
+          idea
+        )
+      }
+    )
+
+    // =====================================================
+    // SUBSCRIBE
+    // =====================================================
 
     channel.subscribe(
       status => {
@@ -819,6 +1111,7 @@ export function useActivityNotifications(
   }, [
     user?.id,
     processActivityChange,
+    createIdeaNotification,
     supabase,
   ])
 
@@ -829,7 +1122,8 @@ export function useActivityNotifications(
   const markAsRead =
     useCallback(
       (
-        notification: NotificationItem
+        notification:
+          NotificationItem
       ) => {
         if (!user?.id) {
           return
@@ -934,11 +1228,15 @@ export function useActivityNotifications(
 
   return {
     notifications,
+
     loading,
+
     unreadCount,
+
     markAsRead,
+
     markAllAsRead,
+
     removeNotification,
   }
 }
-
