@@ -213,7 +213,7 @@ export default function AdministrationDashboard({
 
               <div className="h-14 w-14 flex items-center justify-center">
                 <img
-                  src="/logo-1.png"
+                  src="/public/logo-1.png"
                   alt="Logo 1"
                   className="max-h-14 max-w-14 object-contain"
                 />
@@ -223,7 +223,7 @@ export default function AdministrationDashboard({
 
               <div className="h-14 w-14 flex items-center justify-center">
                 <img
-                  src="/logo-2.png"
+                  src="/public/logo-2.png"
                   alt="Logo 2"
                   className="max-h-14 max-w-14 object-contain"
                 />
