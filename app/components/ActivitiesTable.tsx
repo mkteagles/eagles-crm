@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -39,6 +38,7 @@ import {
 
 import ActivityDetailModal from './ActivityDetailModal'
 
+
 // =========================================================
 // HELPERS DE FECHA
 // =========================================================
@@ -59,6 +59,7 @@ function getLocalDateString(
   return `${year}-${month}-${day}`
 }
 
+
 // =========================================================
 // OBTENER MES
 // =========================================================
@@ -74,6 +75,7 @@ function getMonthKey(
 
   return `${year}-${month}`
 }
+
 
 // =========================================================
 // CREAR DATE DESDE YYYY-MM-DD
@@ -98,6 +100,7 @@ function dateFromString(
   )
 }
 
+
 // =========================================================
 // FORMATEAR FECHA LARGA
 // =========================================================
@@ -120,6 +123,7 @@ function formatLongDate(
     }
   )
 }
+
 
 // =========================================================
 // FORMATEAR HORA
@@ -165,6 +169,7 @@ function formatTime(
   )
 }
 
+
 // =========================================================
 // FORMATEAR FECHA CORTA
 // =========================================================
@@ -195,6 +200,7 @@ function formatDate(
   return `${day}/${month}/${year}`
 }
 
+
 // =========================================================
 // FORMATEAR MES
 // =========================================================
@@ -210,6 +216,7 @@ function formatMonthTitle(
     }
   )
 }
+
 
 // =========================================================
 // STATUS LABEL
@@ -239,6 +246,33 @@ function getStatusLabel(
   }
 }
 
+
+// =========================================================
+// PRIORITY LABEL
+// =========================================================
+
+function getPriorityLabel(
+  priority?: string | null
+) {
+  switch (priority) {
+    case 'low':
+      return 'Baja'
+
+    case 'medium':
+      return 'Media'
+
+    case 'high':
+      return 'Alta'
+
+    case 'urgent':
+      return 'Urgente'
+
+    default:
+      return priority || 'Media'
+  }
+}
+
+
 // =========================================================
 // TIPO FILTRO
 // =========================================================
@@ -248,6 +282,18 @@ type ActivityFilter =
   | 'pending'
   | 'in_progress'
   | 'completed'
+
+
+// =========================================================
+// TIPO PRIORIDAD
+// =========================================================
+
+type ActivityPriority =
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'urgent'
+
 
 // =========================================================
 // COMPONENTE
@@ -266,6 +312,7 @@ export default function ActivitiesTable() {
     markActivityAsSeen,
   } = useActivities()
 
+
   // =======================================================
   // USUARIO
   // =======================================================
@@ -274,12 +321,14 @@ export default function ActivitiesTable() {
     user,
   } = useCurrentUser()
 
+
   // =======================================================
   // SUPABASE
   // =======================================================
 
   const supabase =
     createClient()
+
 
   // =======================================================
   // ACTIVIDAD SELECCIONADA
@@ -292,12 +341,14 @@ export default function ActivitiesTable() {
     null
   )
 
+
   // =======================================================
   // FECHA ACTUAL
   // =======================================================
 
   const today =
     getLocalDateString()
+
 
   // =======================================================
   // FECHA SELECCIONADA
@@ -310,6 +361,7 @@ export default function ActivitiesTable() {
     today
   )
 
+
   // =======================================================
   // FILTRO DE ESTADO
   // =======================================================
@@ -320,6 +372,21 @@ export default function ActivitiesTable() {
   ] = useState<ActivityFilter>(
     'all'
   )
+
+
+  // =======================================================
+  // ACTIVIDADES EN ACTUALIZACIÓN
+  // =======================================================
+
+  const [
+    updatingActivities,
+    setUpdatingActivities,
+  ] = useState<
+    Set<number>
+  >(
+    new Set()
+  )
+
 
   // =======================================================
   // DATE DE LA FECHA SELECCIONADA
@@ -336,6 +403,7 @@ export default function ActivitiesTable() {
       ]
     )
 
+
   // =======================================================
   // MES SELECCIONADO
   // =======================================================
@@ -344,6 +412,42 @@ export default function ActivitiesTable() {
     getMonthKey(
       selectedDateObject
     )
+
+
+  // =======================================================
+  // PERMISO PARA EDITAR
+  // =======================================================
+
+  const canEditActivity = (
+    activity: any
+  ) => {
+
+    // Hugo / cualquier ADMIN
+    // puede editar cualquier actividad
+
+    if (
+      user?.role === 'admin'
+    ) {
+      return true
+    }
+
+
+    // Executors solamente pueden
+    // editar actividades asignadas a ellos
+
+    if (
+      user?.role === 'executor' &&
+      activity.assigned_to === user.id
+    ) {
+      return true
+    }
+
+
+    // Viewers no pueden editar
+
+    return false
+  }
+
 
   // =======================================================
   // CAMBIAR DÍA
@@ -371,6 +475,7 @@ export default function ActivitiesTable() {
       )
     }
 
+
   // =======================================================
   // IR A HOY
   // =======================================================
@@ -382,6 +487,7 @@ export default function ActivitiesTable() {
         getLocalDateString()
       )
     }
+
 
   // =======================================================
   // CAMBIAR FECHA MANUALMENTE
@@ -400,6 +506,7 @@ export default function ActivitiesTable() {
         value
       )
     }
+
 
   // =======================================================
   // ACTIVIDADES DEL DÍA
@@ -454,6 +561,7 @@ export default function ActivitiesTable() {
       ]
     )
 
+
   // =======================================================
   // ESTADÍSTICAS DEL DÍA
   // =======================================================
@@ -505,6 +613,7 @@ export default function ActivitiesTable() {
       ]
     )
 
+
   // =======================================================
   // ACTIVIDADES FILTRADAS DEL DÍA
   // =======================================================
@@ -534,6 +643,7 @@ export default function ActivitiesTable() {
         statusFilter,
       ]
     )
+
 
   // =======================================================
   // ACTIVIDADES DEL MES
@@ -609,6 +719,40 @@ export default function ActivitiesTable() {
       ]
     )
 
+
+  // =======================================================
+  // MARCAR ACTIVIDAD COMO ACTUALIZANDO
+  // =======================================================
+
+  const setActivityUpdating = (
+    activityId: number,
+    updating: boolean
+  ) => {
+
+    setUpdatingActivities(
+      previous => {
+
+        const next =
+          new Set(
+            previous
+          )
+
+        if (updating) {
+          next.add(
+            activityId
+          )
+        } else {
+          next.delete(
+            activityId
+          )
+        }
+
+        return next
+      }
+    )
+  }
+
+
   // =======================================================
   // CAMBIAR ESTADO
   // =======================================================
@@ -619,20 +763,226 @@ export default function ActivitiesTable() {
       newStatus: ActivityStatus
     ) => {
 
-      const previousActivity =
+      const activity =
         activities.find(
           (
-            activity: any
+            item: any
           ) =>
             Number(
-              activity.id
+              item.id
             ) ===
             Number(
               activityId
             )
         )
 
+      if (!activity) {
+        return
+      }
+
+
+      if (
+        !canEditActivity(
+          activity
+        )
+      ) {
+        alert(
+          'No tienes permiso para modificar esta actividad.'
+        )
+
+        return
+      }
+
+
+      const previousStatus =
+        activity.status
+
+
+      setActivityUpdating(
+        Number(activityId),
+        true
+      )
+
+
       try {
+
+        const now =
+          new Date().toISOString()
+
+
+        const updateData: any = {
+          status:
+            newStatus,
+
+          updated_at:
+            now,
+        }
+
+
+        if (
+          newStatus ===
+          'completed'
+        ) {
+
+          updateData.completed_at =
+            now
+
+        } else {
+
+          updateData.completed_at =
+            null
+        }
+
+
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              'activities'
+            )
+            .update(
+              updateData
+            )
+            .eq(
+              'id',
+              activityId
+            )
+
+
+        if (error) {
+
+          console.error(
+            'Error actualizando estado:',
+            error
+          )
+
+          alert(
+            `No se pudo actualizar el estado:\n\n${error.message}`
+          )
+
+          return
+        }
+
+
+        // Actualizar también el modal
+        // si está abierto
+
+        if (
+          selectedActivity &&
+          Number(
+            selectedActivity.id
+          ) ===
+          Number(
+            activityId
+          )
+        ) {
+
+          setSelectedActivity(
+            {
+              ...selectedActivity,
+              status:
+                newStatus,
+              updated_at:
+                now,
+              completed_at:
+                newStatus ===
+                'completed'
+                  ? now
+                  : null,
+            }
+          )
+        }
+
+
+        console.log(
+          '✅ Estado actualizado correctamente',
+          {
+            activityId,
+            previousStatus,
+            newStatus,
+          }
+        )
+
+      } catch (
+        error
+      ) {
+
+        console.error(
+          error
+        )
+
+        alert(
+          'Ocurrió un error inesperado al actualizar el estado.'
+        )
+
+      } finally {
+
+        setActivityUpdating(
+          Number(activityId),
+          false
+        )
+      }
+    }
+
+
+  // =======================================================
+  // CAMBIAR PRIORIDAD
+  // =======================================================
+
+  const handlePriorityChange =
+    async (
+      activityId: number,
+      newPriority: ActivityPriority
+    ) => {
+
+      const activity =
+        activities.find(
+          (
+            item: any
+          ) =>
+            Number(
+              item.id
+            ) ===
+            Number(
+              activityId
+            )
+        )
+
+      if (!activity) {
+        return
+      }
+
+
+      if (
+        !canEditActivity(
+          activity
+        )
+      ) {
+
+        alert(
+          'No tienes permiso para modificar esta actividad.'
+        )
+
+        return
+      }
+
+
+      const previousPriority =
+        activity.priority
+
+
+      setActivityUpdating(
+        Number(activityId),
+        true
+      )
+
+
+      try {
+
+        const now =
+          new Date().toISOString()
+
 
         const {
           error,
@@ -642,66 +992,87 @@ export default function ActivitiesTable() {
               'activities'
             )
             .update({
-
-              status:
-                newStatus,
+              priority:
+                newPriority,
 
               updated_at:
-                new Date()
-                  .toISOString(),
-
-              ...(newStatus ===
-                'completed'
-                ? {
-                    completed_at:
-                      new Date()
-                        .toISOString(),
-                  }
-                : {
-                    completed_at:
-                      null,
-                  }),
-
+                now,
             })
             .eq(
               'id',
               activityId
             )
 
+
         if (error) {
 
           console.error(
+            'Error actualizando prioridad:',
             error
           )
 
           alert(
-            `No se pudo actualizar la actividad:\n\n${error.message}`
+            `No se pudo actualizar la prioridad:\n\n${error.message}`
           )
 
           return
         }
 
+
+        // Actualizar modal
+
+        if (
+          selectedActivity &&
+          Number(
+            selectedActivity.id
+          ) ===
+          Number(
+            activityId
+          )
+        ) {
+
+          setSelectedActivity(
+            {
+              ...selectedActivity,
+              priority:
+                newPriority,
+              updated_at:
+                now,
+            }
+          )
+        }
+
+
         console.log(
-          '✅ Estado actualizado:',
+          '✅ Prioridad actualizada correctamente',
           {
             activityId,
-            oldStatus:
-              previousActivity?.status,
-            newStatus,
+            previousPriority,
+            newPriority,
           }
         )
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           error
         )
 
         alert(
-          'Ocurrió un error inesperado al actualizar la actividad.'
+          'Ocurrió un error inesperado al actualizar la prioridad.'
+        )
+
+      } finally {
+
+        setActivityUpdating(
+          Number(activityId),
+          false
         )
       }
     }
+
 
   // =======================================================
   // ELIMINAR ACTIVIDAD
@@ -720,14 +1091,17 @@ export default function ActivitiesTable() {
         return
       }
 
+
       const confirmed =
         window.confirm(
           `¿Seguro que quieres eliminar la actividad "${activityTitle}"?\n\nEsta acción no se puede deshacer.`
         )
 
+
       if (!confirmed) {
         return
       }
+
 
       try {
 
@@ -746,6 +1120,7 @@ export default function ActivitiesTable() {
             )
             .select('id')
 
+
         if (error) {
 
           alert(
@@ -754,6 +1129,7 @@ export default function ActivitiesTable() {
 
           return
         }
+
 
         if (
           !data ||
@@ -766,6 +1142,7 @@ export default function ActivitiesTable() {
 
           return
         }
+
 
         if (
           Number(
@@ -781,7 +1158,9 @@ export default function ActivitiesTable() {
           )
         }
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         console.error(
           error
@@ -792,6 +1171,7 @@ export default function ActivitiesTable() {
         )
       }
     }
+
 
   // =======================================================
   // ABRIR ACTIVIDAD
@@ -813,6 +1193,7 @@ export default function ActivitiesTable() {
       )
     }
 
+
   // =======================================================
   // CAMBIAR FILTRO
   // =======================================================
@@ -826,6 +1207,7 @@ export default function ActivitiesTable() {
         filter
       )
     }
+
 
   // =======================================================
   // LOADING
@@ -847,9 +1229,9 @@ export default function ActivitiesTable() {
         </p>
 
       </div>
-
     )
   }
+
 
   // =======================================================
   // RENDER FILAS
@@ -872,15 +1254,32 @@ export default function ActivitiesTable() {
               )
             )
 
+
+          const canEdit =
+            canEditActivity(
+              activity
+            )
+
+
+          const isUpdating =
+            updatingActivities.has(
+              Number(
+                activity.id
+              )
+            )
+
+
           const priorityStyles =
             getPriorityStyles(
               activity.priority
             )
 
+
           const statusStyles =
             getStatusStyles(
               activity.status
             )
+
 
           return (
 
@@ -920,8 +1319,8 @@ export default function ActivitiesTable() {
                       </div>
 
                     </div>
-
                   )}
+
 
                   <div className="min-w-0">
 
@@ -933,6 +1332,7 @@ export default function ActivitiesTable() {
 
                     </div>
 
+
                     {activity.description && (
 
                       <div className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
@@ -942,8 +1342,8 @@ export default function ActivitiesTable() {
                         }
 
                       </div>
-
                     )}
+
 
                     {activity.recurrence_type &&
                       activity.recurrence_type !==
@@ -982,7 +1382,6 @@ export default function ActivitiesTable() {
                           : ''}
 
                       </div>
-
                     )}
 
                   </div>
@@ -990,6 +1389,7 @@ export default function ActivitiesTable() {
                 </div>
 
               </td>
+
 
               {/* ASIGNADO */}
 
@@ -1002,6 +1402,7 @@ export default function ActivitiesTable() {
                 }
 
               </td>
+
 
               {/* FECHA / HORA */}
 
@@ -1016,6 +1417,7 @@ export default function ActivitiesTable() {
                   }
 
                 </div>
+
 
                 {activity.due_time && (
 
@@ -1032,47 +1434,111 @@ export default function ActivitiesTable() {
                     }
 
                   </div>
-
                 )}
 
               </td>
+
 
               {/* PRIORIDAD */}
 
               <td className="px-4 py-4">
 
-                <span
-                  className={`
-                    inline-flex
-                    rounded-full
-                    px-2.5
-                    py-1
-                    text-xs
-                    font-semibold
-                    ${priorityStyles.badge}
-                  `}
-                >
+                {canEdit ? (
 
-                  {
-                    priorityStyles.label
-                  }
+                  <select
+                    value={
+                      activity.priority ||
+                      'medium'
+                    }
+                    disabled={
+                      isUpdating
+                    }
+                    onChange={(
+                      e
+                    ) =>
+                      handlePriorityChange(
+                        Number(
+                          activity.id
+                        ),
+                        e.target.value as ActivityPriority
+                      )
+                    }
+                    className={`
+                      rounded-full
+                      border
+                      border-transparent
+                      px-2.5
+                      py-1
+                      text-xs
+                      font-semibold
+                      outline-none
+                      cursor-pointer
+                      transition
+                      disabled:cursor-wait
+                      disabled:opacity-60
+                      ${priorityStyles.badge}
+                    `}
+                  >
 
-                </span>
+                    <option value="low">
+                      Baja
+                    </option>
+
+                    <option value="medium">
+                      Media
+                    </option>
+
+                    <option value="high">
+                      Alta
+                    </option>
+
+                    <option value="urgent">
+                      Urgente
+                    </option>
+
+                  </select>
+
+                ) : (
+
+                  <span
+                    className={`
+                      inline-flex
+                      rounded-full
+                      px-2.5
+                      py-1
+                      text-xs
+                      font-semibold
+                      ${priorityStyles.badge}
+                    `}
+                  >
+
+                    {
+                      priorityStyles.label ||
+                      getPriorityLabel(
+                        activity.priority
+                      )
+                    }
+
+                  </span>
+
+                )}
 
               </td>
+
 
               {/* ESTADO */}
 
               <td className="px-4 py-4">
 
-                {user?.role ===
-                  'executor' &&
-                activity.assigned_to ===
-                  user.id ? (
+                {canEdit ? (
 
                   <select
                     value={
-                      activity.status
+                      activity.status ||
+                      'pending'
+                    }
+                    disabled={
+                      isUpdating
                     }
                     onChange={(
                       e
@@ -1086,12 +1552,17 @@ export default function ActivitiesTable() {
                     }
                     className={`
                       rounded-full
-                      border-0
+                      border
+                      border-transparent
                       px-2.5
                       py-1
                       text-xs
                       font-semibold
                       outline-none
+                      cursor-pointer
+                      transition
+                      disabled:cursor-wait
+                      disabled:opacity-60
                       ${statusStyles.badge}
                     `}
                   >
@@ -1152,6 +1623,7 @@ export default function ActivitiesTable() {
 
               </td>
 
+
               {/* ACCIONES */}
 
               <td className="px-4 py-4 text-center">
@@ -1172,6 +1644,7 @@ export default function ActivitiesTable() {
                       text-sm
                       font-semibold
                       text-blue-500
+                      hover:text-blue-600
                       ${
                         isNew
                           ? 'animate-pulse'
@@ -1187,6 +1660,7 @@ export default function ActivitiesTable() {
                     Ver
 
                   </button>
+
 
                   {user?.role ===
                     'admin' && (
@@ -1219,11 +1693,11 @@ export default function ActivitiesTable() {
               </td>
 
             </tr>
-
           )
         }
       )
     }
+
 
   // =======================================================
   // RENDER TABLA
@@ -1258,9 +1732,9 @@ export default function ActivitiesTable() {
             </p>
 
           </div>
-
         )
       }
+
 
       return (
 
@@ -1300,6 +1774,7 @@ export default function ActivitiesTable() {
 
             </thead>
 
+
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
 
               {
@@ -1313,9 +1788,9 @@ export default function ActivitiesTable() {
           </table>
 
         </div>
-
       )
     }
+
 
   // =======================================================
   // RENDER
@@ -1356,6 +1831,7 @@ export default function ActivitiesTable() {
 
             </div>
 
+
             <div className="flex flex-wrap items-center gap-2">
 
               <button
@@ -1373,6 +1849,7 @@ export default function ActivitiesTable() {
                 Anterior
 
               </button>
+
 
               <label className="relative">
 
@@ -1397,6 +1874,7 @@ export default function ActivitiesTable() {
 
               </label>
 
+
               <button
                 type="button"
                 onClick={
@@ -1419,6 +1897,7 @@ export default function ActivitiesTable() {
               >
                 Hoy
               </button>
+
 
               <button
                 type="button"
@@ -1443,6 +1922,7 @@ export default function ActivitiesTable() {
         </div>
 
       </section>
+
 
       {/* =================================================
           CONTADORES / FILTROS
@@ -1504,16 +1984,20 @@ export default function ActivitiesTable() {
 
               </div>
 
+
               <div className="rounded-lg bg-blue-500/10 p-2">
+
                 <CalendarDays
                   size={20}
                   className="text-blue-500"
                 />
+
               </div>
 
             </div>
 
           </button>
+
 
           {/* PENDIENTES */}
 
@@ -1567,16 +2051,20 @@ export default function ActivitiesTable() {
 
               </div>
 
+
               <div className="rounded-lg bg-orange-500/10 p-2">
+
                 <Circle
                   size={20}
                   className="text-orange-500"
                 />
+
               </div>
 
             </div>
 
           </button>
+
 
           {/* EN PROGRESO */}
 
@@ -1630,16 +2118,20 @@ export default function ActivitiesTable() {
 
               </div>
 
+
               <div className="rounded-lg bg-yellow-500/10 p-2">
+
                 <LoaderCircle
                   size={20}
                   className="text-yellow-500"
                 />
+
               </div>
 
             </div>
 
           </button>
+
 
           {/* COMPLETADAS */}
 
@@ -1693,11 +2185,14 @@ export default function ActivitiesTable() {
 
               </div>
 
+
               <div className="rounded-lg bg-green-500/10 p-2">
+
                 <CheckCircle2
                   size={20}
                   className="text-green-500"
                 />
+
               </div>
 
             </div>
@@ -1707,6 +2202,7 @@ export default function ActivitiesTable() {
         </div>
 
       </section>
+
 
       {/* =================================================
           INDICADOR DE FILTRO
@@ -1739,6 +2235,7 @@ export default function ActivitiesTable() {
 
           </div>
 
+
           <button
             type="button"
             onClick={() =>
@@ -1754,6 +2251,7 @@ export default function ActivitiesTable() {
         </div>
 
       )}
+
 
       {/* =================================================
           ACTIVIDADES DEL DÍA
@@ -1785,6 +2283,7 @@ export default function ActivitiesTable() {
 
             </div>
 
+
             <p className="mt-1 text-sm capitalize text-gray-500 dark:text-gray-400">
 
               {
@@ -1796,6 +2295,7 @@ export default function ActivitiesTable() {
             </p>
 
           </div>
+
 
           <div className="rounded-full bg-brand-orange/10 px-3 py-1 text-sm font-semibold text-brand-orange">
 
@@ -1816,6 +2316,7 @@ export default function ActivitiesTable() {
 
         </div>
 
+
         {
           renderTable(
             filteredDayActivities,
@@ -1832,6 +2333,7 @@ export default function ActivitiesTable() {
         }
 
       </section>
+
 
       {/* =================================================
           ACTIVIDADES DEL MES
@@ -1864,6 +2366,7 @@ export default function ActivitiesTable() {
 
             </div>
 
+
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
 
               Todas las actividades programadas durante este mes.
@@ -1871,6 +2374,7 @@ export default function ActivitiesTable() {
             </p>
 
           </div>
+
 
           <div className="rounded-full bg-purple-500/10 px-3 py-1 text-sm font-semibold text-purple-600 dark:text-purple-400">
 
@@ -1882,6 +2386,7 @@ export default function ActivitiesTable() {
 
         </div>
 
+
         {
           renderTable(
             monthActivities,
@@ -1890,6 +2395,7 @@ export default function ActivitiesTable() {
         }
 
       </section>
+
 
       {/* =================================================
           MODAL DETALLE
@@ -1919,7 +2425,5 @@ export default function ActivitiesTable() {
       }
 
     </div>
-
   )
 }
-
