@@ -9,7 +9,6 @@ import {
   Plus,
   ArrowRight,
   Building2,
-  CircleAlert,
 } from "lucide-react";
 
 interface AdministrationDashboardProps {
@@ -135,12 +134,10 @@ function getPriorityLabel(
 export default function AdministrationDashboard({
   user,
 }: AdministrationDashboardProps) {
-  const isAdmin =
-    user.role === "admin";
+  const isAdmin = user.role === "admin";
 
   const firstName =
-    user.full_name?.split(" ")[0] ||
-    "Usuario";
+    user.full_name?.split(" ")[0] || "Usuario";
 
   const userActivities = isAdmin
     ? mockActivities
@@ -172,9 +169,11 @@ export default function AdministrationDashboard({
             HEADER
         ========================================= */}
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6 mb-8">
 
-          <div>
+          {/* SALUDO */}
+
+          <div className="flex-1">
 
             <div className="flex items-center gap-2 mb-2">
 
@@ -201,46 +200,55 @@ export default function AdministrationDashboard({
 
           </div>
 
-          {isAdmin && (
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm transition"
-            >
-              <Plus size={18} />
 
-              Nueva actividad
-            </button>
-          )}
+          {/* =========================================
+              LOGOS + BOTÓN
+          ========================================= */}
 
-        </div>
+          <div className="flex items-center gap-5">
 
-        {/* =========================================
-            AVISO MOCKUP
-        ========================================= */}
+            {/* LOGOS */}
 
-        <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-4">
+            <div className="flex items-center gap-3">
 
-          <CircleAlert
-            size={20}
-            className="text-amber-600 mt-0.5 shrink-0"
-          />
+              <div className="h-14 w-14 flex items-center justify-center">
+                <img
+                  src="/logo-1.png"
+                  alt="Logo 1"
+                  className="max-h-14 max-w-14 object-contain"
+                />
+              </div>
 
-          <div>
+              <div className="h-14 w-px bg-gray-200 dark:bg-gray-800" />
 
-            <p className="font-semibold text-amber-800 dark:text-amber-300">
-              Actividades de ejemplo
-            </p>
+              <div className="h-14 w-14 flex items-center justify-center">
+                <img
+                  src="/logo-2.png"
+                  alt="Logo 2"
+                  className="max-h-14 max-w-14 object-contain"
+                />
+              </div>
 
-            <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
-              Esta sección está funcionando con
-              actividades de prueba mientras
-              conectamos la administración con
-              las actividades reales.
-            </p>
+            </div>
+
+
+            {/* NUEVA ACTIVIDAD */}
+
+            {isAdmin && (
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm transition"
+              >
+                <Plus size={18} />
+
+                Nueva actividad
+              </button>
+            )}
 
           </div>
 
         </div>
+
 
         {/* =========================================
             STATS
@@ -271,6 +279,7 @@ export default function AdministrationDashboard({
 
           </div>
 
+
           {/* PENDIENTES */}
 
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
@@ -294,6 +303,7 @@ export default function AdministrationDashboard({
 
           </div>
 
+
           {/* EN PROGRESO */}
 
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-5 shadow-sm">
@@ -316,6 +326,7 @@ export default function AdministrationDashboard({
             </p>
 
           </div>
+
 
           {/* COMPLETADAS */}
 
@@ -342,15 +353,14 @@ export default function AdministrationDashboard({
 
         </div>
 
+
         {/* =========================================
             CONTENIDO
         ========================================= */}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-          {/* =======================================
-              ACTIVIDADES
-          ======================================= */}
+          {/* ACTIVIDADES */}
 
           <div className="lg:col-span-2 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm">
 
@@ -380,6 +390,7 @@ export default function AdministrationDashboard({
               </div>
 
             </div>
+
 
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
 
@@ -427,6 +438,7 @@ export default function AdministrationDashboard({
                         )}
 
                       </div>
+
 
                       {/* INFO */}
 
@@ -513,9 +525,8 @@ export default function AdministrationDashboard({
 
           </div>
 
-          {/* =======================================
-              LATERAL
-          ======================================= */}
+
+          {/* LATERAL */}
 
           <div className="space-y-6">
 
@@ -574,6 +585,7 @@ export default function AdministrationDashboard({
 
             </div>
 
+
             {/* USUARIOS */}
 
             {isAdmin && (
@@ -627,9 +639,7 @@ export default function AdministrationDashboard({
                         </div>
 
                         <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
-
                           {member.activities}
-
                         </span>
 
                       </div>
