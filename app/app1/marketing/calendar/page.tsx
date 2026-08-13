@@ -10,6 +10,7 @@ import CalendarActivities from '@/components/CalendarActivities'
 import CalendarCreative from '@/components/CalendarCreative'
 import CalendarConsolidated from '@/components/CalendarConsolidated'
 import CalendarStrategy from '@/components/CalendarStrategy'
+import CalendarMeetings from '@/components/CalendarMeetings'
 
 export default function CalendarPage() {
   const [selectedCalendar, setSelectedCalendar] =
@@ -40,7 +41,9 @@ export default function CalendarPage() {
 
       <CalendarSelector
         selected={selectedCalendar}
-        onChange={(calendar) => setSelectedCalendar(calendar)}
+        onChange={(calendar) =>
+          setSelectedCalendar(calendar)
+        }
       />
 
       {/* =========================================
@@ -65,6 +68,14 @@ export default function CalendarPage() {
 
       {selectedCalendar === 'creative' && (
         <CalendarCreative />
+      )}
+
+      {/* =========================================
+          CALENDARIO DE REUNIONES
+      ========================================= */}
+
+      {selectedCalendar === 'meetings' && (
+        <CalendarMeetings />
       )}
 
       {/* =========================================

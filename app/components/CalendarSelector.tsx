@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   ClipboardList,
   Palette,
+  Users,
   Radio,
   Monitor,
 } from 'lucide-react'
@@ -12,6 +13,7 @@ export type CalendarType =
   | 'consolidated'
   | 'activities'
   | 'creative'
+  | 'meetings'
   | 'transmissions'
   | 'digital'
 
@@ -37,6 +39,11 @@ const calendars = [
     icon: Palette,
   },
   {
+    id: 'meetings' as CalendarType,
+    label: 'Reuniones',
+    icon: Users,
+  },
+  {
     id: 'transmissions' as CalendarType,
     label: 'Transmisiones',
     icon: Radio,
@@ -55,17 +62,23 @@ export default function CalendarSelector({
   return (
     <div className="mb-6">
       <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-2 shadow-sm">
+
         <div className="flex flex-wrap gap-2">
 
           {calendars.map((calendar) => {
             const Icon = calendar.icon
-            const active = selected === calendar.id
+            const active =
+              selected === calendar.id
 
             return (
               <button
                 key={calendar.id}
                 type="button"
-                onClick={() => onChange(calendar.id)}
+                onClick={() =>
+                  onChange(
+                    calendar.id
+                  )
+                }
                 className={`
                   flex items-center gap-2
                   px-4 py-2.5
@@ -79,14 +92,17 @@ export default function CalendarSelector({
                   }
                 `}
               >
+
                 <Icon size={17} />
 
                 {calendar.label}
+
               </button>
             )
           })}
 
         </div>
+
       </div>
     </div>
   )
