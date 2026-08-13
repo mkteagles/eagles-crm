@@ -29,6 +29,8 @@ import {
   CheckCircle2,
   Circle,
   LoaderCircle,
+  Search,
+  X,
 } from 'lucide-react'
 
 import {
@@ -99,7 +101,6 @@ function getMonthKey(
 
 // =========================================================
 // CREAR DATE DESDE YYYY-MM-DD
-// SIN PROBLEMAS DE UTC
 // =========================================================
 
 function dateFromString(
@@ -332,7 +333,6 @@ export default function ActivitiesTable({
   area = 'marketing',
 }: ActivitiesTableProps) {
 
-
   // =======================================================
   // ACTIVIDADES
   // =======================================================
@@ -407,6 +407,16 @@ export default function ActivitiesTable({
 
 
   // =======================================================
+  // FILTRO POR NOMBRE DE USUARIO
+  // =======================================================
+
+  const [
+    userFilter,
+    setUserFilter,
+  ] = useState('')
+
+
+  // =======================================================
   // ACTIVIDADES EN ACTUALIZACIÓN
   // =======================================================
 
@@ -464,25 +474,11 @@ export default function ActivitiesTable({
     activity: any
   ) => {
 
-    /*
-     * ADMIN:
-     *
-     * Puede editar cualquier actividad.
-     */
-
     if (
       user?.role === 'admin'
     ) {
       return true
     }
-
-
-    /*
-     * EXECUTOR:
-     *
-     * Solamente puede editar
-     * actividades asignadas a él.
-     */
 
     if (
       user?.role === 'executor' &&
@@ -490,7 +486,6 @@ export default function ActivitiesTable({
     ) {
       return true
     }
-
 
     return false
   }
@@ -504,37 +499,17 @@ export default function ActivitiesTable({
     activity: any
   ) => {
 
-    /*
-     * ADMIN:
-     *
-     * Ve absolutamente todo.
-     */
-
     if (
       user?.role === 'admin'
     ) {
       return true
     }
 
-
-    /*
-     * VIEWER:
-     *
-     * Ve todas las actividades.
-     */
-
     if (
       user?.role === 'viewer'
     ) {
       return true
     }
-
-
-    /*
-     * EXECUTOR:
-     *
-     * Solamente ve sus actividades.
-     */
 
     if (
       user?.role === 'executor'
@@ -546,7 +521,6 @@ export default function ActivitiesTable({
       )
 
     }
-
 
     return false
   }
@@ -594,7 +568,7 @@ export default function ActivitiesTable({
 
 
   // =======================================================
-  // CAMBIAR FECHA MANUALMENTE
+  // CAMBIAR FECHA
   // =======================================================
 
   const handleDateChange =
@@ -626,18 +600,9 @@ export default function ActivitiesTable({
               activity: any
             ) => {
 
-              /*
-               * FILTRO DE ÁREA
-               */
-
               const matchesArea =
                 activity.area ===
                 area
-
-
-              /*
-               * FILTRO DE FECHA
-               */
 
               const matchesDate =
                 String(
@@ -649,16 +614,10 @@ export default function ActivitiesTable({
                 ) ===
                 selectedDate
 
-
-              /*
-               * FILTRO DE USUARIO
-               */
-
               const visible =
                 canSeeActivity(
                   activity
                 )
-
 
               return (
                 matchesArea &&
@@ -755,42 +714,72 @@ export default function ActivitiesTable({
 
   // =======================================================
   // ACTIVIDADES FILTRADAS DEL DÍA
+  // FILTRO POR USUARIO
   // =======================================================
 
   const filteredDayActivities =
     useMemo(
       () => {
 
-        if (
-          statusFilter ===
-          'all'
-        ) {
-          return selectedDayActivities
-        }
+        const normalizedUser =
+          userFilter
+            .trim()
+            .toLowerCase()
 
         return selectedDayActivities.filter(
           (
             activity: any
-          ) =>
-            activity.status ===
-            statusFilter
+          ) => {
+
+            const matchesStatus =
+              statusFilter === 'all' ||
+              activity.status ===
+                statusFilter
+
+            const assignedUserName =
+              String(
+                activity.assigned_to_name ||
+                  ''
+              )
+                .trim()
+                .toLowerCase()
+
+            const matchesUser =
+              !normalizedUser ||
+              assignedUserName.includes(
+                normalizedUser
+              )
+
+            return (
+              matchesStatus &&
+              matchesUser
+            )
+
+          }
         )
 
       },
       [
         selectedDayActivities,
         statusFilter,
+        userFilter,
       ]
     )
 
 
   // =======================================================
   // ACTIVIDADES DEL MES
+  // FILTRO POR USUARIO
   // =======================================================
 
   const monthActivities =
     useMemo(
       () => {
+
+        const normalizedUser =
+          userFilter
+            .trim()
+            .toLowerCase()
 
         return activities
           .filter(
@@ -807,28 +796,39 @@ export default function ActivitiesTable({
                   10
                 )
 
-
               const matchesArea =
                 activity.area ===
                 area
-
 
               const matchesMonth =
                 date.startsWith(
                   selectedMonth
                 )
 
-
               const visible =
                 canSeeActivity(
                   activity
                 )
 
+              const assignedUserName =
+                String(
+                  activity.assigned_to_name ||
+                    ''
+                )
+                  .trim()
+                  .toLowerCase()
+
+              const matchesUser =
+                !normalizedUser ||
+                assignedUserName.includes(
+                  normalizedUser
+                )
 
               return (
                 matchesArea &&
                 matchesMonth &&
-                visible
+                visible &&
+                matchesUser
               )
             }
           )
@@ -879,6 +879,7 @@ export default function ActivitiesTable({
         selectedMonth,
         area,
         user,
+        userFilter,
       ]
     )
 
@@ -946,11 +947,9 @@ export default function ActivitiesTable({
             )
         )
 
-
       if (!activity) {
         return
       }
-
 
       if (
         !canEditActivity(
@@ -965,10 +964,8 @@ export default function ActivitiesTable({
         return
       }
 
-
       const previousStatus =
         activity.status
-
 
       setActivityUpdating(
         Number(
@@ -977,12 +974,10 @@ export default function ActivitiesTable({
         true
       )
 
-
       try {
 
         const now =
           new Date().toISOString()
-
 
         const updateData: any = {
 
@@ -993,7 +988,6 @@ export default function ActivitiesTable({
             now,
 
         }
-
 
         if (
           newStatus ===
@@ -1010,7 +1004,6 @@ export default function ActivitiesTable({
 
         }
 
-
         const {
           error,
         } =
@@ -1026,7 +1019,6 @@ export default function ActivitiesTable({
               activityId
             )
 
-
         if (error) {
 
           console.error(
@@ -1040,7 +1032,6 @@ export default function ActivitiesTable({
 
           return
         }
-
 
         if (
           selectedActivity &&
@@ -1070,7 +1061,6 @@ export default function ActivitiesTable({
             }
           )
         }
-
 
         console.log(
           'Estado actualizado correctamente',
@@ -1129,11 +1119,9 @@ export default function ActivitiesTable({
             )
         )
 
-
       if (!activity) {
         return
       }
-
 
       if (
         !canEditActivity(
@@ -1148,10 +1136,8 @@ export default function ActivitiesTable({
         return
       }
 
-
       const previousPriority =
         activity.priority
-
 
       setActivityUpdating(
         Number(
@@ -1160,12 +1146,10 @@ export default function ActivitiesTable({
         true
       )
 
-
       try {
 
         const now =
           new Date().toISOString()
-
 
         const {
           error,
@@ -1186,7 +1170,6 @@ export default function ActivitiesTable({
               activityId
             )
 
-
         if (error) {
 
           console.error(
@@ -1200,7 +1183,6 @@ export default function ActivitiesTable({
 
           return
         }
-
 
         if (
           selectedActivity &&
@@ -1225,7 +1207,6 @@ export default function ActivitiesTable({
           )
 
         }
-
 
         console.log(
           'Prioridad actualizada correctamente',
@@ -1258,6 +1239,7 @@ export default function ActivitiesTable({
         )
 
       }
+
     }
 
 
@@ -1278,17 +1260,14 @@ export default function ActivitiesTable({
         return
       }
 
-
       const confirmed =
         window.confirm(
           `¿Seguro que quieres eliminar la actividad "${activityTitle}"?\n\nEsta acción no se puede deshacer.`
         )
 
-
       if (!confirmed) {
         return
       }
-
 
       try {
 
@@ -1307,7 +1286,6 @@ export default function ActivitiesTable({
             )
             .select('id')
 
-
         if (error) {
 
           alert(
@@ -1316,7 +1294,6 @@ export default function ActivitiesTable({
 
           return
         }
-
 
         if (
           !data ||
@@ -1329,7 +1306,6 @@ export default function ActivitiesTable({
 
           return
         }
-
 
         if (
           Number(
@@ -1460,12 +1436,10 @@ export default function ActivitiesTable({
               )
             )
 
-
           const canEdit =
             canEditActivity(
               activity
             )
-
 
           const isUpdating =
             updatingActivities.has(
@@ -1473,7 +1447,6 @@ export default function ActivitiesTable({
                 activity.id
               )
             )
-
 
           const priorityStyles =
             getPriorityStyles(
@@ -1489,7 +1462,6 @@ export default function ActivitiesTable({
                 ),
 
             }
-
 
           const statusStyles =
             getStatusStyles(
@@ -1508,7 +1480,6 @@ export default function ActivitiesTable({
                 ),
 
             }
-
 
           return (
 
@@ -1569,7 +1540,6 @@ export default function ActivitiesTable({
 
                   )}
 
-
                   <div className="min-w-0">
 
                     <div className="
@@ -1584,7 +1554,6 @@ export default function ActivitiesTable({
                       }
 
                     </div>
-
 
                     {activity.description && (
 
@@ -1603,7 +1572,6 @@ export default function ActivitiesTable({
                       </div>
 
                     )}
-
 
                     {activity.recurrence_type &&
                       activity.recurrence_type !==
@@ -1706,7 +1674,6 @@ export default function ActivitiesTable({
                   }
 
                 </div>
-
 
                 {activity.due_time && (
 
@@ -2073,7 +2040,6 @@ export default function ActivitiesTable({
 
       }
 
-
       return (
 
         <div className="
@@ -2172,7 +2138,6 @@ export default function ActivitiesTable({
               </tr>
 
             </thead>
-
 
             <tbody className="
               divide-y
@@ -2406,6 +2371,208 @@ export default function ActivitiesTable({
                 />
 
               </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* =================================================
+          FILTRO POR USUARIO
+      ================================================= */}
+
+      <section>
+
+        <div className="
+          rounded-2xl
+          border
+          border-gray-200
+          bg-surface
+          p-4
+          shadow-sm
+          dark:border-gray-800
+        ">
+
+          <div className="
+            flex
+            flex-col
+            gap-3
+            md:flex-row
+            md:items-center
+            md:justify-between
+          ">
+
+            <div className="
+              flex
+              items-center
+              gap-3
+            ">
+
+              <div className="
+                flex
+                h-10
+                w-10
+                shrink-0
+                items-center
+                justify-center
+                rounded-xl
+                bg-blue-500/10
+              ">
+
+                <Search
+                  size={19}
+                  className="text-blue-500"
+                />
+
+              </div>
+
+              <div>
+
+                <p className="
+                  text-sm
+                  font-semibold
+                  text-gray-900
+                  dark:text-white
+                ">
+                  Buscar por usuario
+                </p>
+
+                <p className="
+                  mt-1
+                  text-xs
+                  text-gray-500
+                  dark:text-gray-400
+                ">
+                  Filtra las actividades por nombre del usuario asignado.
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div className="
+              flex
+              w-full
+              gap-2
+              md:max-w-md
+            ">
+
+              <div className="relative w-full">
+
+                <Search
+                  size={16}
+                  className="
+                    pointer-events-none
+                    absolute
+                    left-3
+                    top-1/2
+                    -translate-y-1/2
+                    text-gray-400
+                  "
+                />
+
+                <input
+                  type="text"
+                  value={
+                    userFilter
+                  }
+                  onChange={(
+                    e
+                  ) =>
+                    setUserFilter(
+                      e.target.value
+                    )
+                  }
+                  placeholder="Ej. Chuy, Hugo, Úrsula..."
+                  className="
+                    w-full
+                    rounded-lg
+                    border
+                    border-gray-200
+                    bg-background
+                    py-2.5
+                    pl-9
+                    pr-9
+                    text-sm
+                    text-gray-900
+                    outline-none
+                    transition
+                    placeholder:text-gray-400
+                    focus:border-brand-orange
+                    focus:ring-2
+                    focus:ring-brand-orange/20
+                    dark:border-gray-700
+                    dark:text-white
+                  "
+                />
+
+                {userFilter && (
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setUserFilter('')
+                    }
+                    className="
+                      absolute
+                      right-2
+                      top-1/2
+                      -translate-y-1/2
+                      rounded-md
+                      p-1
+                      text-gray-400
+                      transition
+                      hover:bg-gray-100
+                      hover:text-gray-700
+                      dark:hover:bg-gray-800
+                      dark:hover:text-gray-200
+                    "
+                    aria-label="Limpiar búsqueda"
+                  >
+
+                    <X
+                      size={16}
+                    />
+
+                  </button>
+
+                )}
+
+              </div>
+
+              {userFilter && (
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setUserFilter('')
+                  }
+                  className="
+                    shrink-0
+                    rounded-lg
+                    border
+                    border-gray-200
+                    px-3
+                    py-2
+                    text-sm
+                    font-semibold
+                    text-gray-600
+                    transition
+                    hover:bg-gray-100
+                    dark:border-gray-700
+                    dark:text-gray-300
+                    dark:hover:bg-gray-800
+                  "
+                >
+                  Limpiar
+                </button>
+
+              )}
 
             </div>
 
@@ -2786,19 +2953,22 @@ export default function ActivitiesTable({
           INDICADOR DE FILTRO
       ================================================= */}
 
-      {statusFilter !==
-        'all' && (
+      {(statusFilter !== 'all' ||
+        userFilter.trim() !== '') && (
 
         <div className="
           flex
-          items-center
-          justify-between
+          flex-col
+          gap-3
           rounded-lg
           border
           border-brand-orange/20
           bg-brand-orange/5
           px-4
           py-3
+          md:flex-row
+          md:items-center
+          md:justify-between
         ">
 
           <div className="
@@ -2807,47 +2977,103 @@ export default function ActivitiesTable({
             dark:text-gray-300
           ">
 
-            Mostrando únicamente:
+            Mostrando actividades
 
-            <span className="
-              ml-1
-              font-bold
-              text-brand-orange
-            ">
+            {statusFilter !== 'all' && (
 
-              {statusFilter ===
-                'pending' &&
-                'Pendientes'}
+              <span className="
+                ml-1
+                font-bold
+                text-brand-orange
+              ">
 
-              {statusFilter ===
-                'in_progress' &&
-                'En progreso'}
+                {statusFilter ===
+                  'pending' &&
+                  'Pendientes'}
 
-              {statusFilter ===
-                'completed' &&
-                'Completadas'}
+                {statusFilter ===
+                  'in_progress' &&
+                  'En progreso'}
 
-            </span>
+                {statusFilter ===
+                  'completed' &&
+                  'Completadas'}
+
+              </span>
+
+            )}
+
+            {statusFilter !== 'all' &&
+              userFilter.trim() !== '' &&
+              (
+                <span className="mx-1">
+                  +
+                </span>
+              )}
+
+            {userFilter.trim() !== '' && (
+
+              <span className="
+                font-bold
+                text-brand-orange
+              ">
+
+                asignadas a "{userFilter.trim()}"
+
+              </span>
+
+            )}
 
           </div>
 
 
-          <button
-            type="button"
-            onClick={() =>
-              handleFilterChange(
-                'all'
-              )
-            }
-            className="
-              text-sm
-              font-semibold
-              text-brand-orange
-              hover:underline
-            "
-          >
-            Ver todas
-          </button>
+          <div className="
+            flex
+            items-center
+            gap-3
+          ">
+
+            {statusFilter !== 'all' && (
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleFilterChange(
+                    'all'
+                  )
+                }
+                className="
+                  text-sm
+                  font-semibold
+                  text-brand-orange
+                  hover:underline
+                "
+              >
+                Quitar estado
+              </button>
+
+            )}
+
+            {userFilter.trim() !== '' && (
+
+              <button
+                type="button"
+                onClick={() =>
+                  setUserFilter('')
+                }
+                className="
+                  text-sm
+                  font-semibold
+                  text-brand-orange
+                  hover:underline
+                "
+              >
+                Quitar usuario
+              </button>
+
+            )}
+
+          </div>
 
         </div>
 
@@ -2901,7 +3127,6 @@ export default function ActivitiesTable({
 
             </div>
 
-
             <p className="
               mt-1
               text-sm
@@ -2953,8 +3178,8 @@ export default function ActivitiesTable({
           renderTable(
             filteredDayActivities,
 
-            statusFilter ===
-              'all'
+            statusFilter === 'all' &&
+              userFilter.trim() === ''
 
               ? (
 
@@ -2967,7 +3192,7 @@ export default function ActivitiesTable({
 
                 )
 
-              : `No hay actividades con estado "${getStatusLabel(statusFilter)}" para este día.`
+              : `No hay actividades que coincidan con los filtros seleccionados para este día.`
 
           )
         }
@@ -3066,7 +3291,9 @@ export default function ActivitiesTable({
           renderTable(
             monthActivities,
 
-            `No hay actividades de ${areaLabel} programadas durante este mes.`
+            userFilter.trim() !== ''
+              ? `No hay actividades de ${areaLabel} asignadas a "${userFilter.trim()}" durante este mes.`
+              : `No hay actividades de ${areaLabel} programadas durante este mes.`
 
           )
         }
