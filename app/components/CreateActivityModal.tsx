@@ -25,6 +25,11 @@ interface CreateActivityModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
+
+  // NUEVO:
+  // Permite abrir el modal desde otra sección
+  // indicando directamente el área.
+  defaultArea?: ActivityArea
 }
 
 
@@ -68,6 +73,7 @@ type ActivityMode =
 type ActivityArea =
   | 'marketing'
   | 'video_editing'
+  | 'administration'
 
 
 // =====================================================
@@ -105,6 +111,7 @@ export default function CreateActivityModal({
   isOpen,
   onClose,
   onSuccess,
+  defaultArea = 'marketing',
 }: CreateActivityModalProps) {
 
   const supabase = createClient()
@@ -121,7 +128,7 @@ export default function CreateActivityModal({
     useState<ActivityMode>('fixed')
 
   const [area, setArea] =
-    useState<ActivityArea>('marketing')
+    useState<ActivityArea>(defaultArea)
 
   const [title, setTitle] =
     useState('')
@@ -164,18 +171,20 @@ export default function CreateActivityModal({
 
 
   // =====================================================
-  // USUARIOS ASIGNABLES
+  // ACTUALIZAR ÁREA AL ABRIR
   // =====================================================
-  //
-  // MARKETING:
-  //   No viewers.
-  //
-  // VIDEO EDITING:
-  //   Chuy sí puede recibir actividades aunque
-  //   tenga role = viewer.
-  //
-  // Esto es importante porque Chuy es ejecutor
-  // de producción de video.
+
+  useEffect(() => {
+
+    if (!isOpen) return
+
+    setArea(defaultArea)
+
+  }, [isOpen, defaultArea])
+
+
+  // =====================================================
+  // USUARIOS ASIGNABLES
   // =====================================================
 
   const assignableUsers = useMemo(() => {
@@ -190,16 +199,39 @@ export default function CreateActivityModal({
 
     if (area === 'video_editing') {
 
-      const chuyUsers =
-        normalizedUsers.filter((u) =>
-          u.full_name
-            ?.trim()
-            .toLowerCase()
-            .includes('chuy')
-        )
+      return normalizedUsers.filter((u) =>
+        u.full_name
+          ?.trim()
+          .toLowerCase()
+          .includes('chuy')
+      )
+
+    }
 
 
-      return chuyUsers
+    // ---------------------------------------------------
+    // ADMINISTRACIÓN
+    // ---------------------------------------------------
+
+    if (area === 'administration') {
+
+      /*
+       * Administración:
+       *
+       * Hugo puede crear actividades.
+       *
+       * Las actividades pueden asignarse a los
+       * usuarios administrativos.
+       *
+       * No usamos el nombre de Hugo para permitir
+       * crear la actividad. Eso se controla desde
+       * el dashboard.
+       */
+
+      return normalizedUsers.filter(
+        (u) =>
+          u.role !== 'viewer'
+      )
 
     }
 
@@ -410,12 +442,6 @@ export default function CreateActivityModal({
 
       setArea(newArea)
 
-      // -------------------------------------------------
-      // MUY IMPORTANTE:
-      // Al cambiar de área eliminamos las personas
-      // seleccionadas anteriormente.
-      // -------------------------------------------------
-
       setSelectedUsers([])
 
       setSelectedTemplate(null)
@@ -574,7 +600,6 @@ export default function CreateActivityModal({
 
     const dates: string[] = []
 
-
     const cursor =
       new Date(start)
 
@@ -591,10 +616,6 @@ export default function CreateActivityModal({
       let include = false
 
 
-      // -------------------------------------------------
-      // DIARIO
-      // -------------------------------------------------
-
       if (
         recurrence === 'daily'
       ) {
@@ -603,10 +624,6 @@ export default function CreateActivityModal({
 
       }
 
-
-      // -------------------------------------------------
-      // SEMANAL
-      // -------------------------------------------------
 
       else if (
         recurrence === 'weekly'
@@ -619,10 +636,6 @@ export default function CreateActivityModal({
 
       }
 
-
-      // -------------------------------------------------
-      // QUINCENAL
-      // -------------------------------------------------
 
       else if (
         recurrence === 'biweekly'
@@ -658,10 +671,6 @@ export default function CreateActivityModal({
       }
 
 
-      // -------------------------------------------------
-      // MENSUAL
-      // -------------------------------------------------
-
       else if (
         recurrence === 'monthly'
       ) {
@@ -672,10 +681,6 @@ export default function CreateActivityModal({
 
       }
 
-
-      // -------------------------------------------------
-      // AGREGAR
-      // -------------------------------------------------
 
       if (include) {
 
@@ -793,10 +798,6 @@ export default function CreateActivityModal({
       e.preventDefault()
 
 
-      // -------------------------------------------------
-      // VALIDAR TÍTULO
-      // -------------------------------------------------
-
       if (
         !title.trim()
       ) {
@@ -809,10 +810,6 @@ export default function CreateActivityModal({
 
       }
 
-
-      // -------------------------------------------------
-      // VALIDAR USUARIO
-      // -------------------------------------------------
 
       if (
         selectedUsers.length === 0
@@ -829,10 +826,6 @@ export default function CreateActivityModal({
       }
 
 
-      // -------------------------------------------------
-      // VALIDAR FECHA
-      // -------------------------------------------------
-
       if (
         !dueDate
       ) {
@@ -845,10 +838,6 @@ export default function CreateActivityModal({
 
       }
 
-
-      // -------------------------------------------------
-      // VALIDAR CREADOR
-      // -------------------------------------------------
 
       if (
         !user?.id
@@ -863,10 +852,6 @@ export default function CreateActivityModal({
       }
 
 
-      // -------------------------------------------------
-      // VALIDAR RECURRENCIA
-      // -------------------------------------------------
-
       if (
         !validateRecurrence()
       ) {
@@ -875,10 +860,6 @@ export default function CreateActivityModal({
 
       }
 
-
-      // -------------------------------------------------
-      // VALIDAR FECHAS
-      // -------------------------------------------------
 
       if (
         generatedDates.length === 0
@@ -898,19 +879,11 @@ export default function CreateActivityModal({
 
       try {
 
-        // -------------------------------------------------
-        // GRUPO RECURRENCIA
-        // -------------------------------------------------
-
         const recurrenceGroupId =
           recurrence === 'none'
             ? null
             : crypto.randomUUID()
 
-
-        // -------------------------------------------------
-        // ACTIVIDADES
-        // -------------------------------------------------
 
         const activitiesToInsert =
           selectedUsers.flatMap(
@@ -930,10 +903,6 @@ export default function CreateActivityModal({
 
                   created_by:
                     user.id,
-
-                  // ---------------------------------------
-                  // ÁREA
-                  // ---------------------------------------
 
                   area:
                     area,
@@ -976,41 +945,10 @@ export default function CreateActivityModal({
 
 
         console.log(
-          '================================='
-        )
-
-        console.log(
-          'CREANDO ACTIVIDADES'
-        )
-
-        console.log(
-          'CREATED BY:',
-          user.id
-        )
-
-        console.log(
-          'AREA:',
-          area
-        )
-
-        console.log(
-          'ASSIGNED USERS:',
-          selectedUsers
-        )
-
-        console.log(
-          'ACTIVITIES:',
+          'CREANDO ACTIVIDADES:',
           activitiesToInsert
         )
 
-        console.log(
-          '================================='
-        )
-
-
-        // -------------------------------------------------
-        // INSERT
-        // -------------------------------------------------
 
         const {
           error,
@@ -1020,10 +958,6 @@ export default function CreateActivityModal({
             activitiesToInsert
           )
 
-
-        // -------------------------------------------------
-        // ERROR
-        // -------------------------------------------------
 
         if (error) {
 
@@ -1040,10 +974,6 @@ export default function CreateActivityModal({
 
         }
 
-
-        // -------------------------------------------------
-        // ÉXITO
-        // -------------------------------------------------
 
         alert(
           activitiesToInsert.length === 1
@@ -1088,7 +1018,7 @@ export default function CreateActivityModal({
 
       setMode('fixed')
 
-      setArea('marketing')
+      setArea(defaultArea)
 
       setTitle('')
 
@@ -1141,6 +1071,18 @@ export default function CreateActivityModal({
 
 
   // =====================================================
+  // NOMBRE DEL ÁREA
+  // =====================================================
+
+  const areaLabel =
+    area === 'marketing'
+      ? 'Marketing'
+      : area === 'video_editing'
+        ? 'Edición de video'
+        : 'Administración'
+
+
+  // =====================================================
   // RENDER
   // =====================================================
 
@@ -1151,9 +1093,7 @@ export default function CreateActivityModal({
       <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-xl bg-white dark:bg-gray-900 shadow-xl">
 
 
-        {/* =================================================
-            HEADER
-        ================================================= */}
+        {/* HEADER */}
 
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
 
@@ -1184,9 +1124,7 @@ export default function CreateActivityModal({
         </div>
 
 
-        {/* =================================================
-            ÁREA
-        ================================================= */}
+        {/* ÁREA */}
 
         <div className="p-6 pb-0">
 
@@ -1218,6 +1156,10 @@ export default function CreateActivityModal({
                 Edición de video
               </option>
 
+              <option value="administration">
+                Administración
+              </option>
+
             </select>
 
 
@@ -1238,9 +1180,7 @@ export default function CreateActivityModal({
         </div>
 
 
-        {/* =================================================
-            MODO
-        ================================================= */}
+        {/* MODO */}
 
         <div className="p-6 pb-0">
 
@@ -1252,7 +1192,6 @@ export default function CreateActivityModal({
 
 
           <div className="grid grid-cols-2 gap-3">
-
 
             <button
               type="button"
@@ -1310,9 +1249,7 @@ export default function CreateActivityModal({
         >
 
 
-          {/* =================================================
-              ACTIVIDAD FIJA
-          ================================================= */}
+          {/* ACTIVIDAD FIJA */}
 
           {mode === 'fixed' && (
 
@@ -1403,9 +1340,7 @@ export default function CreateActivityModal({
           )}
 
 
-          {/* =================================================
-              TÍTULO
-          ================================================= */}
+          {/* TÍTULO */}
 
           <div>
 
@@ -1428,9 +1363,7 @@ export default function CreateActivityModal({
               disabled={loading}
               placeholder={
                 mode === 'custom'
-                  ? area === 'video_editing'
-                    ? 'Ej: Editar video de campaña'
-                    : 'Ej: Revisar campaña de Facebook'
+                  ? 'Ej: Revisar pendientes administrativos'
                   : 'Selecciona una actividad fija'
               }
               className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
@@ -1439,9 +1372,7 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* =================================================
-              DESCRIPCIÓN
-          ================================================= */}
+          {/* DESCRIPCIÓN */}
 
           <div>
 
@@ -1468,9 +1399,7 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* =================================================
-              USUARIOS
-          ================================================= */}
+          {/* USUARIOS */}
 
           <div>
 
@@ -1509,7 +1438,6 @@ export default function CreateActivityModal({
 
 
             <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
-
 
               {assignableUsers.length === 0 && (
 
@@ -1592,12 +1520,9 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* =================================================
-              FECHA + HORA
-          ================================================= */}
+          {/* FECHA + HORA */}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
 
             <div>
 
@@ -1650,9 +1575,7 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* =================================================
-              RECURRENCIA
-          ================================================= */}
+          {/* RECURRENCIA */}
 
           <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
 
@@ -1792,18 +1715,6 @@ export default function CreateActivityModal({
                   className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
 
-
-                {!recurrenceEndDate && (
-
-                  <p className="mt-1 text-xs text-gray-400">
-
-                    Si no seleccionas una fecha,
-                    se generará aproximadamente un mes.
-
-                  </p>
-
-                )}
-
               </div>
 
             )}
@@ -1811,9 +1722,7 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* =================================================
-              PRIORIDAD
-          ================================================= */}
+          {/* PRIORIDAD */}
 
           <div>
 
@@ -1856,9 +1765,7 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* =================================================
-              RESUMEN
-          ================================================= */}
+          {/* RESUMEN */}
 
           {selectedUsers.length > 0 &&
             generatedDates.length > 0 && (
@@ -1884,11 +1791,7 @@ export default function CreateActivityModal({
                   Área:{' '}
 
                   <strong>
-                    {
-                      area === 'marketing'
-                        ? 'Marketing'
-                        : 'Edición de video'
-                    }
+                    {areaLabel}
                   </strong>
 
                 </p>
@@ -1947,12 +1850,9 @@ export default function CreateActivityModal({
             )}
 
 
-          {/* =================================================
-              BOTONES
-          ================================================= */}
+          {/* BOTONES */}
 
           <div className="flex gap-3 pt-2">
-
 
             <button
               type="button"
