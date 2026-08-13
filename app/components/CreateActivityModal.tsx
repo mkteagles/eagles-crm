@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+
 import {
   useUsers,
   useCurrentUser,
@@ -16,12 +17,20 @@ import {
 } from 'lucide-react'
 
 
+// =====================================================
+// PROPS
+// =====================================================
+
 interface CreateActivityModalProps {
   isOpen: boolean
   onClose: () => void
   onSuccess: () => void
 }
 
+
+// =====================================================
+// TEMPLATE
+// =====================================================
 
 interface ActivityTemplate {
   id: string
@@ -32,10 +41,38 @@ interface ActivityTemplate {
 }
 
 
+// =====================================================
+// USER
+// =====================================================
+
+interface AppUser {
+  id: string
+  full_name: string
+  role: string
+}
+
+
+// =====================================================
+// MODOS
+// =====================================================
+
 type ActivityMode =
   | 'fixed'
   | 'custom'
 
+
+// =====================================================
+// ÁREAS
+// =====================================================
+
+type ActivityArea =
+  | 'marketing'
+  | 'video_editing'
+
+
+// =====================================================
+// RECURRENCIA
+// =====================================================
 
 type RecurrenceType =
   | 'none'
@@ -44,6 +81,10 @@ type RecurrenceType =
   | 'biweekly'
   | 'monthly'
 
+
+// =====================================================
+// DÍAS
+// =====================================================
 
 const WEEK_DAYS = [
   { value: 1, label: 'L' },
@@ -55,6 +96,10 @@ const WEEK_DAYS = [
   { value: 0, label: 'D' },
 ]
 
+
+// =====================================================
+// COMPONENTE
+// =====================================================
 
 export default function CreateActivityModal({
   isOpen,
@@ -68,8 +113,15 @@ export default function CreateActivityModal({
   const { users } = useUsers()
 
 
+  // =====================================================
+  // ESTADOS
+  // =====================================================
+
   const [mode, setMode] =
     useState<ActivityMode>('fixed')
+
+  const [area, setArea] =
+    useState<ActivityArea>('marketing')
 
   const [title, setTitle] =
     useState('')
@@ -115,16 +167,53 @@ export default function CreateActivityModal({
   // USUARIOS ASIGNABLES
   // =====================================================
   //
-  // Admin + executor.
+  // MARKETING:
+  //   No viewers.
   //
-  // Viewer NO puede recibir actividades.
+  // VIDEO EDITING:
+  //   Chuy sí puede recibir actividades aunque
+  //   tenga role = viewer.
   //
+  // Esto es importante porque Chuy es ejecutor
+  // de producción de video.
+  // =====================================================
 
   const assignableUsers = useMemo(() => {
-    return users.filter(
-      (u) => u.role !== 'viewer'
+
+    const normalizedUsers =
+      (users || []) as AppUser[]
+
+
+    // ---------------------------------------------------
+    // EDICIÓN DE VIDEO
+    // ---------------------------------------------------
+
+    if (area === 'video_editing') {
+
+      const chuyUsers =
+        normalizedUsers.filter((u) =>
+          u.full_name
+            ?.trim()
+            .toLowerCase()
+            .includes('chuy')
+        )
+
+
+      return chuyUsers
+
+    }
+
+
+    // ---------------------------------------------------
+    // MARKETING
+    // ---------------------------------------------------
+
+    return normalizedUsers.filter(
+      (u) =>
+        u.role !== 'viewer'
     )
-  }, [users])
+
+  }, [users, area])
 
 
   // =====================================================
@@ -135,73 +224,76 @@ export default function CreateActivityModal({
 
     if (!isOpen) return
 
-    const loadTemplates =
-      async () => {
+    const loadTemplates = async () => {
 
-        setTemplatesLoading(true)
+      setTemplatesLoading(true)
 
-        try {
+      try {
 
-          const {
-            data,
-            error,
-          } = await supabase
-            .from('activity_templates')
-            .select(
-              'id, name, description, category, active'
-            )
-            .eq(
-              'active',
-              true
-            )
-            .order(
-              'category',
-              {
-                ascending: true,
-              }
-            )
-            .order(
-              'name',
-              {
-                ascending: true,
-              }
-            )
-
-          if (error) {
-
-            console.error(
-              'Error loading activity templates:',
-              error
-            )
-
-            alert(
-              `No se pudieron cargar las actividades fijas: ${error.message}`
-            )
-
-            return
-          }
-
-          setTemplates(
-            data || []
+        const {
+          data,
+          error,
+        } = await supabase
+          .from('activity_templates')
+          .select(
+            'id, name, description, category, active'
+          )
+          .eq(
+            'active',
+            true
+          )
+          .order(
+            'category',
+            {
+              ascending: true,
+            }
+          )
+          .order(
+            'name',
+            {
+              ascending: true,
+            }
           )
 
-        } catch (error) {
+
+        if (error) {
 
           console.error(
-            'Unexpected error loading templates:',
+            'Error loading activity templates:',
             error
           )
 
           alert(
-            'Ocurrió un error al cargar las actividades fijas.'
+            `No se pudieron cargar las actividades fijas: ${error.message}`
           )
 
-        } finally {
-
-          setTemplatesLoading(false)
-
+          return
         }
+
+
+        setTemplates(
+          data || []
+        )
+
+      } catch (error) {
+
+        console.error(
+          'Unexpected error loading templates:',
+          error
+        )
+
+        alert(
+          'Ocurrió un error al cargar las actividades fijas.'
+        )
+
+      } finally {
+
+        setTemplatesLoading(false)
+
       }
+
+    }
+
 
     loadTemplates()
 
@@ -227,7 +319,9 @@ export default function CreateActivityModal({
           if (
             !groups[template.category]
           ) {
+
             groups[template.category] = []
+
           }
 
           groups[
@@ -259,15 +353,20 @@ export default function CreateActivityModal({
         return
       }
 
+
       const template =
         templates.find(
           (t) =>
             t.id === templateId
         )
 
+
       if (!template) return
 
-      setSelectedTemplate(template)
+
+      setSelectedTemplate(
+        template
+      )
 
       setTitle(
         template.name
@@ -276,6 +375,7 @@ export default function CreateActivityModal({
       setDescription(
         template.description || ''
       )
+
     }
 
 
@@ -291,8 +391,39 @@ export default function CreateActivityModal({
       setMode(newMode)
 
       setSelectedTemplate(null)
+
       setTitle('')
+
       setDescription('')
+
+    }
+
+
+  // =====================================================
+  // CAMBIAR ÁREA
+  // =====================================================
+
+  const handleAreaChange =
+    (newArea: ActivityArea) => {
+
+      if (loading) return
+
+      setArea(newArea)
+
+      // -------------------------------------------------
+      // MUY IMPORTANTE:
+      // Al cambiar de área eliminamos las personas
+      // seleccionadas anteriormente.
+      // -------------------------------------------------
+
+      setSelectedUsers([])
+
+      setSelectedTemplate(null)
+
+      setTitle('')
+
+      setDescription('')
+
     }
 
 
@@ -323,10 +454,16 @@ export default function CreateActivityModal({
             ...current,
             userId,
           ]
+
         }
       )
+
     }
 
+
+  // =====================================================
+  // SELECCIONAR TODOS
+  // =====================================================
 
   const toggleAllUsers = () => {
 
@@ -346,7 +483,9 @@ export default function CreateActivityModal({
           (u) => u.id
         )
       )
+
     }
+
   }
 
 
@@ -357,6 +496,8 @@ export default function CreateActivityModal({
   const toggleDay =
     (day: number) => {
 
+      if (loading) return
+
       setSelectedDays(
         (current) => {
 
@@ -365,7 +506,8 @@ export default function CreateActivityModal({
           ) {
 
             return current.filter(
-              (d) => d !== day
+              (d) =>
+                d !== day
             )
 
           }
@@ -374,31 +516,42 @@ export default function CreateActivityModal({
             ...current,
             day,
           ].sort()
+
         }
       )
+
     }
 
 
   // =====================================================
-  // CALCULAR FECHAS
+  // GENERAR FECHAS
   // =====================================================
 
   const generateDates = (): string[] => {
 
     if (!dueDate) {
+
       return []
+
     }
+
 
     if (
       recurrence === 'none'
     ) {
-      return [dueDate]
+
+      return [
+        dueDate,
+      ]
+
     }
+
 
     const start =
       new Date(
         `${dueDate}T12:00:00`
       )
+
 
     const end =
       recurrenceEndDate
@@ -407,6 +560,7 @@ export default function CreateActivityModal({
           )
         : new Date(start)
 
+
     if (
       !recurrenceEndDate
     ) {
@@ -414,12 +568,16 @@ export default function CreateActivityModal({
       end.setMonth(
         end.getMonth() + 1
       )
+
     }
+
 
     const dates: string[] = []
 
+
     const cursor =
       new Date(start)
+
 
     while (
       cursor <= end &&
@@ -429,7 +587,13 @@ export default function CreateActivityModal({
       const day =
         cursor.getDay()
 
+
       let include = false
+
+
+      // -------------------------------------------------
+      // DIARIO
+      // -------------------------------------------------
 
       if (
         recurrence === 'daily'
@@ -437,14 +601,30 @@ export default function CreateActivityModal({
 
         include = true
 
-      } else if (
+      }
+
+
+      // -------------------------------------------------
+      // SEMANAL
+      // -------------------------------------------------
+
+      else if (
         recurrence === 'weekly'
       ) {
 
         include =
-          selectedDays.includes(day)
+          selectedDays.includes(
+            day
+          )
 
-      } else if (
+      }
+
+
+      // -------------------------------------------------
+      // QUINCENAL
+      // -------------------------------------------------
+
+      else if (
         recurrence === 'biweekly'
       ) {
 
@@ -462,16 +642,27 @@ export default function CreateActivityModal({
             )
           )
 
+
         const week =
           Math.floor(
             diff / 7
           )
 
+
         include =
           week % 2 === 0 &&
-          selectedDays.includes(day)
+          selectedDays.includes(
+            day
+          )
 
-      } else if (
+      }
+
+
+      // -------------------------------------------------
+      // MENSUAL
+      // -------------------------------------------------
+
+      else if (
         recurrence === 'monthly'
       ) {
 
@@ -481,6 +672,11 @@ export default function CreateActivityModal({
 
       }
 
+
+      // -------------------------------------------------
+      // AGREGAR
+      // -------------------------------------------------
+
       if (include) {
 
         const year =
@@ -489,30 +685,46 @@ export default function CreateActivityModal({
         const month =
           String(
             cursor.getMonth() + 1
-          ).padStart(2, '0')
+          ).padStart(
+            2,
+            '0'
+          )
 
         const date =
           String(
             cursor.getDate()
-          ).padStart(2, '0')
+          ).padStart(
+            2,
+            '0'
+          )
 
         dates.push(
           `${year}-${month}-${date}`
         )
+
       }
+
 
       cursor.setDate(
         cursor.getDate() + 1
       )
+
     }
 
+
     return dates
+
   }
 
 
+  // =====================================================
+  // FECHAS GENERADAS
+  // =====================================================
+
   const generatedDates =
     useMemo(
-      () => generateDates(),
+      () =>
+        generateDates(),
       [
         dueDate,
         recurrence,
@@ -543,8 +755,11 @@ export default function CreateActivityModal({
           )
 
           return false
+
         }
+
       }
+
 
       if (
         recurrence !== 'none' &&
@@ -557,9 +772,12 @@ export default function CreateActivityModal({
         )
 
         return false
+
       }
 
+
       return true
+
     }
 
 
@@ -574,49 +792,93 @@ export default function CreateActivityModal({
 
       e.preventDefault()
 
-      if (!title.trim()) {
+
+      // -------------------------------------------------
+      // VALIDAR TÍTULO
+      // -------------------------------------------------
+
+      if (
+        !title.trim()
+      ) {
 
         alert(
           'El título es obligatorio.'
         )
 
         return
+
       }
+
+
+      // -------------------------------------------------
+      // VALIDAR USUARIO
+      // -------------------------------------------------
 
       if (
         selectedUsers.length === 0
       ) {
 
         alert(
-          'Selecciona al menos una persona.'
+          area === 'video_editing'
+            ? 'Selecciona a Chuy.'
+            : 'Selecciona al menos una persona.'
         )
 
         return
+
       }
 
-      if (!dueDate) {
+
+      // -------------------------------------------------
+      // VALIDAR FECHA
+      // -------------------------------------------------
+
+      if (
+        !dueDate
+      ) {
 
         alert(
           'Selecciona una fecha.'
         )
 
         return
+
       }
 
-      if (!user?.id) {
+
+      // -------------------------------------------------
+      // VALIDAR CREADOR
+      // -------------------------------------------------
+
+      if (
+        !user?.id
+      ) {
 
         alert(
           'No se pudo identificar al usuario actual.'
         )
 
         return
+
       }
+
+
+      // -------------------------------------------------
+      // VALIDAR RECURRENCIA
+      // -------------------------------------------------
 
       if (
         !validateRecurrence()
       ) {
+
         return
+
       }
+
+
+      // -------------------------------------------------
+      // VALIDAR FECHAS
+      // -------------------------------------------------
 
       if (
         generatedDates.length === 0
@@ -627,17 +889,28 @@ export default function CreateActivityModal({
         )
 
         return
+
       }
+
 
       setLoading(true)
 
+
       try {
+
+        // -------------------------------------------------
+        // GRUPO RECURRENCIA
+        // -------------------------------------------------
 
         const recurrenceGroupId =
           recurrence === 'none'
             ? null
             : crypto.randomUUID()
 
+
+        // -------------------------------------------------
+        // ACTIVIDADES
+        // -------------------------------------------------
 
         const activitiesToInsert =
           selectedUsers.flatMap(
@@ -649,7 +922,8 @@ export default function CreateActivityModal({
                     title.trim(),
 
                   description:
-                    description.trim(),
+                    description.trim() ||
+                    null,
 
                   assigned_to:
                     userId,
@@ -657,13 +931,22 @@ export default function CreateActivityModal({
                   created_by:
                     user.id,
 
+                  // ---------------------------------------
+                  // ÁREA
+                  // ---------------------------------------
+
+                  area:
+                    area,
+
                   due_date:
                     date,
 
                   due_time:
-                    dueTime || null,
+                    dueTime ||
+                    null,
 
-                  priority,
+                  priority:
+                    priority,
 
                   status:
                     'pending',
@@ -692,6 +975,43 @@ export default function CreateActivityModal({
           )
 
 
+        console.log(
+          '================================='
+        )
+
+        console.log(
+          'CREANDO ACTIVIDADES'
+        )
+
+        console.log(
+          'CREATED BY:',
+          user.id
+        )
+
+        console.log(
+          'AREA:',
+          area
+        )
+
+        console.log(
+          'ASSIGNED USERS:',
+          selectedUsers
+        )
+
+        console.log(
+          'ACTIVITIES:',
+          activitiesToInsert
+        )
+
+        console.log(
+          '================================='
+        )
+
+
+        // -------------------------------------------------
+        // INSERT
+        // -------------------------------------------------
+
         const {
           error,
         } = await supabase
@@ -701,10 +1021,14 @@ export default function CreateActivityModal({
           )
 
 
+        // -------------------------------------------------
+        // ERROR
+        // -------------------------------------------------
+
         if (error) {
 
           console.error(
-            'Error creating activities:',
+            'ERROR CREATING ACTIVITIES:',
             error
           )
 
@@ -713,8 +1037,13 @@ export default function CreateActivityModal({
           )
 
           return
+
         }
 
+
+        // -------------------------------------------------
+        // ÉXITO
+        // -------------------------------------------------
 
         alert(
           activitiesToInsert.length === 1
@@ -729,10 +1058,11 @@ export default function CreateActivityModal({
 
         onClose()
 
+
       } catch (error) {
 
         console.error(
-          'Unexpected error creating activities:',
+          'UNEXPECTED ERROR:',
           error
         )
 
@@ -745,6 +1075,7 @@ export default function CreateActivityModal({
         setLoading(false)
 
       }
+
     }
 
 
@@ -756,16 +1087,29 @@ export default function CreateActivityModal({
     () => {
 
       setMode('fixed')
+
+      setArea('marketing')
+
       setTitle('')
+
       setDescription('')
+
       setSelectedTemplate(null)
+
       setSelectedUsers([])
+
       setDueDate('')
+
       setDueTime('')
+
       setPriority('medium')
+
       setRecurrence('none')
+
       setSelectedDays([])
+
       setRecurrenceEndDate('')
+
     }
 
 
@@ -779,7 +1123,9 @@ export default function CreateActivityModal({
       if (loading) return
 
       resetForm()
+
       onClose()
+
     }
 
 
@@ -788,7 +1134,9 @@ export default function CreateActivityModal({
   // =====================================================
 
   if (!isOpen) {
+
     return null
+
   }
 
 
@@ -802,7 +1150,10 @@ export default function CreateActivityModal({
 
       <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-xl bg-white dark:bg-gray-900 shadow-xl">
 
-        {/* HEADER */}
+
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
 
@@ -818,27 +1169,90 @@ export default function CreateActivityModal({
 
           </div>
 
+
           <button
             type="button"
             onClick={handleClose}
             disabled={loading}
             className="p-1 rounded-md text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition"
           >
+
             <X size={20} />
+
           </button>
 
         </div>
 
 
-        {/* MODO */}
+        {/* =================================================
+            ÁREA
+        ================================================= */}
 
         <div className="p-6 pb-0">
 
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Tipo de actividad
+
+            Área *
+
           </label>
 
+
+          <div className="relative">
+
+            <select
+              value={area}
+              onChange={(e) =>
+                handleAreaChange(
+                  e.target.value as ActivityArea
+                )
+              }
+              disabled={loading}
+              className="w-full appearance-none px-3 py-3 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            >
+
+              <option value="marketing">
+                Marketing
+              </option>
+
+              <option value="video_editing">
+                Edición de video
+              </option>
+
+            </select>
+
+
+            <ChevronDown
+              size={18}
+              className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500"
+            />
+
+          </div>
+
+
+          <p className="mt-2 text-xs text-gray-400">
+
+            El área determina en qué sección aparecerá la actividad.
+
+          </p>
+
+        </div>
+
+
+        {/* =================================================
+            MODO
+        ================================================= */}
+
+        <div className="p-6 pb-0">
+
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+
+            Tipo de actividad
+
+          </label>
+
+
           <div className="grid grid-cols-2 gap-3">
+
 
             <button
               type="button"
@@ -855,8 +1269,11 @@ export default function CreateActivityModal({
                 }
               `}
             >
+
               <Sparkles size={18} />
+
               Actividad fija
+
             </button>
 
 
@@ -875,8 +1292,11 @@ export default function CreateActivityModal({
                 }
               `}
             >
+
               <Plus size={18} />
+
               Nueva actividad
+
             </button>
 
           </div>
@@ -889,15 +1309,21 @@ export default function CreateActivityModal({
           className="p-6 space-y-5"
         >
 
-          {/* ACTIVIDAD FIJA */}
+
+          {/* =================================================
+              ACTIVIDAD FIJA
+          ================================================= */}
 
           {mode === 'fixed' && (
 
             <div>
 
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+
                 Actividad fija *
+
               </label>
+
 
               <div className="relative">
 
@@ -919,10 +1345,15 @@ export default function CreateActivityModal({
                 >
 
                   <option value="">
-                    {templatesLoading
-                      ? 'Cargando...'
-                      : 'Selecciona una actividad fija'}
+
+                    {
+                      templatesLoading
+                        ? 'Cargando...'
+                        : 'Selecciona una actividad fija'
+                    }
+
                   </option>
+
 
                   {Object.entries(
                     templatesByCategory
@@ -944,7 +1375,9 @@ export default function CreateActivityModal({
                               key={template.id}
                               value={template.id}
                             >
+
                               {template.name}
+
                             </option>
 
                           )
@@ -956,6 +1389,7 @@ export default function CreateActivityModal({
                   )}
 
                 </select>
+
 
                 <ChevronDown
                   size={18}
@@ -969,25 +1403,34 @@ export default function CreateActivityModal({
           )}
 
 
-          {/* TÍTULO */}
+          {/* =================================================
+              TÍTULO
+          ================================================= */}
 
           <div>
 
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+
               Título *
+
             </label>
+
 
             <input
               type="text"
               value={title}
               onChange={(e) =>
-                setTitle(e.target.value)
+                setTitle(
+                  e.target.value
+                )
               }
               required
               disabled={loading}
               placeholder={
                 mode === 'custom'
-                  ? 'Ej: Revisar campaña de Facebook'
+                  ? area === 'video_editing'
+                    ? 'Ej: Editar video de campaña'
+                    : 'Ej: Revisar campaña de Facebook'
                   : 'Selecciona una actividad fija'
               }
               className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
@@ -996,13 +1439,18 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* DESCRIPCIÓN */}
+          {/* =================================================
+              DESCRIPCIÓN
+          ================================================= */}
 
           <div>
 
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+
               Descripción
+
             </label>
+
 
             <textarea
               value={description}
@@ -1020,17 +1468,24 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* USUARIOS */}
+          {/* =================================================
+              USUARIOS
+          ================================================= */}
 
           <div>
 
             <div className="flex items-center justify-between mb-2">
 
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Asignar a *
+
+                {area === 'video_editing'
+                  ? 'Asignar a Chuy *'
+                  : 'Asignar a *'}
+
               </label>
 
-              {assignableUsers.length > 0 && (
+
+              {assignableUsers.length > 1 && (
 
                 <button
                   type="button"
@@ -1038,12 +1493,14 @@ export default function CreateActivityModal({
                   disabled={loading}
                   className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
                 >
+
                   {
                     selectedUsers.length ===
                     assignableUsers.length
                       ? 'Quitar todos'
                       : 'Seleccionar todos'
                   }
+
                 </button>
 
               )}
@@ -1053,6 +1510,20 @@ export default function CreateActivityModal({
 
             <div className="border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden">
 
+
+              {assignableUsers.length === 0 && (
+
+                <div className="px-4 py-4 text-sm text-gray-500 dark:text-gray-400">
+
+                  {area === 'video_editing'
+                    ? 'No se encontró a Chuy en los usuarios.'
+                    : 'No hay usuarios disponibles para asignar actividades.'}
+
+                </div>
+
+              )}
+
+
               {assignableUsers.map(
                 (u) => {
 
@@ -1060,6 +1531,7 @@ export default function CreateActivityModal({
                     selectedUsers.includes(
                       u.id
                     )
+
 
                   return (
 
@@ -1087,34 +1559,54 @@ export default function CreateActivityModal({
                         className="w-4 h-4 rounded border-gray-300 text-blue-600"
                       />
 
+
                       <span className="text-sm font-medium text-gray-900 dark:text-white">
+
                         {u.full_name}
+
                       </span>
 
+
                       <span className="ml-auto text-[10px] uppercase text-gray-400">
+
                         {u.role}
+
                       </span>
 
                     </label>
 
                   )
+
                 }
               )}
 
             </div>
 
+
+            {area === 'video_editing' && (
+              <p className="mt-2 text-xs text-gray-400">
+                Las actividades de edición se asignan directamente a Chuy.
+              </p>
+            )}
+
           </div>
 
 
-          {/* FECHA + HORA */}
+          {/* =================================================
+              FECHA + HORA
+          ================================================= */}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
 
             <div>
 
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+
                 Fecha *
+
               </label>
+
 
               <input
                 type="date"
@@ -1135,8 +1627,11 @@ export default function CreateActivityModal({
             <div>
 
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+
                 Hora
+
               </label>
+
 
               <input
                 type="time"
@@ -1155,7 +1650,9 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* RECURRENCIA */}
+          {/* =================================================
+              RECURRENCIA
+          ================================================= */}
 
           <div className="rounded-xl border border-gray-200 dark:border-gray-700 p-4">
 
@@ -1167,7 +1664,9 @@ export default function CreateActivityModal({
               />
 
               <label className="text-sm font-semibold text-gray-900 dark:text-white">
+
                 Repetición
+
               </label>
 
             </div>
@@ -1213,8 +1712,11 @@ export default function CreateActivityModal({
               <div className="mt-4">
 
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+
                   Días de la semana
+
                 </p>
+
 
                 <div className="flex gap-2">
 
@@ -1226,6 +1728,7 @@ export default function CreateActivityModal({
                           day.value
                         )
 
+
                       return (
 
                         <button
@@ -1236,6 +1739,7 @@ export default function CreateActivityModal({
                               day.value
                             )
                           }
+                          disabled={loading}
                           className={`
                             w-9 h-9 rounded-full text-xs font-bold transition
                             ${
@@ -1245,10 +1749,13 @@ export default function CreateActivityModal({
                             }
                           `}
                         >
+
                           {day.label}
+
                         </button>
 
                       )
+
                     }
                   )}
 
@@ -1264,8 +1771,11 @@ export default function CreateActivityModal({
               <div className="mt-4">
 
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+
                   Repetir hasta
+
                 </label>
+
 
                 <input
                   type="date"
@@ -1282,11 +1792,16 @@ export default function CreateActivityModal({
                   className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
 
+
                 {!recurrenceEndDate && (
+
                   <p className="mt-1 text-xs text-gray-400">
+
                     Si no seleccionas una fecha,
                     se generará aproximadamente un mes.
+
                   </p>
+
                 )}
 
               </div>
@@ -1296,13 +1811,18 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* PRIORIDAD */}
+          {/* =================================================
+              PRIORIDAD
+          ================================================= */}
 
           <div>
 
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+
               Prioridad
+
             </label>
+
 
             <select
               value={priority}
@@ -1336,7 +1856,9 @@ export default function CreateActivityModal({
           </div>
 
 
-          {/* RESUMEN */}
+          {/* =================================================
+              RESUMEN
+          ================================================= */}
 
           {selectedUsers.length > 0 &&
             generatedDates.length > 0 && (
@@ -1347,27 +1869,77 @@ export default function CreateActivityModal({
                   Resumen
                 </p>
 
+
                 <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+
                   <strong>
                     {title}
                   </strong>
+
                 </p>
 
+
                 <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+
+                  Área:{' '}
+
+                  <strong>
+                    {
+                      area === 'marketing'
+                        ? 'Marketing'
+                        : 'Edición de video'
+                    }
+                  </strong>
+
+                </p>
+
+
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+
+                  Asignado a:{' '}
+
+                  <strong>
+
+                    {selectedUsers
+                      .map(
+                        (id) =>
+                          assignableUsers.find(
+                            (u) =>
+                              u.id === id
+                          )?.full_name
+                      )
+                      .filter(Boolean)
+                      .join(', ')}
+
+                  </strong>
+
+                </p>
+
+
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+
                   Se crearán{' '}
+
                   <strong>
                     {
                       generatedDates.length *
                       selectedUsers.length
                     }
                   </strong>{' '}
+
                   actividades.
+
                 </p>
 
+
                 {dueTime && (
+
                   <p className="text-xs text-blue-600 dark:text-blue-400">
+
                     Hora: {dueTime}
+
                   </p>
+
                 )}
 
               </div>
@@ -1375,9 +1947,12 @@ export default function CreateActivityModal({
             )}
 
 
-          {/* BOTONES */}
+          {/* =================================================
+              BOTONES
+          ================================================= */}
 
           <div className="flex gap-3 pt-2">
+
 
             <button
               type="button"
@@ -1385,8 +1960,11 @@ export default function CreateActivityModal({
               disabled={loading}
               className="flex-1 px-4 py-3 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 font-medium"
             >
+
               Cancelar
+
             </button>
+
 
             <button
               type="submit"
@@ -1399,9 +1977,11 @@ export default function CreateActivityModal({
               }
               className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold disabled:opacity-50"
             >
+
               {loading
                 ? 'Asignando...'
                 : 'Asignar actividad'}
+
             </button>
 
           </div>
@@ -1411,5 +1991,7 @@ export default function CreateActivityModal({
       </div>
 
     </div>
+
   )
+
 }

@@ -25,13 +25,11 @@ import {
 
 import Link from 'next/link'
 
-
 // =========================================================
 // COMPONENTE
 // =========================================================
 
 export default function MarketingDashboard() {
-
 
   // =======================================================
   // USUARIO
@@ -40,9 +38,7 @@ export default function MarketingDashboard() {
   const {
     user,
     loading: userLoading,
-  } =
-    useCurrentUser()
-
+  } = useCurrentUser()
 
   // =======================================================
   // MODAL CREAR ACTIVIDAD
@@ -51,9 +47,7 @@ export default function MarketingDashboard() {
   const [
     showCreateModal,
     setShowCreateModal,
-  ] =
-    useState(false)
-
+  ] = useState(false)
 
   // =======================================================
   // MODAL ACTIVIDADES FIJAS
@@ -62,9 +56,7 @@ export default function MarketingDashboard() {
   const [
     showFixedActivitiesModal,
     setShowFixedActivitiesModal,
-  ] =
-    useState(false)
-
+  ] = useState(false)
 
   // =======================================================
   // REFRESH
@@ -73,9 +65,7 @@ export default function MarketingDashboard() {
   const [
     refreshKey,
     setRefreshKey,
-  ] =
-    useState(0)
-
+  ] = useState(0)
 
   // =======================================================
   // IDEAS ABIERTAS / CERRADAS
@@ -84,9 +74,7 @@ export default function MarketingDashboard() {
   const [
     showIdeas,
     setShowIdeas,
-  ] =
-    useState(false)
-
+  ] = useState(false)
 
   // =======================================================
   // SUGERENCIAS ABIERTAS / CERRADAS
@@ -95,56 +83,38 @@ export default function MarketingDashboard() {
   const [
     showSuggestions,
     setShowSuggestions,
-  ] =
-    useState(false)
-
+  ] = useState(false)
 
   // =======================================================
   // ACTIVIDAD CREADA
   // =======================================================
 
-  const handleSuccess =
-    () => {
+  const handleSuccess = () => {
+    setRefreshKey(
+      prev => prev + 1
+    )
 
-      setRefreshKey(
-        (prev) =>
-          prev + 1,
-      )
-
-      setShowCreateModal(
-        false,
-      )
-
-    }
-
+    setShowCreateModal(false)
+  }
 
   // =======================================================
   // ACTIVIDAD FIJA CREADA
   // =======================================================
 
-  const handleFixedActivitySuccess =
-    () => {
+  const handleFixedActivitySuccess = () => {
+    setRefreshKey(
+      prev => prev + 1
+    )
 
-      setRefreshKey(
-        (prev) =>
-          prev + 1,
-      )
-
-      setShowFixedActivitiesModal(
-        false,
-      )
-
-    }
-
+    setShowFixedActivitiesModal(false)
+  }
 
   // =======================================================
   // CARGANDO USUARIO
   // =======================================================
 
   if (userLoading) {
-
     return (
-
       <div
         className="
           flex
@@ -153,7 +123,6 @@ export default function MarketingDashboard() {
           py-12
         "
       >
-
         <Loader
           className="
             mr-2
@@ -165,22 +134,16 @@ export default function MarketingDashboard() {
         <p>
           Cargando datos...
         </p>
-
       </div>
-
     )
-
   }
-
 
   // =======================================================
   // SIN USUARIO
   // =======================================================
 
   if (!user) {
-
     return (
-
       <div
         className="
           flex
@@ -191,7 +154,6 @@ export default function MarketingDashboard() {
           py-12
         "
       >
-
         <p>
           No autenticado
         </p>
@@ -209,40 +171,74 @@ export default function MarketingDashboard() {
         >
           Ir al Login
         </Link>
-
       </div>
-
     )
-
   }
-
 
   // =======================================================
   // PERMISOS
   // =======================================================
 
-  const canCreateIdeas =
-    [
-      'marcos',
-      'ursula',
-      'úrsula',
-    ].includes(
-      user.full_name
-        .trim()
-        .toLowerCase(),
-    )
-
+  /*
+   * IMPORTANTE:
+   *
+   * Hugo es ADMIN.
+   *
+   * Por lo tanto NO dependemos de su nombre para darle
+   * permisos administrativos.
+   */
 
   const isAdmin =
     user.role === 'admin'
 
+  /*
+   * Personas que pueden trabajar con IDEAS:
+   *
+   * - admin
+   * - Marcos
+   * - Úrsula
+   *
+   * El admin entra automáticamente.
+   */
+
+  const normalizedName =
+    (user.full_name || '')
+      .trim()
+      .toLowerCase()
+
+  const isMarcos =
+    normalizedName.includes(
+      'marcos'
+    )
+
+  const isUrsula =
+    normalizedName.includes(
+      'ursula'
+    ) ||
+    normalizedName.includes(
+      'úrsula'
+    )
+
+  const canCreateIdeas =
+    isAdmin ||
+    isMarcos ||
+    isUrsula
+
+  /*
+   * SUGERENCIAS:
+   *
+   * Hugo/admin también puede verlas.
+   * Marcos y Úrsula también.
+   */
+
+  const canSeeSuggestions =
+    canCreateIdeas
 
   // =======================================================
   // RENDER
   // =======================================================
 
   return (
-
     <div
       className="
         space-y-6
@@ -266,7 +262,6 @@ export default function MarketingDashboard() {
           🎯 Marketing - Actividades
         </h1>
 
-
         <p
           className="
             mt-1
@@ -275,7 +270,6 @@ export default function MarketingDashboard() {
             dark:text-gray-400
           "
         >
-
           Bienvenido,{' '}
 
           <span
@@ -286,12 +280,12 @@ export default function MarketingDashboard() {
             {user.full_name}
           </span>{' '}
 
-          {user.role}
-
+          <span className="capitalize">
+            {user.role}
+          </span>
         </p>
 
       </div>
-
 
       {/* =================================================
           BOTONES
@@ -305,16 +299,15 @@ export default function MarketingDashboard() {
         "
       >
 
-        {/* CREAR ACTIVIDAD */}
+        {/* =================================================
+            CREAR ACTIVIDAD
+        ================================================= */}
 
         {isAdmin && (
-
           <button
             type="button"
             onClick={() =>
-              setShowCreateModal(
-                true,
-              )
+              setShowCreateModal(true)
             }
             className="
               flex
@@ -337,20 +330,17 @@ export default function MarketingDashboard() {
             Crear Actividad
 
           </button>
-
         )}
 
-
-        {/* ACTIVIDADES FIJAS */}
+        {/* =================================================
+            ACTIVIDADES FIJAS
+        ================================================= */}
 
         {isAdmin && (
-
           <button
             type="button"
             onClick={() =>
-              setShowFixedActivitiesModal(
-                true,
-              )
+              setShowFixedActivitiesModal(true)
             }
             className="
               flex
@@ -373,21 +363,18 @@ export default function MarketingDashboard() {
             Actividades Fijas
 
           </button>
-
         )}
 
+        {/* =================================================
+            IDEAS
+        ================================================= */}
 
-        {/* IDEAS */}
-
-        {(canCreateIdeas ||
-          isAdmin) && (
-
+        {canCreateIdeas && (
           <button
             type="button"
             onClick={() =>
               setShowIdeas(
-                (prev) =>
-                  !prev,
+                prev => !prev
               )
             }
             className="
@@ -411,44 +398,46 @@ export default function MarketingDashboard() {
             Ideas
 
           </button>
-
         )}
 
+        {/* =================================================
+            SUGERENCIAS
+        ================================================= */}
 
-        {/* SUGERENCIAS */}
+        {canSeeSuggestions && (
+          <button
+            type="button"
+            onClick={() =>
+              setShowSuggestions(
+                prev => !prev
+              )
+            }
+            className="
+              flex
+              items-center
+              gap-2
+              rounded-lg
+              bg-pink-600
+              px-4 py-2
+              font-semibold
+              text-white
+              transition
+              hover:bg-pink-700
+            "
+          >
 
-        <button
-          type="button"
-          onClick={() =>
-            setShowSuggestions(
-              (prev) =>
-                !prev,
-            )
-          }
-          className="
-            flex
-            items-center
-            gap-2
-            rounded-lg
-            bg-pink-600
-            px-4 py-2
-            font-semibold
-            text-white
-            transition
-            hover:bg-pink-700
-          "
-        >
+            <Sparkles
+              size={20}
+            />
 
-          <Sparkles
-            size={20}
-          />
+            Sugerencias
 
-          Sugerencias
+          </button>
+        )}
 
-        </button>
-
-
-        {/* CALENDARIO */}
+        {/* =================================================
+            CALENDARIO
+        ================================================= */}
 
         <Link
           href="/app1/marketing/calendar"
@@ -474,12 +463,11 @@ export default function MarketingDashboard() {
 
         </Link>
 
+        {/* =================================================
+            REPORTE EJECUTOR
+        ================================================= */}
 
-        {/* REPORTE EJECUTOR */}
-
-        {user.role ===
-          'executor' && (
-
+        {user.role === 'executor' && (
           <Link
             href="/app1/marketing/reports"
             className="
@@ -503,14 +491,13 @@ export default function MarketingDashboard() {
             Generar Reporte
 
           </Link>
-
         )}
 
-
-        {/* REPORTES ADMIN */}
+        {/* =================================================
+            REPORTES ADMIN
+        ================================================= */}
 
         {isAdmin && (
-
           <Link
             href="/app1/marketing/reports"
             className="
@@ -534,99 +521,68 @@ export default function MarketingDashboard() {
             Reportes
 
           </Link>
-
         )}
 
       </div>
-
 
       {/* =================================================
           IDEAS
       ================================================= */}
 
       {showIdeas && (
-
         <ActivityIdeas
-          userId={
-            user.id
-          }
-          userName={
-            user.full_name
-          }
-          role={
-            user.role
-          }
-          refreshKey={
-            refreshKey
-          }
+          userId={user.id}
+          userName={user.full_name}
+          role={user.role}
+          refreshKey={refreshKey}
         />
-
       )}
-
 
       {/* =================================================
           SUGERENCIAS
       ================================================= */}
 
       {showSuggestions && (
-
         <section
           id="content-suggestions"
         >
 
           <ContentSuggestions
-            refreshKey={
-              refreshKey
-            }
+            refreshKey={refreshKey}
           />
 
         </section>
-
       )}
 
-
       {/* =================================================
-          ACTIVIDADES
+          ACTIVIDADES DE MARKETING
       ================================================= */}
 
       <ActivitiesTable
-        key={
-          refreshKey
-        }
+        key={refreshKey}
+        area="marketing"
       />
-
 
       {/* =================================================
           MODAL CREAR ACTIVIDAD
       ================================================= */}
 
       <CreateActivityModal
-        isOpen={
-          showCreateModal
-        }
+        isOpen={showCreateModal}
         onClose={() =>
-          setShowCreateModal(
-            false,
-          )
+          setShowCreateModal(false)
         }
-        onSuccess={
-          handleSuccess
-        }
+        onSuccess={handleSuccess}
       />
-
 
       {/* =================================================
           MODAL ACTIVIDADES FIJAS
       ================================================= */}
 
       <FixedActivitiesModal
-        isOpen={
-          showFixedActivitiesModal
-        }
+        isOpen={showFixedActivitiesModal}
         onClose={() =>
-          setShowFixedActivitiesModal(
-            false,
-          )
+          setShowFixedActivitiesModal(false)
         }
         onSuccess={
           handleFixedActivitySuccess
@@ -634,7 +590,5 @@ export default function MarketingDashboard() {
       />
 
     </div>
-
   )
-
 }

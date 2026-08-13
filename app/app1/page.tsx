@@ -10,6 +10,7 @@ import {
   Users,
   ClipboardList,
   UserCog,
+  Video,
 } from "lucide-react";
 
 export default async function App1Home() {
@@ -39,11 +40,59 @@ export default async function App1Home() {
 
   const firstName = name.split(" ")[0];
 
+  // =========================================================
+  // PERMISOS DE SECCIONES
+  // =========================================================
+
+  const normalizedName = name
+    .trim()
+    .toLowerCase();
+
+  /*
+   * CHUY:
+   *
+   * Chuy puede entrar a su sección de Edición de Video.
+   *
+   * También conservamos Marketing, porque actualmente
+   * esa sección ya está disponible desde el inicio.
+   */
+
+  const isChuy =
+    normalizedName.includes("chuy") ||
+    normalizedName.includes("jesus") ||
+    normalizedName.includes("jesús");
+
+  /*
+   * ADMIN / VIEWER:
+   *
+   * Ven todas las áreas principales.
+   */
+
+  const canSeeAllSections =
+    role === "admin" ||
+    role === "viewer";
+
+  /*
+   * EDICIÓN DE VIDEO:
+   *
+   * Chuy
+   * Admin
+   * Viewer
+   */
+
+  const canSeeVideoEditing =
+    isChuy ||
+    canSeeAllSections;
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+
       <div className="max-w-7xl mx-auto px-6 py-10">
 
-        {/* HEADER */}
+        {/* =====================================================
+            HEADER
+        ===================================================== */}
+
         <div className="mb-10">
 
           <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
@@ -60,21 +109,24 @@ export default async function App1Home() {
 
         </div>
 
-        {/* ÁREAS PRINCIPALES */}
+        {/* =====================================================
+            ÁREAS PRINCIPALES
+        ===================================================== */}
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
 
-          {/* =========================
+          {/* ===================================================
               VENTAS
-          ========================= */}
+          =================================================== */}
 
-          {(role === "admin" || role === "viewer") && (
+          {canSeeAllSections && (
             <Link
               href="/app1/leads"
               className="group"
             >
+
               <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
 
-                {/* DECORACIÓN */}
                 <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-green-100 dark:bg-green-900/20 blur-2xl" />
 
                 <div className="relative p-7 flex flex-col h-full">
@@ -124,17 +176,19 @@ export default async function App1Home() {
                 </div>
 
               </div>
+
             </Link>
           )}
 
-          {/* =========================
+          {/* ===================================================
               MARKETING + ACTIVIDADES
-          ========================= */}
+          =================================================== */}
 
           <Link
             href="/app1/marketing"
             className="group"
           >
+
             <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
 
               <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-blue-100 dark:bg-blue-900/20 blur-2xl" />
@@ -186,17 +240,19 @@ export default async function App1Home() {
               </div>
 
             </div>
+
           </Link>
 
-          {/* =========================
+          {/* ===================================================
               ADMINISTRACIÓN
-          ========================= */}
+          =================================================== */}
 
-          {(role === "admin" || role === "viewer") && (
+          {canSeeAllSections && (
             <Link
               href="/app1/administracion"
               className="group"
             >
+
               <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
 
                 <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-purple-100 dark:bg-purple-900/20 blur-2xl" />
@@ -248,12 +304,81 @@ export default async function App1Home() {
                 </div>
 
               </div>
+
+            </Link>
+          )}
+
+          {/* ===================================================
+              EDICIÓN DE VIDEO
+          =================================================== */}
+
+          {canSeeVideoEditing && (
+            <Link
+              href="/app1/edicion-video"
+              className="group"
+            >
+
+              <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+
+                <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-orange-100 dark:bg-orange-900/20 blur-2xl" />
+
+                <div className="relative p-7 flex flex-col h-full">
+
+                  <div className="flex items-center justify-between mb-8">
+
+                    <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+
+                      <Video
+                        size={28}
+                        className="text-orange-600 dark:text-orange-400"
+                      />
+
+                    </div>
+
+                    <ArrowRight
+                      size={22}
+                      className="text-gray-400 group-hover:text-orange-600 group-hover:translate-x-1 transition-all"
+                    />
+
+                  </div>
+
+                  <div className="mt-auto">
+
+                    <p className="text-sm font-semibold text-orange-600 dark:text-orange-400 mb-2">
+                      PRODUCCIÓN
+                    </p>
+
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      Edición de Video
+                    </h2>
+
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Gestiona y da seguimiento a las actividades de edición de video.
+                    </p>
+
+                    <div className="flex items-center gap-2 mt-5 text-sm font-semibold text-gray-700 dark:text-gray-300">
+
+                      <Video size={16} />
+
+                      Producción de contenido
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+
             </Link>
           )}
 
         </div>
 
-        {/* INFORMACIÓN INFERIOR */}
+        {/* =====================================================
+            INFORMACIÓN INFERIOR
+        ===================================================== */}
+
         <div className="mt-10">
 
           <div className="rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-5">
@@ -287,6 +412,7 @@ export default async function App1Home() {
         </div>
 
       </div>
+
     </div>
   );
 }

@@ -40,21 +40,38 @@ import ActivityDetailModal from './ActivityDetailModal'
 
 
 // =========================================================
+// PROPS
+// =========================================================
+
+type ActivityArea =
+  | 'marketing'
+  | 'video_editing'
+
+type ActivitiesTableProps = {
+  area?: ActivityArea
+}
+
+
+// =========================================================
 // HELPERS DE FECHA
 // =========================================================
 
 function getLocalDateString(
   date: Date = new Date()
 ): string {
-  const year = date.getFullYear()
 
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, '0')
+  const year =
+    date.getFullYear()
 
-  const day = String(
-    date.getDate()
-  ).padStart(2, '0')
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(2, '0')
+
+  const day =
+    String(
+      date.getDate()
+    ).padStart(2, '0')
 
   return `${year}-${month}-${day}`
 }
@@ -67,11 +84,14 @@ function getLocalDateString(
 function getMonthKey(
   date: Date
 ): string {
-  const year = date.getFullYear()
 
-  const month = String(
-    date.getMonth() + 1
-  ).padStart(2, '0')
+  const year =
+    date.getFullYear()
+
+  const month =
+    String(
+      date.getMonth() + 1
+    ).padStart(2, '0')
 
   return `${year}-${month}`
 }
@@ -85,6 +105,7 @@ function getMonthKey(
 function dateFromString(
   dateString: string
 ): Date {
+
   const [
     year,
     month,
@@ -108,6 +129,7 @@ function dateFromString(
 function formatLongDate(
   dateString: string
 ) {
+
   const date =
     dateFromString(
       dateString
@@ -132,6 +154,7 @@ function formatLongDate(
 function formatTime(
   time?: string | null
 ) {
+
   if (!time) {
     return ''
   }
@@ -177,6 +200,7 @@ function formatTime(
 function formatDate(
   date?: string | null
 ) {
+
   if (!date) {
     return 'Sin fecha'
   }
@@ -208,6 +232,7 @@ function formatDate(
 function formatMonthTitle(
   date: Date
 ) {
+
   return date.toLocaleDateString(
     'es-MX',
     {
@@ -225,7 +250,9 @@ function formatMonthTitle(
 function getStatusLabel(
   status?: string | null
 ) {
+
   switch (status) {
+
     case 'pending':
       return 'Pendiente'
 
@@ -254,7 +281,9 @@ function getStatusLabel(
 function getPriorityLabel(
   priority?: string | null
 ) {
+
   switch (priority) {
+
     case 'low':
       return 'Baja'
 
@@ -299,7 +328,10 @@ type ActivityPriority =
 // COMPONENTE
 // =========================================================
 
-export default function ActivitiesTable() {
+export default function ActivitiesTable({
+  area = 'marketing',
+}: ActivitiesTableProps) {
+
 
   // =======================================================
   // ACTIVIDADES
@@ -415,6 +447,16 @@ export default function ActivitiesTable() {
 
 
   // =======================================================
+  // NOMBRE DEL ÁREA
+  // =======================================================
+
+  const areaLabel =
+    area === 'video_editing'
+      ? 'Edición de Video'
+      : 'Marketing'
+
+
+  // =======================================================
   // PERMISO PARA EDITAR
   // =======================================================
 
@@ -422,8 +464,11 @@ export default function ActivitiesTable() {
     activity: any
   ) => {
 
-    // Hugo / cualquier ADMIN
-    // puede editar cualquier actividad
+    /*
+     * ADMIN:
+     *
+     * Puede editar cualquier actividad.
+     */
 
     if (
       user?.role === 'admin'
@@ -432,8 +477,12 @@ export default function ActivitiesTable() {
     }
 
 
-    // Executors solamente pueden
-    // editar actividades asignadas a ellos
+    /*
+     * EXECUTOR:
+     *
+     * Solamente puede editar
+     * actividades asignadas a él.
+     */
 
     if (
       user?.role === 'executor' &&
@@ -443,7 +492,61 @@ export default function ActivitiesTable() {
     }
 
 
-    // Viewers no pueden editar
+    return false
+  }
+
+
+  // =======================================================
+  // PERMISO PARA VER ACTIVIDAD
+  // =======================================================
+
+  const canSeeActivity = (
+    activity: any
+  ) => {
+
+    /*
+     * ADMIN:
+     *
+     * Ve absolutamente todo.
+     */
+
+    if (
+      user?.role === 'admin'
+    ) {
+      return true
+    }
+
+
+    /*
+     * VIEWER:
+     *
+     * Ve todas las actividades.
+     */
+
+    if (
+      user?.role === 'viewer'
+    ) {
+      return true
+    }
+
+
+    /*
+     * EXECUTOR:
+     *
+     * Solamente ve sus actividades.
+     */
+
+    if (
+      user?.role === 'executor'
+    ) {
+
+      return (
+        activity.assigned_to ===
+        user.id
+      )
+
+    }
+
 
     return false
   }
@@ -486,6 +589,7 @@ export default function ActivitiesTable() {
       setSelectedDate(
         getLocalDateString()
       )
+
     }
 
 
@@ -520,15 +624,48 @@ export default function ActivitiesTable() {
           .filter(
             (
               activity: any
-            ) =>
-              String(
-                activity.due_date ||
-                  ''
-              ).slice(
-                0,
-                10
-              ) ===
-              selectedDate
+            ) => {
+
+              /*
+               * FILTRO DE ÁREA
+               */
+
+              const matchesArea =
+                activity.area ===
+                area
+
+
+              /*
+               * FILTRO DE FECHA
+               */
+
+              const matchesDate =
+                String(
+                  activity.due_date ||
+                    ''
+                ).slice(
+                  0,
+                  10
+                ) ===
+                selectedDate
+
+
+              /*
+               * FILTRO DE USUARIO
+               */
+
+              const visible =
+                canSeeActivity(
+                  activity
+                )
+
+
+              return (
+                matchesArea &&
+                matchesDate &&
+                visible
+              )
+            }
           )
           .sort(
             (
@@ -558,6 +695,8 @@ export default function ActivitiesTable() {
       [
         activities,
         selectedDate,
+        area,
+        user,
       ]
     )
 
@@ -668,8 +807,28 @@ export default function ActivitiesTable() {
                   10
                 )
 
-              return date.startsWith(
-                selectedMonth
+
+              const matchesArea =
+                activity.area ===
+                area
+
+
+              const matchesMonth =
+                date.startsWith(
+                  selectedMonth
+                )
+
+
+              const visible =
+                canSeeActivity(
+                  activity
+                )
+
+
+              return (
+                matchesArea &&
+                matchesMonth &&
+                visible
               )
             }
           )
@@ -695,9 +854,11 @@ export default function ActivitiesTable() {
                 dateA !==
                 dateB
               ) {
+
                 return dateA.localeCompare(
                   dateB
                 )
+
               }
 
               return String(
@@ -716,6 +877,8 @@ export default function ActivitiesTable() {
       [
         activities,
         selectedMonth,
+        area,
+        user,
       ]
     )
 
@@ -737,17 +900,24 @@ export default function ActivitiesTable() {
             previous
           )
 
-        if (updating) {
+        if (
+          updating
+        ) {
+
           next.add(
             activityId
           )
+
         } else {
+
           next.delete(
             activityId
           )
+
         }
 
         return next
+
       }
     )
   }
@@ -776,6 +946,7 @@ export default function ActivitiesTable() {
             )
         )
 
+
       if (!activity) {
         return
       }
@@ -786,6 +957,7 @@ export default function ActivitiesTable() {
           activity
         )
       ) {
+
         alert(
           'No tienes permiso para modificar esta actividad.'
         )
@@ -799,7 +971,9 @@ export default function ActivitiesTable() {
 
 
       setActivityUpdating(
-        Number(activityId),
+        Number(
+          activityId
+        ),
         true
       )
 
@@ -811,11 +985,13 @@ export default function ActivitiesTable() {
 
 
         const updateData: any = {
+
           status:
             newStatus,
 
           updated_at:
             now,
+
         }
 
 
@@ -831,6 +1007,7 @@ export default function ActivitiesTable() {
 
           updateData.completed_at =
             null
+
         }
 
 
@@ -865,9 +1042,6 @@ export default function ActivitiesTable() {
         }
 
 
-        // Actualizar también el modal
-        // si está abierto
-
         if (
           selectedActivity &&
           Number(
@@ -881,10 +1055,13 @@ export default function ActivitiesTable() {
           setSelectedActivity(
             {
               ...selectedActivity,
+
               status:
                 newStatus,
+
               updated_at:
                 now,
+
               completed_at:
                 newStatus ===
                 'completed'
@@ -896,7 +1073,7 @@ export default function ActivitiesTable() {
 
 
         console.log(
-          '✅ Estado actualizado correctamente',
+          'Estado actualizado correctamente',
           {
             activityId,
             previousStatus,
@@ -919,9 +1096,12 @@ export default function ActivitiesTable() {
       } finally {
 
         setActivityUpdating(
-          Number(activityId),
+          Number(
+            activityId
+          ),
           false
         )
+
       }
     }
 
@@ -949,6 +1129,7 @@ export default function ActivitiesTable() {
             )
         )
 
+
       if (!activity) {
         return
       }
@@ -973,7 +1154,9 @@ export default function ActivitiesTable() {
 
 
       setActivityUpdating(
-        Number(activityId),
+        Number(
+          activityId
+        ),
         true
       )
 
@@ -1019,8 +1202,6 @@ export default function ActivitiesTable() {
         }
 
 
-        // Actualizar modal
-
         if (
           selectedActivity &&
           Number(
@@ -1034,17 +1215,20 @@ export default function ActivitiesTable() {
           setSelectedActivity(
             {
               ...selectedActivity,
+
               priority:
                 newPriority,
+
               updated_at:
                 now,
             }
           )
+
         }
 
 
         console.log(
-          '✅ Prioridad actualizada correctamente',
+          'Prioridad actualizada correctamente',
           {
             activityId,
             previousPriority,
@@ -1067,9 +1251,12 @@ export default function ActivitiesTable() {
       } finally {
 
         setActivityUpdating(
-          Number(activityId),
+          Number(
+            activityId
+          ),
           false
         )
+
       }
     }
 
@@ -1156,6 +1343,7 @@ export default function ActivitiesTable() {
           setSelectedActivity(
             null
           )
+
         }
 
       } catch (
@@ -1169,7 +1357,9 @@ export default function ActivitiesTable() {
         alert(
           'Ocurrió un error inesperado al eliminar la actividad.'
         )
+
       }
+
     }
 
 
@@ -1191,6 +1381,7 @@ export default function ActivitiesTable() {
       setSelectedActivity(
         activity
       )
+
     }
 
 
@@ -1206,6 +1397,7 @@ export default function ActivitiesTable() {
       setStatusFilter(
         filter
       )
+
     }
 
 
@@ -1217,19 +1409,33 @@ export default function ActivitiesTable() {
 
     return (
 
-      <div className="flex items-center justify-center py-12">
+      <div className="
+        flex
+        items-center
+        justify-center
+        py-12
+      ">
 
         <LoaderCircle
-          className="mr-2 animate-spin text-brand-orange"
+          className="
+            mr-2
+            animate-spin
+            text-brand-orange
+          "
           size={24}
         />
 
-        <p className="text-gray-500 dark:text-gray-400">
+        <p className="
+          text-gray-500
+          dark:text-gray-400
+        ">
           Cargando actividades...
         </p>
 
       </div>
+
     )
+
   }
 
 
@@ -1272,13 +1478,36 @@ export default function ActivitiesTable() {
           const priorityStyles =
             getPriorityStyles(
               activity.priority
-            )
+            ) || {
+
+              badge:
+                'bg-gray-100 text-gray-700',
+
+              label:
+                getPriorityLabel(
+                  activity.priority
+                ),
+
+            }
 
 
           const statusStyles =
             getStatusStyles(
               activity.status
-            )
+            ) || {
+
+              badge:
+                'bg-gray-100 text-gray-700',
+
+              dot:
+                'bg-gray-500',
+
+              label:
+                getStatusLabel(
+                  activity.status
+                ),
+
+            }
 
 
           return (
@@ -1298,17 +1527,35 @@ export default function ActivitiesTable() {
               `}
             >
 
-              {/* ACTIVIDAD */}
+              {/* =========================================
+                  ACTIVIDAD
+              ========================================= */}
 
               <td className="px-4 py-4">
 
-                <div className="flex items-start gap-3">
+                <div className="
+                  flex
+                  items-start
+                  gap-3
+                ">
 
                   {isNew && (
 
                     <div className="shrink-0">
 
-                      <div className="inline-flex items-center gap-1 rounded-full bg-blue-600 px-2 py-1 text-[10px] font-bold uppercase text-white">
+                      <div className="
+                        inline-flex
+                        items-center
+                        gap-1
+                        rounded-full
+                        bg-blue-600
+                        px-2
+                        py-1
+                        text-[10px]
+                        font-bold
+                        uppercase
+                        text-white
+                      ">
 
                         <Sparkles
                           size={11}
@@ -1319,12 +1566,18 @@ export default function ActivitiesTable() {
                       </div>
 
                     </div>
+
                   )}
 
 
                   <div className="min-w-0">
 
-                    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    <div className="
+                      text-sm
+                      font-semibold
+                      text-gray-900
+                      dark:text-gray-100
+                    ">
 
                       {
                         activity.title
@@ -1335,13 +1588,20 @@ export default function ActivitiesTable() {
 
                     {activity.description && (
 
-                      <div className="mt-1 line-clamp-2 text-xs text-gray-500 dark:text-gray-400">
+                      <div className="
+                        mt-1
+                        line-clamp-2
+                        text-xs
+                        text-gray-500
+                        dark:text-gray-400
+                      ">
 
                         {
                           activity.description
                         }
 
                       </div>
+
                     )}
 
 
@@ -1349,7 +1609,21 @@ export default function ActivitiesTable() {
                       activity.recurrence_type !==
                         'none' && (
 
-                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-1 text-[10px] font-semibold text-purple-700 dark:bg-purple-950/40 dark:text-purple-300">
+                      <div className="
+                        mt-2
+                        inline-flex
+                        items-center
+                        gap-1
+                        rounded-full
+                        bg-purple-100
+                        px-2
+                        py-1
+                        text-[10px]
+                        font-semibold
+                        text-purple-700
+                        dark:bg-purple-950/40
+                        dark:text-purple-300
+                      ">
 
                         <CalendarDays
                           size={11}
@@ -1382,6 +1656,7 @@ export default function ActivitiesTable() {
                           : ''}
 
                       </div>
+
                     )}
 
                   </div>
@@ -1391,9 +1666,17 @@ export default function ActivitiesTable() {
               </td>
 
 
-              {/* ASIGNADO */}
+              {/* =========================================
+                  ASIGNADO
+              ========================================= */}
 
-              <td className="px-4 py-4 text-sm text-gray-700 dark:text-gray-300">
+              <td className="
+                px-4
+                py-4
+                text-sm
+                text-gray-700
+                dark:text-gray-300
+              ">
 
                 {
                   activity.assigned_to_name ||
@@ -1404,11 +1687,17 @@ export default function ActivitiesTable() {
               </td>
 
 
-              {/* FECHA / HORA */}
+              {/* =========================================
+                  FECHA / HORA
+              ========================================= */}
 
               <td className="px-4 py-4">
 
-                <div className="text-sm text-gray-700 dark:text-gray-300">
+                <div className="
+                  text-sm
+                  text-gray-700
+                  dark:text-gray-300
+                ">
 
                   {
                     formatDate(
@@ -1421,7 +1710,14 @@ export default function ActivitiesTable() {
 
                 {activity.due_time && (
 
-                  <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                  <div className="
+                    mt-1
+                    flex
+                    items-center
+                    gap-1
+                    text-xs
+                    text-gray-500
+                  ">
 
                     <Clock
                       size={12}
@@ -1434,12 +1730,15 @@ export default function ActivitiesTable() {
                     }
 
                   </div>
+
                 )}
 
               </td>
 
 
-              {/* PRIORIDAD */}
+              {/* =========================================
+                  PRIORIDAD
+              ========================================= */}
 
               <td className="px-4 py-4">
 
@@ -1500,17 +1799,15 @@ export default function ActivitiesTable() {
 
                 ) : (
 
-                  <span
-                    className={`
-                      inline-flex
-                      rounded-full
-                      px-2.5
-                      py-1
-                      text-xs
-                      font-semibold
-                      ${priorityStyles.badge}
-                    `}
-                  >
+                  <span className={`
+                    inline-flex
+                    rounded-full
+                    px-2.5
+                    py-1
+                    text-xs
+                    font-semibold
+                    ${priorityStyles.badge}
+                  `}>
 
                     {
                       priorityStyles.label ||
@@ -1526,7 +1823,9 @@ export default function ActivitiesTable() {
               </td>
 
 
-              {/* ESTADO */}
+              {/* =========================================
+                  ESTADO
+              ========================================= */}
 
               <td className="px-4 py-4">
 
@@ -1587,28 +1886,24 @@ export default function ActivitiesTable() {
 
                 ) : (
 
-                  <span
-                    className={`
-                      inline-flex
-                      items-center
-                      gap-1.5
-                      rounded-full
-                      px-2.5
-                      py-1
-                      text-xs
-                      font-semibold
-                      ${statusStyles.badge}
-                    `}
-                  >
+                  <span className={`
+                    inline-flex
+                    items-center
+                    gap-1.5
+                    rounded-full
+                    px-2.5
+                    py-1
+                    text-xs
+                    font-semibold
+                    ${statusStyles.badge}
+                  `}>
 
-                    <span
-                      className={`
-                        h-1.5
-                        w-1.5
-                        rounded-full
-                        ${statusStyles.dot}
-                      `}
-                    />
+                    <span className={`
+                      h-1.5
+                      w-1.5
+                      rounded-full
+                      ${statusStyles.dot}
+                    `} />
 
                     {
                       statusStyles.label ||
@@ -1624,11 +1919,22 @@ export default function ActivitiesTable() {
               </td>
 
 
-              {/* ACCIONES */}
+              {/* =========================================
+                  ACCIONES
+              ========================================= */}
 
-              <td className="px-4 py-4 text-center">
+              <td className="
+                px-4
+                py-4
+                text-center
+              ">
 
-                <div className="flex items-center justify-center gap-3">
+                <div className="
+                  flex
+                  items-center
+                  justify-center
+                  gap-3
+                ">
 
                   <button
                     type="button"
@@ -1675,7 +1981,15 @@ export default function ActivitiesTable() {
                           activity.title
                         )
                       }
-                      className="inline-flex items-center gap-1 text-sm font-semibold text-red-500 hover:text-red-600"
+                      className="
+                        inline-flex
+                        items-center
+                        gap-1
+                        text-sm
+                        font-semibold
+                        text-red-500
+                        hover:text-red-600
+                      "
                     >
 
                       <Trash2
@@ -1693,9 +2007,12 @@ export default function ActivitiesTable() {
               </td>
 
             </tr>
+
           )
+
         }
       )
+
     }
 
 
@@ -1715,58 +2032,140 @@ export default function ActivitiesTable() {
 
         return (
 
-          <div className="rounded-xl border border-gray-200 bg-surface p-8 text-center dark:border-gray-800">
+          <div className="
+            rounded-xl
+            border
+            border-gray-200
+            bg-surface
+            p-8
+            text-center
+            dark:border-gray-800
+          ">
 
             <div className="mb-2 text-3xl">
               📋
             </div>
 
-            <p className="font-semibold text-gray-900 dark:text-white">
+            <p className="
+              font-semibold
+              text-gray-900
+              dark:text-white
+            ">
               No hay actividades
             </p>
 
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="
+              mt-1
+              text-sm
+              text-gray-500
+              dark:text-gray-400
+            ">
+
               {
                 emptyMessage
               }
+
             </p>
 
           </div>
+
         )
+
       }
 
 
       return (
 
-        <div className="w-full overflow-x-auto rounded-xl border border-gray-200 bg-surface shadow-sm dark:border-gray-800">
+        <div className="
+          w-full
+          overflow-x-auto
+          rounded-xl
+          border
+          border-gray-200
+          bg-surface
+          shadow-sm
+          dark:border-gray-800
+        ">
 
           <table className="w-full">
 
-            <thead className="border-b border-gray-200 dark:border-gray-800">
+            <thead className="
+              border-b
+              border-gray-200
+              dark:border-gray-800
+            ">
 
               <tr>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
+                <th className="
+                  px-4
+                  py-3
+                  text-left
+                  text-xs
+                  font-semibold
+                  uppercase
+                  text-gray-500
+                ">
                   Actividad
                 </th>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
+                <th className="
+                  px-4
+                  py-3
+                  text-left
+                  text-xs
+                  font-semibold
+                  uppercase
+                  text-gray-500
+                ">
                   Asignado a
                 </th>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
+                <th className="
+                  px-4
+                  py-3
+                  text-left
+                  text-xs
+                  font-semibold
+                  uppercase
+                  text-gray-500
+                ">
                   Fecha / hora
                 </th>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
+                <th className="
+                  px-4
+                  py-3
+                  text-left
+                  text-xs
+                  font-semibold
+                  uppercase
+                  text-gray-500
+                ">
                   Prioridad
                 </th>
 
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-gray-500">
+                <th className="
+                  px-4
+                  py-3
+                  text-left
+                  text-xs
+                  font-semibold
+                  uppercase
+                  text-gray-500
+                ">
                   Estado
                 </th>
 
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase text-gray-500">
+                <th className="
+                  px-4
+                  py-3
+                  text-center
+                  text-xs
+                  font-semibold
+                  uppercase
+                  text-gray-500
+                ">
                   Acciones
                 </th>
 
@@ -1775,7 +2174,11 @@ export default function ActivitiesTable() {
             </thead>
 
 
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+            <tbody className="
+              divide-y
+              divide-gray-200
+              dark:divide-gray-800
+            ">
 
               {
                 renderRows(
@@ -1788,7 +2191,9 @@ export default function ActivitiesTable() {
           </table>
 
         </div>
+
       )
+
     }
 
 
@@ -1800,46 +2205,100 @@ export default function ActivitiesTable() {
 
     <div className="space-y-8">
 
+
       {/* =================================================
           SELECTOR DE FECHA
       ================================================= */}
 
       <section>
 
-        <div className="rounded-2xl border border-gray-200 bg-surface p-4 shadow-sm dark:border-gray-800">
+        <div className="
+          rounded-2xl
+          border
+          border-gray-200
+          bg-surface
+          p-4
+          shadow-sm
+          dark:border-gray-800
+        ">
 
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="
+            flex
+            flex-col
+            gap-4
+            lg:flex-row
+            lg:items-center
+            lg:justify-between
+          ">
 
             <div>
 
-              <div className="flex items-center gap-2">
+              <div className="
+                flex
+                items-center
+                gap-2
+              ">
 
                 <CalendarDays
                   size={20}
-                  className="text-brand-orange"
+                  className="
+                    text-brand-orange
+                  "
                 />
 
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">
-                  Actividades
+                <h2 className="
+                  text-base
+                  font-bold
+                  text-gray-900
+                  dark:text-white
+                ">
+                  {areaLabel} - Actividades
                 </h2>
 
               </div>
 
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p className="
+                mt-1
+                text-xs
+                text-gray-500
+                dark:text-gray-400
+              ">
                 Consulta actividades de cualquier día.
               </p>
 
             </div>
 
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="
+              flex
+              flex-wrap
+              items-center
+              gap-2
+            ">
 
               <button
                 type="button"
                 onClick={() =>
                   changeDay(-1)
                 }
-                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                className="
+                  inline-flex
+                  items-center
+                  gap-1
+                  rounded-lg
+                  border
+                  border-gray-200
+                  px-3
+                  py-2
+                  text-sm
+                  font-medium
+                  text-gray-700
+                  transition
+                  hover:bg-gray-100
+                  dark:border-gray-700
+                  dark:text-gray-300
+                  dark:hover:bg-gray-800
+                "
               >
 
                 <ChevronLeft
@@ -1869,7 +2328,23 @@ export default function ActivitiesTable() {
                       e.target.value
                     )
                   }
-                  className="rounded-lg border border-gray-200 bg-background px-3 py-2 text-sm font-medium text-gray-900 outline-none focus:border-brand-orange focus:ring-2 focus:ring-brand-orange/20 dark:border-gray-700 dark:text-white"
+                  className="
+                    rounded-lg
+                    border
+                    border-gray-200
+                    bg-background
+                    px-3
+                    py-2
+                    text-sm
+                    font-medium
+                    text-gray-900
+                    outline-none
+                    focus:border-brand-orange
+                    focus:ring-2
+                    focus:ring-brand-orange/20
+                    dark:border-gray-700
+                    dark:text-white
+                  "
                 />
 
               </label>
@@ -1904,7 +2379,24 @@ export default function ActivitiesTable() {
                 onClick={() =>
                   changeDay(1)
                 }
-                className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                className="
+                  inline-flex
+                  items-center
+                  gap-1
+                  rounded-lg
+                  border
+                  border-gray-200
+                  px-3
+                  py-2
+                  text-sm
+                  font-medium
+                  text-gray-700
+                  transition
+                  hover:bg-gray-100
+                  dark:border-gray-700
+                  dark:text-gray-300
+                  dark:hover:bg-gray-800
+                "
               >
 
                 Siguiente
@@ -1930,7 +2422,13 @@ export default function ActivitiesTable() {
 
       <section>
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="
+          grid
+          grid-cols-2
+          gap-4
+          md:grid-cols-4
+        ">
+
 
           {/* TOTAL */}
 
@@ -1959,21 +2457,38 @@ export default function ActivitiesTable() {
             `}
           >
 
-            <div className="flex items-center justify-between">
+            <div className="
+              flex
+              items-center
+              justify-between
+            ">
 
               <div>
 
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="
+                  text-sm
+                  text-gray-500
+                  dark:text-gray-400
+                ">
                   Total
                 </p>
 
-                <p className="mt-1 text-3xl font-bold text-blue-500">
+                <p className="
+                  mt-1
+                  text-3xl
+                  font-bold
+                  text-blue-500
+                ">
                   {
                     dayStats.total
                   }
                 </p>
 
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="
+                  mt-1
+                  text-xs
+                  text-gray-400
+                ">
                   {
                     statusFilter ===
                     'all'
@@ -1984,8 +2499,11 @@ export default function ActivitiesTable() {
 
               </div>
 
-
-              <div className="rounded-lg bg-blue-500/10 p-2">
+              <div className="
+                rounded-lg
+                bg-blue-500/10
+                p-2
+              ">
 
                 <CalendarDays
                   size={20}
@@ -2026,21 +2544,38 @@ export default function ActivitiesTable() {
             `}
           >
 
-            <div className="flex items-center justify-between">
+            <div className="
+              flex
+              items-center
+              justify-between
+            ">
 
               <div>
 
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="
+                  text-sm
+                  text-gray-500
+                  dark:text-gray-400
+                ">
                   Pendientes
                 </p>
 
-                <p className="mt-1 text-3xl font-bold text-orange-500">
+                <p className="
+                  mt-1
+                  text-3xl
+                  font-bold
+                  text-orange-500
+                ">
                   {
                     dayStats.pending
                   }
                 </p>
 
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="
+                  mt-1
+                  text-xs
+                  text-gray-400
+                ">
                   {
                     statusFilter ===
                     'pending'
@@ -2051,8 +2586,11 @@ export default function ActivitiesTable() {
 
               </div>
 
-
-              <div className="rounded-lg bg-orange-500/10 p-2">
+              <div className="
+                rounded-lg
+                bg-orange-500/10
+                p-2
+              ">
 
                 <Circle
                   size={20}
@@ -2093,21 +2631,38 @@ export default function ActivitiesTable() {
             `}
           >
 
-            <div className="flex items-center justify-between">
+            <div className="
+              flex
+              items-center
+              justify-between
+            ">
 
               <div>
 
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="
+                  text-sm
+                  text-gray-500
+                  dark:text-gray-400
+                ">
                   En progreso
                 </p>
 
-                <p className="mt-1 text-3xl font-bold text-yellow-500">
+                <p className="
+                  mt-1
+                  text-3xl
+                  font-bold
+                  text-yellow-500
+                ">
                   {
                     dayStats.inProgress
                   }
                 </p>
 
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="
+                  mt-1
+                  text-xs
+                  text-gray-400
+                ">
                   {
                     statusFilter ===
                     'in_progress'
@@ -2118,8 +2673,11 @@ export default function ActivitiesTable() {
 
               </div>
 
-
-              <div className="rounded-lg bg-yellow-500/10 p-2">
+              <div className="
+                rounded-lg
+                bg-yellow-500/10
+                p-2
+              ">
 
                 <LoaderCircle
                   size={20}
@@ -2160,21 +2718,38 @@ export default function ActivitiesTable() {
             `}
           >
 
-            <div className="flex items-center justify-between">
+            <div className="
+              flex
+              items-center
+              justify-between
+            ">
 
               <div>
 
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="
+                  text-sm
+                  text-gray-500
+                  dark:text-gray-400
+                ">
                   Completadas
                 </p>
 
-                <p className="mt-1 text-3xl font-bold text-green-500">
+                <p className="
+                  mt-1
+                  text-3xl
+                  font-bold
+                  text-green-500
+                ">
                   {
                     dayStats.completed
                   }
                 </p>
 
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="
+                  mt-1
+                  text-xs
+                  text-gray-400
+                ">
                   {
                     statusFilter ===
                     'completed'
@@ -2185,8 +2760,11 @@ export default function ActivitiesTable() {
 
               </div>
 
-
-              <div className="rounded-lg bg-green-500/10 p-2">
+              <div className="
+                rounded-lg
+                bg-green-500/10
+                p-2
+              ">
 
                 <CheckCircle2
                   size={20}
@@ -2211,13 +2789,31 @@ export default function ActivitiesTable() {
       {statusFilter !==
         'all' && (
 
-        <div className="flex items-center justify-between rounded-lg border border-brand-orange/20 bg-brand-orange/5 px-4 py-3">
+        <div className="
+          flex
+          items-center
+          justify-between
+          rounded-lg
+          border
+          border-brand-orange/20
+          bg-brand-orange/5
+          px-4
+          py-3
+        ">
 
-          <div className="text-sm text-gray-700 dark:text-gray-300">
+          <div className="
+            text-sm
+            text-gray-700
+            dark:text-gray-300
+          ">
 
             Mostrando únicamente:
 
-            <span className="ml-1 font-bold text-brand-orange">
+            <span className="
+              ml-1
+              font-bold
+              text-brand-orange
+            ">
 
               {statusFilter ===
                 'pending' &&
@@ -2243,7 +2839,12 @@ export default function ActivitiesTable() {
                 'all'
               )
             }
-            className="text-sm font-semibold text-brand-orange hover:underline"
+            className="
+              text-sm
+              font-semibold
+              text-brand-orange
+              hover:underline
+            "
           >
             Ver todas
           </button>
@@ -2259,24 +2860,41 @@ export default function ActivitiesTable() {
 
       <section>
 
-        <div className="mb-4 flex items-center justify-between">
+        <div className="
+          mb-4
+          flex
+          items-center
+          justify-between
+        ">
 
           <div>
 
-            <div className="flex items-center gap-2">
+            <div className="
+              flex
+              items-center
+              gap-2
+            ">
 
               <CalendarDays
                 size={20}
-                className="text-brand-orange"
+                className="
+                  text-brand-orange
+                "
               />
 
-              <h2 className="text-xl font-bold capitalize text-gray-900 dark:text-white">
+              <h2 className="
+                text-xl
+                font-bold
+                capitalize
+                text-gray-900
+                dark:text-white
+              ">
 
                 {
                   selectedDate ===
                   today
-                    ? 'Actividades de hoy'
-                    : 'Actividades del día'
+                    ? `Actividades de hoy - ${areaLabel}`
+                    : `Actividades del día - ${areaLabel}`
                 }
 
               </h2>
@@ -2284,7 +2902,13 @@ export default function ActivitiesTable() {
             </div>
 
 
-            <p className="mt-1 text-sm capitalize text-gray-500 dark:text-gray-400">
+            <p className="
+              mt-1
+              text-sm
+              capitalize
+              text-gray-500
+              dark:text-gray-400
+            ">
 
               {
                 formatLongDate(
@@ -2297,7 +2921,15 @@ export default function ActivitiesTable() {
           </div>
 
 
-          <div className="rounded-full bg-brand-orange/10 px-3 py-1 text-sm font-semibold text-brand-orange">
+          <div className="
+            rounded-full
+            bg-brand-orange/10
+            px-3
+            py-1
+            text-sm
+            font-semibold
+            text-brand-orange
+          ">
 
             {
               filteredDayActivities.length
@@ -2320,15 +2952,23 @@ export default function ActivitiesTable() {
         {
           renderTable(
             filteredDayActivities,
+
             statusFilter ===
               'all'
+
               ? (
+
                   selectedDate ===
                   today
-                    ? 'No tienes actividades programadas para hoy.'
-                    : `No tienes actividades programadas para el ${formatDate(selectedDate)}.`
+
+                    ? `No tienes actividades de ${areaLabel} programadas para hoy.`
+
+                    : `No tienes actividades de ${areaLabel} programadas para el ${formatDate(selectedDate)}.`
+
                 )
+
               : `No hay actividades con estado "${getStatusLabel(statusFilter)}" para este día.`
+
           )
         }
 
@@ -2341,20 +2981,41 @@ export default function ActivitiesTable() {
 
       <section>
 
-        <div className="mb-4 flex items-center justify-between">
+        <div className="
+          mb-4
+          flex
+          items-center
+          justify-between
+        ">
 
           <div>
 
-            <div className="flex items-center gap-2">
+            <div className="
+              flex
+              items-center
+              gap-2
+            ">
 
               <CalendarDays
                 size={20}
-                className="text-purple-500"
+                className="
+                  text-purple-500
+                "
               />
 
-              <h2 className="text-xl font-bold capitalize text-gray-900 dark:text-white">
+              <h2 className="
+                text-xl
+                font-bold
+                capitalize
+                text-gray-900
+                dark:text-white
+              ">
 
                 Todas las actividades de{' '}
+
+                {areaLabel}
+
+                {' · '}
 
                 {
                   formatMonthTitle(
@@ -2367,7 +3028,12 @@ export default function ActivitiesTable() {
             </div>
 
 
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="
+              mt-1
+              text-sm
+              text-gray-500
+              dark:text-gray-400
+            ">
 
               Todas las actividades programadas durante este mes.
 
@@ -2376,7 +3042,16 @@ export default function ActivitiesTable() {
           </div>
 
 
-          <div className="rounded-full bg-purple-500/10 px-3 py-1 text-sm font-semibold text-purple-600 dark:text-purple-400">
+          <div className="
+            rounded-full
+            bg-purple-500/10
+            px-3
+            py-1
+            text-sm
+            font-semibold
+            text-purple-600
+            dark:text-purple-400
+          ">
 
             {
               monthActivities.length
@@ -2390,7 +3065,9 @@ export default function ActivitiesTable() {
         {
           renderTable(
             monthActivities,
-            'No hay actividades programadas durante este mes.'
+
+            `No hay actividades de ${areaLabel} programadas durante este mes.`
+
           )
         }
 
@@ -2425,5 +3102,6 @@ export default function ActivitiesTable() {
       }
 
     </div>
+
   )
 }

@@ -22,12 +22,20 @@ import {
 } from '@/lib/supabase/client'
 
 
+// =======================================================
+// USUARIO
+// =======================================================
+
 interface UserProfile {
   id: string
   full_name: string
   role: string
 }
 
+
+// =======================================================
+// PROPS
+// =======================================================
 
 interface CreateActivityIdeaModalProps {
 
@@ -40,6 +48,10 @@ interface CreateActivityIdeaModalProps {
 }
 
 
+// =======================================================
+// COMPONENTE
+// =======================================================
+
 export default function CreateActivityIdeaModal({
 
   isOpen,
@@ -50,30 +62,40 @@ export default function CreateActivityIdeaModal({
 
 }: CreateActivityIdeaModalProps) {
 
+
+  // =====================================================
+  // ESTADOS
+  // =====================================================
+
   const [
     title,
     setTitle,
   ] = useState('')
+
 
   const [
     description,
     setDescription,
   ] = useState('')
 
+
   const [
     assignedTo,
     setAssignedTo,
   ] = useState('')
+
 
   const [
     dueDate,
     setDueDate,
   ] = useState('')
 
+
   const [
     dueTime,
     setDueTime,
   ] = useState('')
+
 
   const [
     priority,
@@ -83,11 +105,13 @@ export default function CreateActivityIdeaModal({
       'medium',
     )
 
+
   const [
     users,
     setUsers,
   ] =
     useState<UserProfile[]>([])
+
 
   const [
     loadingUsers,
@@ -95,11 +119,13 @@ export default function CreateActivityIdeaModal({
   ] =
     useState(false)
 
+
   const [
     saving,
     setSaving,
   ] =
     useState(false)
+
 
   const [
     error,
@@ -108,9 +134,9 @@ export default function CreateActivityIdeaModal({
     useState<string | null>(null)
 
 
-  // =======================================================
+  // =====================================================
   // CARGAR USUARIOS
-  // =======================================================
+  // =====================================================
 
   useEffect(
     () => {
@@ -119,6 +145,7 @@ export default function CreateActivityIdeaModal({
         return
       }
 
+
       const loadUsers =
         async () => {
 
@@ -126,8 +153,12 @@ export default function CreateActivityIdeaModal({
 
             setLoadingUsers(true)
 
+            setError(null)
+
+
             const supabase =
               createClient()
+
 
             const {
               data,
@@ -142,21 +173,36 @@ export default function CreateActivityIdeaModal({
                 )
                 .order(
                   'full_name',
+                  {
+                    ascending: true,
+                  },
                 )
+
 
             if (error) {
               throw error
             }
 
+
             setUsers(
               data || [],
             )
 
+
           } catch (err) {
 
             console.error(
+              'Error cargando usuarios:',
               err,
             )
+
+
+            setError(
+              err instanceof Error
+                ? err.message
+                : 'No se pudieron cargar los usuarios.',
+            )
+
 
           } finally {
 
@@ -168,6 +214,7 @@ export default function CreateActivityIdeaModal({
 
         }
 
+
       loadUsers()
 
     },
@@ -177,27 +224,33 @@ export default function CreateActivityIdeaModal({
   )
 
 
-  // =======================================================
+  // =====================================================
   // RESET
-  // =======================================================
+  // =====================================================
 
   const resetForm =
     () => {
 
       setTitle('')
+
       setDescription('')
+
       setAssignedTo('')
+
       setDueDate('')
+
       setDueTime('')
+
       setPriority('medium')
+
       setError(null)
 
     }
 
 
-  // =======================================================
+  // =====================================================
   // CERRAR
-  // =======================================================
+  // =====================================================
 
   const handleClose =
     () => {
@@ -206,6 +259,7 @@ export default function CreateActivityIdeaModal({
         return
       }
 
+
       resetForm()
 
       onClose()
@@ -213,9 +267,9 @@ export default function CreateActivityIdeaModal({
     }
 
 
-  // =======================================================
+  // =====================================================
   // GUARDAR
-  // =======================================================
+  // =====================================================
 
   const handleSubmit =
     async (
@@ -223,6 +277,11 @@ export default function CreateActivityIdeaModal({
     ) => {
 
       event.preventDefault()
+
+
+      // -------------------------------------------------
+      // VALIDAR TÍTULO
+      // -------------------------------------------------
 
       if (!title.trim()) {
 
@@ -234,16 +293,25 @@ export default function CreateActivityIdeaModal({
 
       }
 
+
       try {
 
         setSaving(true)
+
         setError(null)
+
+
+        // -------------------------------------------------
+        // CREAR IDEA
+        // -------------------------------------------------
 
         await createActivityIdea({
 
-          title,
+          title:
+            title.trim(),
 
-          description,
+          description:
+            description.trim(),
 
           assigned_to:
             assignedTo ||
@@ -261,9 +329,27 @@ export default function CreateActivityIdeaModal({
 
         })
 
+
+        // -------------------------------------------------
+        // LIMPIAR
+        // -------------------------------------------------
+
         resetForm()
 
+
+        // -------------------------------------------------
+        // ACTUALIZAR LISTA
+        // -------------------------------------------------
+
         onSuccess()
+
+
+        // -------------------------------------------------
+        // CERRAR MODAL
+        // -------------------------------------------------
+
+        onClose()
+
 
       } catch (err) {
 
@@ -272,11 +358,13 @@ export default function CreateActivityIdeaModal({
           err,
         )
 
+
         setError(
           err instanceof Error
             ? err.message
             : 'No se pudo crear la idea.',
         )
+
 
       } finally {
 
@@ -287,10 +375,18 @@ export default function CreateActivityIdeaModal({
     }
 
 
+  // =====================================================
+  // NO MOSTRAR
+  // =====================================================
+
   if (!isOpen) {
     return null
   }
 
+
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
 
@@ -306,12 +402,15 @@ export default function CreateActivityIdeaModal({
       <div
         className="
           w-full max-w-lg
+          max-h-[92vh]
+          overflow-y-auto
           rounded-2xl
           bg-white
           shadow-2xl
           dark:bg-gray-900
         "
       >
+
 
         {/* =================================================
             HEADER
@@ -350,6 +449,7 @@ export default function CreateActivityIdeaModal({
 
             </div>
 
+
             <div>
 
               <h2
@@ -361,6 +461,7 @@ export default function CreateActivityIdeaModal({
               >
                 Nueva idea
               </h2>
+
 
               <p
                 className="
@@ -382,12 +483,20 @@ export default function CreateActivityIdeaModal({
             onClick={
               handleClose
             }
+            disabled={
+              saving
+            }
             className="
               rounded-lg
               p-2
               text-gray-500
               hover:bg-gray-100
+              hover:text-gray-900
+              disabled:cursor-not-allowed
+              disabled:opacity-50
+              dark:text-gray-400
               dark:hover:bg-gray-800
+              dark:hover:text-white
             "
           >
 
@@ -408,10 +517,16 @@ export default function CreateActivityIdeaModal({
           onSubmit={
             handleSubmit
           }
-          className="space-y-4 p-6"
+          className="
+            space-y-4
+            p-6
+          "
         >
 
-          {/* TÍTULO */}
+
+          {/* =================================================
+              TÍTULO
+          ================================================= */}
 
           <div>
 
@@ -426,6 +541,7 @@ export default function CreateActivityIdeaModal({
               Título
             </label>
 
+
             <input
               value={
                 title
@@ -435,6 +551,9 @@ export default function CreateActivityIdeaModal({
                   setTitle(
                     event.target.value,
                   )
+              }
+              disabled={
+                saving
               }
               placeholder="Ej. Grabar video para campaña"
               className="
@@ -446,6 +565,8 @@ export default function CreateActivityIdeaModal({
                 focus:border-amber-500
                 focus:ring-2
                 focus:ring-amber-500/20
+                disabled:cursor-not-allowed
+                disabled:opacity-60
                 dark:border-gray-700
                 dark:bg-gray-800
                 dark:text-white
@@ -455,7 +576,9 @@ export default function CreateActivityIdeaModal({
           </div>
 
 
-          {/* DESCRIPCIÓN */}
+          {/* =================================================
+              DESCRIPCIÓN
+          ================================================= */}
 
           <div>
 
@@ -470,6 +593,7 @@ export default function CreateActivityIdeaModal({
               Descripción
             </label>
 
+
             <textarea
               value={
                 description
@@ -479,6 +603,9 @@ export default function CreateActivityIdeaModal({
                   setDescription(
                     event.target.value,
                   )
+              }
+              disabled={
+                saving
               }
               rows={4}
               placeholder="Explica qué quieres realizar..."
@@ -492,6 +619,8 @@ export default function CreateActivityIdeaModal({
                 focus:border-amber-500
                 focus:ring-2
                 focus:ring-amber-500/20
+                disabled:cursor-not-allowed
+                disabled:opacity-60
                 dark:border-gray-700
                 dark:bg-gray-800
                 dark:text-white
@@ -501,7 +630,9 @@ export default function CreateActivityIdeaModal({
           </div>
 
 
-          {/* ASIGNAR */}
+          {/* =================================================
+              ASIGNAR / PROPONER PARA
+          ================================================= */}
 
           <div>
 
@@ -516,6 +647,7 @@ export default function CreateActivityIdeaModal({
               Proponer para
             </label>
 
+
             <select
               value={
                 assignedTo
@@ -527,13 +659,20 @@ export default function CreateActivityIdeaModal({
                   )
               }
               disabled={
-                loadingUsers
+                loadingUsers ||
+                saving
               }
               className="
                 w-full rounded-lg
                 border border-gray-300
                 bg-white
                 px-3 py-2
+                outline-none
+                focus:border-amber-500
+                focus:ring-2
+                focus:ring-amber-500/20
+                disabled:cursor-not-allowed
+                disabled:opacity-60
                 dark:border-gray-700
                 dark:bg-gray-800
                 dark:text-white
@@ -541,8 +680,11 @@ export default function CreateActivityIdeaModal({
             >
 
               <option value="">
-                Sin asignar
+                {loadingUsers
+                  ? 'Cargando usuarios...'
+                  : 'Sin asignar'}
               </option>
+
 
               {users.map(
                 (user) => (
@@ -563,10 +705,24 @@ export default function CreateActivityIdeaModal({
 
             </select>
 
+
+            <p
+              className="
+                mt-1
+                text-xs
+                text-gray-400
+                dark:text-gray-500
+              "
+            >
+              Puedes dejarla sin asignar para que Hugo decida después.
+            </p>
+
           </div>
 
 
-          {/* FECHA / HORA */}
+          {/* =================================================
+              FECHA / HORA
+          ================================================= */}
 
           <div
             className="
@@ -574,6 +730,9 @@ export default function CreateActivityIdeaModal({
               gap-3
             "
           >
+
+
+            {/* FECHA */}
 
             <div>
 
@@ -588,6 +747,7 @@ export default function CreateActivityIdeaModal({
                 Fecha propuesta
               </label>
 
+
               <input
                 type="date"
                 value={
@@ -599,11 +759,20 @@ export default function CreateActivityIdeaModal({
                       event.target.value,
                     )
                 }
+                disabled={
+                  saving
+                }
                 className="
                   w-full rounded-lg
                   border border-gray-300
                   bg-white
                   px-3 py-2
+                  outline-none
+                  focus:border-amber-500
+                  focus:ring-2
+                  focus:ring-amber-500/20
+                  disabled:cursor-not-allowed
+                  disabled:opacity-60
                   dark:border-gray-700
                   dark:bg-gray-800
                   dark:text-white
@@ -612,6 +781,8 @@ export default function CreateActivityIdeaModal({
 
             </div>
 
+
+            {/* HORA */}
 
             <div>
 
@@ -626,6 +797,7 @@ export default function CreateActivityIdeaModal({
                 Hora propuesta
               </label>
 
+
               <input
                 type="time"
                 value={
@@ -637,11 +809,20 @@ export default function CreateActivityIdeaModal({
                       event.target.value,
                     )
                 }
+                disabled={
+                  saving
+                }
                 className="
                   w-full rounded-lg
                   border border-gray-300
                   bg-white
                   px-3 py-2
+                  outline-none
+                  focus:border-amber-500
+                  focus:ring-2
+                  focus:ring-amber-500/20
+                  disabled:cursor-not-allowed
+                  disabled:opacity-60
                   dark:border-gray-700
                   dark:bg-gray-800
                   dark:text-white
@@ -653,7 +834,9 @@ export default function CreateActivityIdeaModal({
           </div>
 
 
-          {/* PRIORIDAD */}
+          {/* =================================================
+              PRIORIDAD
+          ================================================= */}
 
           <div>
 
@@ -668,6 +851,7 @@ export default function CreateActivityIdeaModal({
               Prioridad
             </label>
 
+
             <select
               value={
                 priority
@@ -678,11 +862,20 @@ export default function CreateActivityIdeaModal({
                     event.target.value as ActivityIdeaPriority,
                   )
               }
+              disabled={
+                saving
+              }
               className="
                 w-full rounded-lg
                 border border-gray-300
                 bg-white
                 px-3 py-2
+                outline-none
+                focus:border-amber-500
+                focus:ring-2
+                focus:ring-amber-500/20
+                disabled:cursor-not-allowed
+                disabled:opacity-60
                 dark:border-gray-700
                 dark:bg-gray-800
                 dark:text-white
@@ -710,28 +903,37 @@ export default function CreateActivityIdeaModal({
           </div>
 
 
-          {/* ERROR */}
+          {/* =================================================
+              ERROR
+          ================================================= */}
 
           {error && (
 
             <div
               className="
                 rounded-lg
+                border
+                border-red-200
                 bg-red-50
                 p-3
                 text-sm
                 text-red-700
+                dark:border-red-800
                 dark:bg-red-900/20
                 dark:text-red-400
               "
             >
+
               {error}
+
             </div>
 
           )}
 
 
-          {/* BOTONES */}
+          {/* =================================================
+              BOTONES
+          ================================================= */}
 
           <div
             className="
@@ -740,6 +942,9 @@ export default function CreateActivityIdeaModal({
               pt-2
             "
           >
+
+
+            {/* CANCELAR */}
 
             <button
               type="button"
@@ -756,7 +961,10 @@ export default function CreateActivityIdeaModal({
                 px-4 py-2
                 font-semibold
                 text-gray-700
+                transition
                 hover:bg-gray-50
+                disabled:cursor-not-allowed
+                disabled:opacity-50
                 dark:border-gray-700
                 dark:text-gray-300
                 dark:hover:bg-gray-800
@@ -766,10 +974,13 @@ export default function CreateActivityIdeaModal({
             </button>
 
 
+            {/* ENVIAR */}
+
             <button
               type="submit"
               disabled={
-                saving
+                saving ||
+                !title.trim()
               }
               className="
                 flex items-center
@@ -779,6 +990,7 @@ export default function CreateActivityIdeaModal({
                 px-4 py-2
                 font-semibold
                 text-white
+                transition
                 hover:bg-amber-600
                 disabled:cursor-not-allowed
                 disabled:opacity-60
@@ -793,6 +1005,7 @@ export default function CreateActivityIdeaModal({
                 />
 
               )}
+
 
               {saving
                 ? 'Enviando...'
@@ -809,5 +1022,4 @@ export default function CreateActivityIdeaModal({
     </div>
 
   )
-
 }

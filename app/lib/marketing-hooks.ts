@@ -113,12 +113,15 @@ export const useCurrentUser = () => {
 //
 // Incluye:
 //
-// - Actividades
+// - Todas las actividades
 // - Nombre de usuarios
 // - Realtime
 // - Actividades nuevas
 // - markActivityAsSeen
 //
+// IMPORTANTE:
+// No recibe area.
+// El filtrado por area se hace en ActivitiesTable.
 // =========================================================
 
 export const useActivities = () => {
@@ -146,7 +149,6 @@ export const useActivities = () => {
   const supabase =
     createClient()
 
-
   useEffect(() => {
 
     if (
@@ -157,7 +159,6 @@ export const useActivities = () => {
     }
 
     let isActive = true
-
 
     // ===================================================
     // CARGAR ACTIVIDADES
@@ -186,7 +187,6 @@ export const useActivities = () => {
                 }
               )
 
-
           // ------------------------------------------------
           // EXECUTOR
           // ------------------------------------------------
@@ -201,9 +201,7 @@ export const useActivities = () => {
                 'assigned_to',
                 user.id
               )
-
           }
-
 
           const [
             activitiesResult,
@@ -223,11 +221,9 @@ export const useActivities = () => {
 
             ])
 
-
           if (!isActive) {
             return
           }
-
 
           const {
             data,
@@ -240,7 +236,6 @@ export const useActivities = () => {
           } =
             profilesResult
 
-
           if (error) {
 
             console.error(
@@ -250,7 +245,6 @@ export const useActivities = () => {
 
             return
           }
-
 
           // ------------------------------------------------
           // MAPA DE USUARIOS
@@ -266,7 +260,6 @@ export const useActivities = () => {
                   ]
                 )
             )
-
 
           // ------------------------------------------------
           // AGREGAR NOMBRES
@@ -303,11 +296,9 @@ export const useActivities = () => {
               })
             )
 
-
           if (!isActive) {
             return
           }
-
 
           setActivities(
             activitiesWithNames
@@ -329,13 +320,11 @@ export const useActivities = () => {
         }
       }
 
-
     // ===================================================
     // CARGA INICIAL
     // ===================================================
 
     fetchActivities()
-
 
     // ===================================================
     // REALTIME
@@ -344,12 +333,10 @@ export const useActivities = () => {
     const channelName =
       `activities_realtime_${user.id}_${Date.now()}`
 
-
     const channel =
       supabase.channel(
         channelName
       )
-
 
     channel.on(
       'postgres_changes',
@@ -364,13 +351,11 @@ export const useActivities = () => {
           return
         }
 
-
         console.log(
           '🔔 Cambio Realtime:',
           payload.eventType,
           payload
         )
-
 
         // ===============================================
         // INSERT
@@ -384,7 +369,6 @@ export const useActivities = () => {
           const newActivity =
             payload.new as any
 
-
           if (
             user.role ===
               'executor' &&
@@ -397,12 +381,10 @@ export const useActivities = () => {
             return
           }
 
-
           const newId =
             Number(
               newActivity.id
             )
-
 
           setNewActivityIds(
             (previous) => {
@@ -421,9 +403,7 @@ export const useActivities = () => {
               ]
             }
           )
-
         }
-
 
         // ===============================================
         // UPDATE
@@ -440,7 +420,6 @@ export const useActivities = () => {
           const updatedActivity =
             payload.new as any
 
-
           if (
             user.role ===
             'executor'
@@ -454,7 +433,6 @@ export const useActivities = () => {
               updatedActivity?.assigned_to ===
               user.id
 
-
             if (
               !wasAssigned &&
               isAssigned
@@ -464,7 +442,6 @@ export const useActivities = () => {
                 Number(
                   updatedActivity.id
                 )
-
 
               setNewActivityIds(
                 (previous) => {
@@ -483,13 +460,9 @@ export const useActivities = () => {
                   ]
                 }
               )
-
             }
-
           }
-
         }
-
 
         // ===============================================
         // DELETE
@@ -508,7 +481,6 @@ export const useActivities = () => {
               deleted.id
             )
 
-
           setNewActivityIds(
             (previous) =>
               previous.filter(
@@ -517,19 +489,15 @@ export const useActivities = () => {
                   deletedId
               )
           )
-
         }
-
 
         // ===============================================
         // RECARGAR
         // ===============================================
 
         await fetchActivities()
-
       }
     )
-
 
     // ===================================================
     // SUBSCRIBE
@@ -551,7 +519,6 @@ export const useActivities = () => {
           console.log(
             '✅ Realtime conectado'
           )
-
         }
 
         if (
@@ -562,7 +529,6 @@ export const useActivities = () => {
           console.error(
             '❌ Error Realtime'
           )
-
         }
 
         if (
@@ -573,12 +539,9 @@ export const useActivities = () => {
           console.error(
             '⏱️ Realtime timeout'
           )
-
         }
-
       }
     )
-
 
     // ===================================================
     // CLEANUP
@@ -591,7 +554,6 @@ export const useActivities = () => {
       supabase.removeChannel(
         channel
       )
-
     }
 
   }, [
@@ -599,7 +561,6 @@ export const useActivities = () => {
     user?.id,
     user?.role,
   ])
-
 
   // =====================================================
   // MARCAR COMO VISTA
@@ -622,7 +583,6 @@ export const useActivities = () => {
       )
     }
 
-
   return {
     activities,
     loading,
@@ -638,6 +598,7 @@ export const useActivities = () => {
 // =========================================================
 
 export const useUsers = () => {
+
   const [
     users,
     setUsers,
@@ -652,11 +613,14 @@ export const useUsers = () => {
     createClient()
 
   useEffect(() => {
+
     let isActive = true
 
     const fetchUsers =
       async () => {
+
         try {
+
           const {
             data,
             error,
@@ -671,6 +635,7 @@ export const useUsers = () => {
           }
 
           if (error) {
+
             console.error(
               'Error fetching users:',
               error
@@ -682,12 +647,16 @@ export const useUsers = () => {
           setUsers(
             data || []
           )
+
         } catch (error) {
+
           console.error(
             'Error fetching users:',
             error
           )
+
         } finally {
+
           if (isActive) {
             setLoaded(true)
           }
@@ -699,6 +668,7 @@ export const useUsers = () => {
     return () => {
       isActive = false
     }
+
   }, [])
 
   return {
@@ -715,6 +685,7 @@ export const useDailyReport = (
   userId: string,
   reportDate: string
 ) => {
+
   const [
     report,
     setReport,
@@ -733,6 +704,7 @@ export const useDailyReport = (
     createClient()
 
   useEffect(() => {
+
     if (!userId) {
       return
     }
@@ -741,7 +713,9 @@ export const useDailyReport = (
 
     const fetchReport =
       async () => {
+
         try {
+
           const {
             data,
             error,
@@ -765,6 +739,7 @@ export const useDailyReport = (
           }
 
           if (error) {
+
             console.error(
               'Error fetching report:',
               error
@@ -774,12 +749,16 @@ export const useDailyReport = (
           }
 
           setReport(data)
+
         } catch (error) {
+
           console.error(
             'Error fetching report:',
             error
           )
+
         } finally {
+
           if (isActive) {
             setLoading(false)
           }
@@ -791,6 +770,7 @@ export const useDailyReport = (
     return () => {
       isActive = false
     }
+
   }, [
     userId,
     reportDate,
@@ -808,6 +788,7 @@ export const useDailyReport = (
 
 export const useConsolidatedReports =
   () => {
+
     const [
       reports,
       setReports,
@@ -826,6 +807,7 @@ export const useConsolidatedReports =
       createClient()
 
     useEffect(() => {
+
       if (
         !mounted ||
         user?.role !==
@@ -838,7 +820,9 @@ export const useConsolidatedReports =
 
       const fetchReports =
         async () => {
+
           try {
+
             const {
               data,
               error,
@@ -861,6 +845,7 @@ export const useConsolidatedReports =
             }
 
             if (error) {
+
               console.error(
                 'Error fetching consolidated reports:',
                 error
@@ -872,7 +857,9 @@ export const useConsolidatedReports =
             setReports(
               data || []
             )
+
           } catch (error) {
+
             console.error(
               'Error fetching consolidated reports:',
               error
@@ -885,6 +872,7 @@ export const useConsolidatedReports =
       return () => {
         isActive = false
       }
+
     }, [
       user?.id,
       user?.role,
