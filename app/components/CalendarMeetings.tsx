@@ -78,13 +78,6 @@ const EVENT_TYPES = [
   },
 ]
 
-function getAreaLabel(area: string) {
-  return (
-    AREAS.find((item) => item.id === area)?.label ||
-    area
-  )
-}
-
 function getAreaColor(area: string) {
   return (
     AREAS.find((item) => item.id === area)?.color ||
@@ -137,9 +130,6 @@ export default function CalendarMeetings() {
   const [saving, setSaving] =
     useState(false)
 
-  const [selectedDate, setSelectedDate] =
-    useState('')
-
   const [selectedEvent, setSelectedEvent] =
     useState<CalendarEvent | null>(null)
 
@@ -188,6 +178,11 @@ export default function CalendarMeetings() {
       setEvents(
         (data || []) as CalendarEvent[]
       )
+    } catch (error) {
+      console.error(
+        'Error cargando eventos:',
+        error
+      )
     } finally {
       setLoading(false)
     }
@@ -223,6 +218,10 @@ export default function CalendarMeetings() {
       (data || []) as UserProfile[]
     )
   }
+
+  // =========================================================
+  // CARGA INICIAL
+  // =========================================================
 
   useEffect(() => {
     loadEvents()
@@ -287,7 +286,7 @@ export default function CalendarMeetings() {
   }, [currentDate])
 
   // =========================================================
-  // ABRIR MODAL
+  // ABRIR MODAL PARA CREAR
   // =========================================================
 
   const openCreateModal = (
@@ -315,7 +314,7 @@ export default function CalendarMeetings() {
   }
 
   // =========================================================
-  // EDITAR EVENTO
+  // ABRIR MODAL PARA EDITAR
   // =========================================================
 
   const openEditModal = async (
@@ -346,24 +345,32 @@ export default function CalendarMeetings() {
     setForm({
       title:
         event.title,
+
       description:
         event.description || '',
+
       event_date:
         event.event_date,
+
       start_time:
         formatTime(
           event.start_time
         ),
+
       end_time:
         formatTime(
           event.end_time
         ),
+
       event_type:
         event.event_type,
+
       area:
         event.area,
+
       location:
         event.location || '',
+
       participants:
         data?.map(
           (item) =>
@@ -396,6 +403,7 @@ export default function CalendarMeetings() {
   ) => {
     setForm((prev) => ({
       ...prev,
+
       participants:
         prev.participants.includes(
           userId
@@ -438,6 +446,10 @@ export default function CalendarMeetings() {
       let eventId =
         selectedEvent?.id
 
+      // =====================================================
+      // EDITAR
+      // =====================================================
+
       if (selectedEvent) {
         const {
           error,
@@ -448,24 +460,32 @@ export default function CalendarMeetings() {
           .update({
             title:
               form.title.trim(),
+
             description:
               form.description.trim() ||
               null,
+
             event_date:
               form.event_date,
+
             start_time:
               form.start_time ||
               null,
+
             end_time:
               form.end_time ||
               null,
+
             event_type:
               form.event_type,
+
             area:
               form.area,
+
             location:
               form.location.trim() ||
               null,
+
             updated_at:
               new Date().toISOString(),
           })
@@ -478,7 +498,11 @@ export default function CalendarMeetings() {
           throw error
         }
 
-        await supabase
+        // Borrar participantes anteriores
+        const {
+          error:
+            deleteParticipantsError,
+        } = await supabase
           .from(
             'calendar_event_participants'
           )
@@ -487,7 +511,31 @@ export default function CalendarMeetings() {
             'event_id',
             selectedEvent.id
           )
-      } else {
+
+        if (
+          deleteParticipantsError
+        ) {
+          throw deleteParticipantsError
+        }
+      }
+
+      // =====================================================
+      // CREAR
+      // =====================================================
+
+      else {
+        const {
+          data: {
+            user,
+          },
+        } = await supabase.auth.getUser()
+
+        if (!user) {
+          throw new Error(
+            'No se encontró el usuario actual.'
+          )
+        }
+
         const {
           data,
           error,
@@ -498,24 +546,34 @@ export default function CalendarMeetings() {
           .insert({
             title:
               form.title.trim(),
+
             description:
               form.description.trim() ||
               null,
+
             event_date:
               form.event_date,
+
             start_time:
               form.start_time ||
               null,
+
             end_time:
               form.end_time ||
               null,
+
             event_type:
               form.event_type,
+
             area:
               form.area,
+
             location:
               form.location.trim() ||
               null,
+
+            created_by:
+              user.id,
           })
           .select()
           .single()
@@ -541,6 +599,7 @@ export default function CalendarMeetings() {
             (userId) => ({
               event_id:
                 eventId,
+
               user_id:
                 userId,
             })
@@ -561,9 +620,12 @@ export default function CalendarMeetings() {
         }
       }
 
+      // Recargar eventos
       await loadEvents()
 
-      closeModal()
+      // Cerrar modal
+      setShowModal(false)
+      setSelectedEvent(null)
     } catch (error: any) {
       console.error(
         'Error guardando evento:',
@@ -597,43 +659,48 @@ export default function CalendarMeetings() {
       return
     }
 
-    const {
-      error,
-    } = await supabase
-      .from(
-        'calendar_events'
-      )
-      .delete()
-      .eq(
-        'id',
-        event.id
+    setSaving(true)
+
+    try {
+      const {
+        error,
+      } = await supabase
+        .from(
+          'calendar_events'
+        )
+        .delete()
+        .eq(
+          'id',
+          event.id
+        )
+
+      if (error) {
+        throw error
+      }
+
+      setEvents((prev) =>
+        prev.filter(
+          (item) =>
+            item.id !== event.id
+        )
       )
 
-    if (error) {
+      setSelectedEvent(null)
+      setShowModal(false)
+    } catch (error: any) {
       console.error(
         'Error eliminando evento:',
         error
       )
 
       alert(
-        `No se pudo eliminar: ${error.message}`
+        `No se pudo eliminar: ${
+          error?.message ||
+          'Error desconocido'
+        }`
       )
-
-      return
-    }
-
-    setEvents((prev) =>
-      prev.filter(
-        (item) =>
-          item.id !== event.id
-      )
-    )
-
-    if (
-      selectedEvent?.id ===
-      event.id
-    ) {
-      setSelectedEvent(null)
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -668,7 +735,9 @@ export default function CalendarMeetings() {
   return (
     <div className="space-y-6">
 
-      {/* HEADER */}
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
 
       <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
 
@@ -715,7 +784,9 @@ export default function CalendarMeetings() {
 
         </div>
 
-        {/* ÁREAS */}
+        {/* ===================================================
+            ÁREAS
+        =================================================== */}
 
         <div className="flex flex-wrap gap-2 mt-5">
 
@@ -732,7 +803,9 @@ export default function CalendarMeetings() {
 
       </div>
 
-      {/* CALENDARIO */}
+      {/* =====================================================
+          CALENDARIO
+      ===================================================== */}
 
       <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm p-6">
 
@@ -747,10 +820,13 @@ export default function CalendarMeetings() {
             }
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
           >
+
             <ChevronLeft size={20} />
+
           </button>
 
           <h3 className="text-lg font-bold text-gray-900 dark:text-white capitalize">
+
             {currentDate.toLocaleDateString(
               'es-MX',
               {
@@ -758,6 +834,7 @@ export default function CalendarMeetings() {
                 year: 'numeric',
               }
             )}
+
           </h3>
 
           <button
@@ -767,12 +844,14 @@ export default function CalendarMeetings() {
             }
             className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
           >
+
             <ChevronRight size={20} />
+
           </button>
 
         </div>
 
-        {/* DÍAS */}
+        {/* DÍAS DE LA SEMANA */}
 
         <div className="grid grid-cols-7 gap-2 mb-2">
 
@@ -864,6 +943,8 @@ export default function CalendarMeetings() {
                     className="min-h-[130px] border border-gray-200 dark:border-gray-700 rounded-xl p-2 bg-gray-50 dark:bg-gray-800"
                   >
 
+                    {/* DÍA */}
+
                     <div className="flex items-center justify-between mb-2">
 
                       <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -880,12 +961,16 @@ export default function CalendarMeetings() {
                         className="p-1 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
                         title="Agregar reunión"
                       >
+
                         <Plus
                           size={14}
                         />
+
                       </button>
 
                     </div>
+
+                    {/* EVENTOS */}
 
                     <div className="space-y-1.5">
 
@@ -910,13 +995,17 @@ export default function CalendarMeetings() {
                           >
 
                             <div className="font-semibold truncate">
+
                               {
                                 event.title
                               }
+
                             </div>
 
                             {event.start_time && (
+
                               <div className="flex items-center gap-1 mt-0.5 opacity-80">
+
                                 <Clock
                                   size={
                                     10
@@ -928,7 +1017,18 @@ export default function CalendarMeetings() {
                                     event.start_time
                                   )
                                 }
+
+                                {event.end_time && (
+                                  <>
+                                    {' - '}
+                                    {formatTime(
+                                      event.end_time
+                                    )}
+                                  </>
+                                )}
+
                               </div>
+
                             )}
 
                           </button>
@@ -949,7 +1049,9 @@ export default function CalendarMeetings() {
 
       </div>
 
-      {/* MODAL */}
+      {/* =====================================================
+          MODAL
+      ===================================================== */}
 
       {showModal && (
 
@@ -987,9 +1089,11 @@ export default function CalendarMeetings() {
                 }
                 className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
               >
+
                 <X
                   size={20}
                 />
+
               </button>
 
             </div>
@@ -1022,6 +1126,7 @@ export default function CalendarMeetings() {
                     )
                   }
                   placeholder="Ej. Reunión semanal de marketing"
+                  disabled={saving}
                   className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
 
@@ -1051,6 +1156,7 @@ export default function CalendarMeetings() {
                   }
                   rows={3}
                   placeholder="Detalles de la reunión..."
+                  disabled={saving}
                   className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white resize-none"
                 />
 
@@ -1059,6 +1165,8 @@ export default function CalendarMeetings() {
               {/* FECHA / HORARIOS */}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                {/* FECHA */}
 
                 <div>
 
@@ -1081,10 +1189,13 @@ export default function CalendarMeetings() {
                         })
                       )
                     }
+                    disabled={saving}
                     className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                   />
 
                 </div>
+
+                {/* INICIO */}
 
                 <div>
 
@@ -1107,10 +1218,13 @@ export default function CalendarMeetings() {
                         })
                       )
                     }
+                    disabled={saving}
                     className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                   />
 
                 </div>
+
+                {/* FIN */}
 
                 <div>
 
@@ -1133,6 +1247,7 @@ export default function CalendarMeetings() {
                         })
                       )
                     }
+                    disabled={saving}
                     className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                   />
 
@@ -1143,6 +1258,8 @@ export default function CalendarMeetings() {
               {/* ÁREA / TIPO */}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                {/* ÁREA */}
 
                 <div>
 
@@ -1164,6 +1281,7 @@ export default function CalendarMeetings() {
                         })
                       )
                     }
+                    disabled={saving}
                     className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                   >
 
@@ -1188,6 +1306,8 @@ export default function CalendarMeetings() {
 
                 </div>
 
+                {/* TIPO */}
+
                 <div>
 
                   <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
@@ -1208,6 +1328,7 @@ export default function CalendarMeetings() {
                         })
                       )
                     }
+                    disabled={saving}
                     className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                   >
 
@@ -1265,6 +1386,7 @@ export default function CalendarMeetings() {
                       )
                     }
                     placeholder="Ej. Oficina / Google Meet / Zoom"
+                    disabled={saving}
                     className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                   />
 
@@ -1328,6 +1450,9 @@ export default function CalendarMeetings() {
                                   user.id
                                 )
                               }
+                              disabled={
+                                saving
+                              }
                               className="w-4 h-4 rounded"
                             />
 
@@ -1365,9 +1490,12 @@ export default function CalendarMeetings() {
 
             <div className="flex items-center justify-between gap-3 p-5 border-t border-gray-200 dark:border-gray-700">
 
+              {/* ELIMINAR */}
+
               <div>
 
                 {selectedEvent && (
+
                   <button
                     type="button"
                     onClick={() =>
@@ -1378,7 +1506,7 @@ export default function CalendarMeetings() {
                     disabled={
                       saving
                     }
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-semibold text-sm"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 font-semibold text-sm disabled:opacity-50"
                   >
 
                     <Trash2
@@ -1388,9 +1516,12 @@ export default function CalendarMeetings() {
                     Eliminar
 
                   </button>
+
                 )}
 
               </div>
+
+              {/* ACCIONES */}
 
               <div className="flex gap-3">
 
@@ -1402,7 +1533,7 @@ export default function CalendarMeetings() {
                   disabled={
                     saving
                   }
-                  className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white font-semibold"
+                  className="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white font-semibold disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -1414,27 +1545,32 @@ export default function CalendarMeetings() {
                   }
                   disabled={
                     saving ||
-                    !form.title.trim()
+                    !form.title.trim() ||
+                    !form.event_date
                   }
                   className="inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 font-semibold disabled:opacity-50"
                 >
 
                   {saving ? (
                     <>
+
                       <Loader
                         size={17}
                         className="animate-spin"
                       />
 
                       Guardando...
+
                     </>
                   ) : (
                     <>
+
                       <Save
                         size={17}
                       />
 
                       Guardar reunión
+
                     </>
                   )}
 
