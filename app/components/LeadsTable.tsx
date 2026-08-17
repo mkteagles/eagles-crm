@@ -1,12 +1,85 @@
 'use client'
 
-import { Lead } from '@/lib/types'
-import { useLeads, ProductFilter } from '@/lib/hooks'
+import { Lead, ProductFilter } from '@/lib/types'
+import { useLeads } from '@/lib/hooks'
+
 import Link from 'next/link'
-import { Phone } from 'lucide-react'
+
+import {
+  Phone,
+  DollarSign,
+} from 'lucide-react'
 
 interface LeadsTableProps {
   product?: ProductFilter
+}
+
+function formatMoney(
+  amount: number,
+  currency: 'MXN' | 'USD'
+) {
+  return new Intl.NumberFormat(
+    'es-MX',
+    {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 2,
+    }
+  ).format(amount)
+}
+
+function getProductLabel(
+  product?: Lead['product']
+) {
+  switch (product) {
+    case 'costa_rica':
+      return '🇨🇷 Costa Rica'
+
+    case 'workshop':
+      return '🎓 Workshop'
+
+    case 'empresarial':
+      return '🏢 Empresarial'
+
+    default:
+      return '—'
+  }
+}
+
+function getPaymentLabel(
+  status?: Lead['payment_status']
+) {
+  switch (status) {
+    case 'paid':
+      return 'Pagado'
+
+    case 'partial':
+      return 'Pago parcial'
+
+    case 'refunded':
+      return 'Reembolsado'
+
+    default:
+      return 'Sin pago'
+  }
+}
+
+function getPaymentClass(
+  status?: Lead['payment_status']
+) {
+  switch (status) {
+    case 'paid':
+      return 'bg-green-500'
+
+    case 'partial':
+      return 'bg-brand-orange'
+
+    case 'refunded':
+      return 'bg-red-500'
+
+    default:
+      return 'bg-gray-500'
+  }
 }
 
 export function LeadsTable({
@@ -21,16 +94,20 @@ export function LeadsTable({
 
   if (loading) {
     return (
-      <div className="p-4">
-        Cargando leads...
+      <div className="bg-surface border border-border-color rounded-lg p-8 text-center">
+        <p className="text-foreground/60">
+          Cargando leads...
+        </p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="p-4 text-red-500">
-        Error: {error}
+      <div className="bg-surface border border-red-500/30 rounded-lg p-6">
+        <p className="text-red-500">
+          Error: {error}
+        </p>
       </div>
     )
   }
@@ -51,7 +128,6 @@ export function LeadsTable({
       <table className="w-full border-collapse">
 
         <thead>
-
           <tr className="bg-foreground/5">
 
             <th className="p-3 text-left text-sm font-semibold">
@@ -59,15 +135,27 @@ export function LeadsTable({
             </th>
 
             <th className="p-3 text-left text-sm font-semibold">
+              Producto
+            </th>
+
+            <th className="p-3 text-left text-sm font-semibold">
               Teléfono
             </th>
 
             <th className="p-3 text-left text-sm font-semibold">
-              Email
+              Precio
             </th>
 
             <th className="p-3 text-left text-sm font-semibold">
-              Campaña
+              Apartado
+            </th>
+
+            <th className="p-3 text-left text-sm font-semibold">
+              Saldo
+            </th>
+
+            <th className="p-3 text-left text-sm font-semibold">
+              Pago
             </th>
 
             <th className="p-3 text-left text-sm font-semibold">
@@ -79,172 +167,242 @@ export function LeadsTable({
             </th>
 
             <th className="p-3 text-left text-sm font-semibold">
-              Engagement
-            </th>
-
-            <th className="p-3 text-left text-sm font-semibold">
-              ¿Compró?
-            </th>
-
-            <th className="p-3 text-left text-sm font-semibold">
               Acción
             </th>
 
           </tr>
-
         </thead>
 
         <tbody>
 
-          {leads.map((lead: Lead) => (
+          {leads.map(
+            (lead: Lead) => {
 
-            <tr
-              key={lead.id}
-              className="border-b border-border-color hover:bg-foreground/5"
-            >
+              const price =
+                Number(
+                  lead.product_price || 0
+                )
 
-              {/* NOMBRE */}
+              const paid =
+                Number(
+                  lead.amount_paid || 0
+                )
 
-              <td className="p-3 font-semibold">
-                {lead.full_name}
-              </td>
+              const balance =
+                Math.max(
+                  price - paid,
+                  0
+                )
 
+              const currency =
+                lead.currency || 'MXN'
 
-              {/* TELÉFONO */}
-
-              <td className="p-3">
-
-                <a
-                  href={`https://wa.me/${lead.phone_number}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-green-500 flex items-center gap-1"
+              return (
+                <tr
+                  key={lead.id}
+                  className="border-b border-border-color hover:bg-foreground/5 transition"
                 >
 
-                  <Phone size={16} />
+                  {/* NOMBRE */}
 
-                  {lead.phone_number}
+                  <td className="p-3">
 
-                </a>
+                    <div className="font-semibold">
+                      {lead.full_name}
+                    </div>
 
-              </td>
+                    {lead.email && (
+                      <div className="text-xs text-foreground/50 mt-1">
+                        {lead.email}
+                      </div>
+                    )}
 
-
-              {/* EMAIL */}
-
-              <td className="p-3">
-                {lead.email || '—'}
-              </td>
-
-
-              {/* CAMPAÑA */}
-
-              <td className="p-3 text-sm text-foreground/60">
-                {lead.campaign_name || '—'}
-              </td>
+                  </td>
 
 
-              {/* ESTADO */}
+                  {/* PRODUCTO */}
 
-              <td className="p-3">
+                  <td className="p-3">
 
-                <span
-                  className={`
-                    px-2
-                    py-1
-                    rounded
-                    text-white
-                    text-xs
-                    font-bold
+                    <span className="text-sm font-medium">
+                      {getProductLabel(
+                        lead.product
+                      )}
+                    </span>
 
-                    ${
-                      lead.lead_status === 'qualified'
-                        ? 'bg-green-500'
-                        : lead.lead_status === 'interested'
-                        ? 'bg-brand-blue'
-                        : lead.lead_status === 'contacted'
-                        ? 'bg-brand-orange'
-                        : lead.lead_status === 'lost'
-                        ? 'bg-gray-400'
-                        : 'bg-gray-500'
-                    }
-                  `}
-                >
-
-                  {lead.lead_status}
-
-                </span>
-
-              </td>
+                  </td>
 
 
-              {/* SCORE */}
+                  {/* TELÉFONO */}
 
-              <td className="p-3 font-bold">
-                {lead.score}/100
-              </td>
+                  <td className="p-3">
 
+                    <a
+                      href={`https://wa.me/${lead.phone_number}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-500 flex items-center gap-1"
+                    >
 
-              {/* ENGAGEMENT */}
+                      <Phone size={16} />
 
-              <td className="p-3">
+                      {lead.phone_number}
 
-                <span
-                  className={
-                    lead.lead_metrics?.engagement_level === 'hot'
-                      ? 'text-red-500 font-bold'
-                      : lead.lead_metrics?.engagement_level === 'high'
-                      ? 'text-brand-orange font-bold'
-                      : lead.lead_metrics?.engagement_level === 'medium'
-                      ? 'text-brand-blue'
-                      : 'text-foreground/50'
-                  }
-                >
+                    </a>
 
-                  {lead.lead_metrics?.engagement_level || 'low'}
-
-                </span>
-
-              </td>
+                  </td>
 
 
-              {/* COMPRA */}
+                  {/* PRECIO */}
 
-              <td className="p-3">
+                  <td className="p-3">
 
-                {lead.has_purchased ? (
+                    <div className="font-semibold whitespace-nowrap">
 
-                  <span className="text-green-500 font-bold">
-                    ✓ Sí
-                  </span>
+                      {formatMoney(
+                        price,
+                        currency
+                      )}
 
-                ) : (
+                    </div>
 
-                  <span className="text-red-500">
-                    ✗ No
-                  </span>
-
-                )}
-
-              </td>
+                  </td>
 
 
-              {/* ACCIÓN */}
+                  {/* APARTADO */}
 
-              <td className="p-3">
+                  <td className="p-3">
 
-                <Link
-                  href={`/app1/leads/${lead.id}`}
-                  className="text-brand-blue hover:underline"
-                >
-                  Ver más
-                </Link>
+                    <div className="text-green-500 font-bold whitespace-nowrap">
 
-              </td>
+                      {formatMoney(
+                        paid,
+                        currency
+                      )}
 
-            </tr>
+                    </div>
 
-          ))}
+                  </td>
+
+
+                  {/* SALDO */}
+
+                  <td className="p-3">
+
+                    <div
+                      className={
+                        balance > 0
+                          ? 'text-brand-orange font-bold whitespace-nowrap'
+                          : 'text-green-500 font-bold whitespace-nowrap'
+                      }
+                    >
+
+                      {formatMoney(
+                        balance,
+                        currency
+                      )}
+
+                    </div>
+
+                  </td>
+
+
+                  {/* ESTADO DE PAGO */}
+
+                  <td className="p-3">
+
+                    <span
+                      className={`
+                        inline-flex
+                        items-center
+                        gap-1
+                        px-2
+                        py-1
+                        rounded
+                        text-white
+                        text-xs
+                        font-bold
+                        whitespace-nowrap
+                        ${getPaymentClass(
+                          lead.payment_status
+                        )}
+                      `}
+                    >
+
+                      <DollarSign size={12} />
+
+                      {getPaymentLabel(
+                        lead.payment_status
+                      )}
+
+                    </span>
+
+                  </td>
+
+
+                  {/* ESTADO DEL LEAD */}
+
+                  <td className="p-3">
+
+                    <span
+                      className={`
+                        px-2
+                        py-1
+                        rounded
+                        text-white
+                        text-xs
+                        font-bold
+                        ${
+                          lead.lead_status ===
+                          'qualified'
+                            ? 'bg-green-500'
+                            : lead.lead_status ===
+                              'interested'
+                            ? 'bg-brand-blue'
+                            : lead.lead_status ===
+                              'contacted'
+                            ? 'bg-brand-orange'
+                            : lead.lead_status ===
+                              'lost'
+                            ? 'bg-gray-400'
+                            : 'bg-gray-500'
+                        }
+                      `}
+                    >
+
+                      {lead.lead_status}
+
+                    </span>
+
+                  </td>
+
+
+                  {/* SCORE */}
+
+                  <td className="p-3 font-bold">
+
+                    {lead.score}/100
+
+                  </td>
+
+
+                  {/* ACCIÓN */}
+
+                  <td className="p-3">
+
+                    <Link
+                      href={`/app1/leads/${lead.id}`}
+                      className="text-brand-blue hover:underline font-semibold"
+                    >
+                      Ver más
+                    </Link>
+
+                  </td>
+
+                </tr>
+              )
+            }
+          )}
 
         </tbody>
 

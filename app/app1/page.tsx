@@ -41,43 +41,64 @@ export default async function App1Home() {
   const firstName = name.split(" ")[0];
 
   // =========================================================
-  // PERMISOS DE SECCIONES
+  // IDENTIFICAR USUARIO
   // =========================================================
 
-  const normalizedName = name
-    .trim()
-    .toLowerCase();
-
-  /*
-   * CHUY:
-   *
-   * Chuy puede entrar a su sección de Edición de Video.
-   *
-   * También conservamos Marketing, porque actualmente
-   * esa sección ya está disponible desde el inicio.
-   */
+  const normalizedName = name.trim().toLowerCase();
 
   const isChuy =
     normalizedName.includes("chuy") ||
     normalizedName.includes("jesus") ||
     normalizedName.includes("jesús");
 
+  const isMarcos =
+    normalizedName.includes("marcos");
+
+  const isUrsula =
+    normalizedName.includes("ursula") ||
+    normalizedName.includes("úrsula");
+
+  // =========================================================
+  // PERMISOS GENERALES
+  // =========================================================
+
   /*
-   * ADMIN / VIEWER:
+   * ADMINISTRACIÓN:
    *
-   * Ven todas las áreas principales.
+   * Los admins ven todas las áreas.
    */
 
   const canSeeAllSections =
-    role === "admin" ||
-    role === "viewer";
+    role === "admin";
+
+  // =========================================================
+  // VENTAS
+  // =========================================================
 
   /*
-   * EDICIÓN DE VIDEO:
+   * Ventas puede ser vista por:
+   *
+   * ADMIN
+   * MARCOS
+   * URSULA
+   *
+   * Chuy NO entra aquí.
+   */
+
+  const canSeeSales =
+    canSeeAllSections ||
+    isMarcos ||
+    isUrsula;
+
+  // =========================================================
+  // EDICIÓN DE VIDEO
+  // =========================================================
+
+  /*
+   * Edición de Video:
    *
    * Chuy
    * Admin
-   * Viewer
    */
 
   const canSeeVideoEditing =
@@ -119,7 +140,7 @@ export default async function App1Home() {
               VENTAS
           =================================================== */}
 
-          {canSeeAllSections && (
+          {canSeeSales && (
             <Link
               href="/app1/leads"
               className="group"
