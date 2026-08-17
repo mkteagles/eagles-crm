@@ -11,6 +11,7 @@ import {
   createClient,
 } from '@/lib/supabase/client'
 
+
 // =========================================================
 // ACTIVIDAD
 // =========================================================
@@ -37,6 +38,7 @@ export interface ActivityLike {
 
   updated_at?: string | null
 }
+
 
 // =========================================================
 // IDEA
@@ -73,6 +75,7 @@ export interface ActivityIdeaLike {
   updated_at?: string | null
 }
 
+
 // =========================================================
 // TIPOS DE NOTIFICACIÓN
 // =========================================================
@@ -83,6 +86,7 @@ export type NotificationType =
   | 'approved'
   | 'rejected'
   | 'updated'
+
 
 // =========================================================
 // NOTIFICACIÓN
@@ -112,12 +116,14 @@ export interface NotificationItem {
   read: boolean
 }
 
+
 // =========================================================
 // STORAGE
 // =========================================================
 
 const STORAGE_PREFIX =
   'marketing_activity_seen_'
+
 
 // =========================================================
 // KEY
@@ -132,6 +138,7 @@ export function getActivityNotificationKey(
     'unassigned'
   }`
 }
+
 
 // =========================================================
 // ACTIVIDADES VISTAS
@@ -162,18 +169,13 @@ export function getSeenActivities(
     const parsed: unknown =
       JSON.parse(stored)
 
-    return Array.isArray(
-      parsed
-    )
-
+    return Array.isArray(parsed)
       ? parsed.filter(
           (
             item
           ): item is string =>
-            typeof item ===
-            'string'
+            typeof item === 'string'
         )
-
       : []
 
   } catch (error) {
@@ -186,6 +188,7 @@ export function getSeenActivities(
     return []
   }
 }
+
 
 // =========================================================
 // MARCAR COMO VISTA
@@ -215,12 +218,8 @@ export function markActivityAsSeen(
         userId
       )
 
-    if (
-      !seen.includes(key)
-    ) {
-
+    if (!seen.includes(key)) {
       seen.push(key)
-
     }
 
     localStorage.setItem(
@@ -253,6 +252,7 @@ export function markActivityAsSeen(
   }
 }
 
+
 // =========================================================
 // SABER SI FUE VISTA
 // =========================================================
@@ -266,9 +266,7 @@ export function isActivitySeen(
     !userId ||
     typeof window === 'undefined'
   ) {
-
     return false
-
   }
 
   const key =
@@ -280,6 +278,7 @@ export function isActivitySeen(
     userId
   ).includes(key)
 }
+
 
 // =========================================================
 // SABER SI ES NUEVA
@@ -296,6 +295,7 @@ export function isActivityNew(
   )
 }
 
+
 // =========================================================
 // USUARIO
 // =========================================================
@@ -309,6 +309,7 @@ interface UserProfile {
   role?: string | null
 }
 
+
 // =========================================================
 // HOOK
 // =========================================================
@@ -317,8 +318,20 @@ export function useActivityNotifications(
   user?: UserProfile | null
 ) {
 
-  const supabase =
-    createClient()
+  // =======================================================
+  // CLIENTE SUPABASE ESTABLE
+  // =======================================================
+
+  const [
+    supabase,
+  ] = useState(
+    () => createClient()
+  )
+
+
+  // =======================================================
+  // ESTADOS
+  // =======================================================
 
   const [
     notifications,
@@ -331,6 +344,7 @@ export function useActivityNotifications(
     loading,
     setLoading,
   ] = useState(true)
+
 
   // =======================================================
   // NOMBRE USUARIO
@@ -394,6 +408,7 @@ export function useActivityNotifications(
       [supabase]
     )
 
+
   // =======================================================
   // NOTIFICACIÓN DEL NAVEGADOR
   // =======================================================
@@ -407,17 +422,13 @@ export function useActivityNotifications(
       ) => {
 
         if (
-          typeof window ===
-          'undefined'
+          typeof window === 'undefined'
         ) {
           return
         }
 
         if (
-          !(
-            'Notification' in
-            window
-          )
+          !('Notification' in window)
         ) {
           return
         }
@@ -455,6 +466,7 @@ export function useActivityNotifications(
       []
     )
 
+
   // =======================================================
   // CREAR NOTIFICACIÓN
   // =======================================================
@@ -471,14 +483,9 @@ export function useActivityNotifications(
           return
         }
 
-        // -------------------------------------------------
-        // NO NOTIFICARSE A SÍ MISMO
-        // -------------------------------------------------
-
         if (
           actorId &&
-          actorId ===
-          user.id
+          actorId === user.id
         ) {
           return
         }
@@ -492,6 +499,7 @@ export function useActivityNotifications(
           await getUserName(
             actorId
           )
+
 
         // -------------------------------------------------
         // ASIGNADA
@@ -507,8 +515,8 @@ export function useActivityNotifications(
 
           message =
             `${actorName} te asignó la actividad "${activity.title}"`
-
         }
+
 
         // -------------------------------------------------
         // COMPLETADA
@@ -524,8 +532,8 @@ export function useActivityNotifications(
 
           message =
             `${actorName} completó la actividad "${activity.title}"`
-
         }
+
 
         // -------------------------------------------------
         // APROBADA
@@ -541,8 +549,8 @@ export function useActivityNotifications(
 
           message =
             `${actorName} aprobó la actividad "${activity.title}"`
-
         }
+
 
         // -------------------------------------------------
         // RECHAZADA
@@ -567,8 +575,8 @@ export function useActivityNotifications(
               `: ${activity.description}`
 
           }
-
         }
+
 
         // -------------------------------------------------
         // ACTUALIZADA
@@ -584,8 +592,8 @@ export function useActivityNotifications(
 
           message =
             `${actorName} actualizó la actividad "${activity.title}"`
-
         }
+
 
         // -------------------------------------------------
         // NO NOTIFICAR
@@ -595,6 +603,7 @@ export function useActivityNotifications(
           return
         }
 
+
         // -------------------------------------------------
         // KEY
         // -------------------------------------------------
@@ -603,6 +612,7 @@ export function useActivityNotifications(
           getActivityNotificationKey(
             activity
           )
+
 
         // -------------------------------------------------
         // OBJETO
@@ -641,6 +651,7 @@ export function useActivityNotifications(
               ),
           }
 
+
         // -------------------------------------------------
         // EVITAR DUPLICADOS
         // -------------------------------------------------
@@ -667,9 +678,9 @@ export function useActivityNotifications(
               notification,
               ...previous,
             ]
-
           }
         )
+
 
         // -------------------------------------------------
         // BROWSER
@@ -688,6 +699,7 @@ export function useActivityNotifications(
         showBrowserNotification,
       ]
     )
+
 
   // =======================================================
   // IDEA
@@ -827,6 +839,7 @@ export function useActivityNotifications(
       ]
     )
 
+
   // =======================================================
   // PROCESAR CAMBIO
   // =======================================================
@@ -843,6 +856,7 @@ export function useActivityNotifications(
 
         const eventType =
           payload.eventType
+
 
         // =================================================
         // INSERT
@@ -866,11 +880,11 @@ export function useActivityNotifications(
               activity,
               activity.created_by
             )
-
           }
 
           return
         }
+
 
         // =================================================
         // SOLO UPDATE
@@ -883,11 +897,13 @@ export function useActivityNotifications(
           return
         }
 
+
         const oldActivity =
           payload.old as ActivityLike
 
         const newActivity =
           payload.new as ActivityLike
+
 
         // =================================================
         // ASIGNACIÓN
@@ -911,8 +927,8 @@ export function useActivityNotifications(
             newActivity,
             newActivity.created_by
           )
-
         }
+
 
         // =================================================
         // COMPLETADA
@@ -936,8 +952,8 @@ export function useActivityNotifications(
             newActivity,
             newActivity.assigned_to
           )
-
         }
+
 
         // =================================================
         // APROBADA
@@ -961,8 +977,8 @@ export function useActivityNotifications(
             newActivity,
             newActivity.approved_by
           )
-
         }
+
 
         // =================================================
         // RECHAZADA
@@ -986,8 +1002,8 @@ export function useActivityNotifications(
             newActivity,
             newActivity.approved_by
           )
-
         }
+
 
         // =================================================
         // ACTUALIZADA
@@ -1043,7 +1059,6 @@ export function useActivityNotifications(
             newActivity,
             newActivity.created_by
           )
-
         }
 
       },
@@ -1052,6 +1067,7 @@ export function useActivityNotifications(
         createNotification,
       ]
     )
+
 
   // =======================================================
   // REALTIME
@@ -1066,15 +1082,19 @@ export function useActivityNotifications(
       setLoading(false)
 
       return
-
     }
+
 
     let active = true
 
+    const channelName =
+      `activity_notifications_${user.id}`
+
     const channel =
       supabase.channel(
-        `activity_notifications_${user.id}`
+        channelName
       )
+
 
     // =====================================================
     // ACTIVIDADES
@@ -1093,17 +1113,29 @@ export function useActivityNotifications(
           return
         }
 
-        console.log(
-          '🔔 Cambio de actividad:',
-          payload
-        )
+        try {
 
-        await processActivityChange(
-          payload
-        )
+          console.log(
+            '🔔 Cambio de actividad:',
+            payload
+          )
+
+          await processActivityChange(
+            payload
+          )
+
+        } catch (error) {
+
+          console.error(
+            '❌ Error procesando actividad realtime:',
+            error
+          )
+
+        }
 
       }
     )
+
 
     // =====================================================
     // IDEAS
@@ -1122,32 +1154,49 @@ export function useActivityNotifications(
           return
         }
 
-        console.log(
-          '💡 Nueva idea recibida:',
-          payload
-        )
+        try {
 
-        const idea =
-          payload.new as ActivityIdeaLike
+          console.log(
+            '💡 Nueva idea recibida:',
+            payload
+          )
 
-        await createIdeaNotification(
-          idea
-        )
+          const idea =
+            payload.new as ActivityIdeaLike
+
+          await createIdeaNotification(
+            idea
+          )
+
+        } catch (error) {
+
+          console.error(
+            '❌ Error procesando idea realtime:',
+            error
+          )
+
+        }
 
       }
     )
 
+
     // =====================================================
-    // SUBSCRIBE
+    // SUSCRIBIR
     // =====================================================
 
     channel.subscribe(
       status => {
 
+        if (!active) {
+          return
+        }
+
         console.log(
           '📡 Notifications realtime:',
           status
         )
+
 
         if (
           status ===
@@ -1160,16 +1209,27 @@ export function useActivityNotifications(
 
         }
 
+
         if (
           status ===
           'CHANNEL_ERROR'
         ) {
 
           console.error(
-            '❌ Error realtime notificaciones'
+            '❌ Error realtime notificaciones',
+            {
+              channel:
+                channelName,
+
+              userId:
+                user.id,
+
+              status,
+            }
           )
 
         }
+
 
         if (
           status ===
@@ -1177,7 +1237,16 @@ export function useActivityNotifications(
         ) {
 
           console.error(
-            '⏱️ Timeout realtime notificaciones'
+            '⏱️ Timeout realtime notificaciones',
+            {
+              channel:
+                channelName,
+
+              userId:
+                user.id,
+
+              status,
+            }
           )
 
         }
@@ -1185,13 +1254,19 @@ export function useActivityNotifications(
       }
     )
 
+
     setLoading(false)
+
+
+    // =====================================================
+    // CLEANUP
+    // =====================================================
 
     return () => {
 
       active = false
 
-      supabase.removeChannel(
+      void supabase.removeChannel(
         channel
       )
 
@@ -1203,6 +1278,7 @@ export function useActivityNotifications(
     createIdeaNotification,
     supabase,
   ])
+
 
   // =======================================================
   // MARCAR UNA
@@ -1241,6 +1317,7 @@ export function useActivityNotifications(
       },
       [user?.id]
     )
+
 
   // =======================================================
   // MARCAR TODAS
@@ -1282,6 +1359,7 @@ export function useActivityNotifications(
       ]
     )
 
+
   // =======================================================
   // OCULTAR
   // =======================================================
@@ -1305,6 +1383,7 @@ export function useActivityNotifications(
       []
     )
 
+
   // =======================================================
   // CONTADOR
   // =======================================================
@@ -1318,6 +1397,7 @@ export function useActivityNotifications(
         ).length,
       [notifications]
     )
+
 
   // =======================================================
   // RETURN

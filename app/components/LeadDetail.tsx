@@ -52,7 +52,14 @@ export function LeadDetail({
   onSaved,
 }: LeadDetailProps) {
 
-  const supabase = createClient()
+  // =====================================================
+  // SUPABASE
+  // =====================================================
+
+  const supabase = useMemo(
+    () => createClient(),
+    []
+  )
 
 
   // =====================================================
@@ -81,7 +88,7 @@ export function LeadDetail({
 
 
   // =====================================================
-  // FORMULARIO
+  // CREAR FORMULARIO
   // =====================================================
 
   const createFormFromLead = () => ({
@@ -112,6 +119,10 @@ export function LeadDetail({
       lead.lead_status || 'new',
   })
 
+
+  // =====================================================
+  // FORM
+  // =====================================================
 
   const [
     form,
@@ -196,6 +207,7 @@ export function LeadDetail({
           metrics[0]?.engagement_level ||
           'low'
         )
+
       }
 
       return (
@@ -209,7 +221,7 @@ export function LeadDetail({
 
 
   // =====================================================
-  // CAMBIAR FORMULARIO
+  // CAMBIAR FORM
   // =====================================================
 
   function handleChange(
@@ -246,6 +258,7 @@ export function LeadDetail({
 
     setError(null)
     setSaved(false)
+
     setEditing(true)
   }
 
@@ -256,12 +269,17 @@ export function LeadDetail({
 
   function cancelEditing() {
 
+    if (saving) {
+      return
+    }
+
     setForm(
       createFormFromLead()
     )
 
     setError(null)
     setSaved(false)
+
     setEditing(false)
   }
 
@@ -283,10 +301,12 @@ export function LeadDetail({
     try {
 
       // =================================================
-      // VALIDACIONES
+      // VALIDAR NOMBRE
       // =================================================
 
-      if (!form.full_name.trim()) {
+      if (
+        !form.full_name.trim()
+      ) {
 
         throw new Error(
           'El nombre es obligatorio.'
@@ -294,13 +314,23 @@ export function LeadDetail({
       }
 
 
-      if (!form.phone_number.trim()) {
+      // =================================================
+      // VALIDAR TELÉFONO
+      // =================================================
+
+      if (
+        !form.phone_number.trim()
+      ) {
 
         throw new Error(
           'El teléfono es obligatorio.'
         )
       }
 
+
+      // =================================================
+      // VALIDAR PRODUCTO
+      // =================================================
 
       if (!productConfig) {
 
@@ -310,8 +340,14 @@ export function LeadDetail({
       }
 
 
+      // =================================================
+      // VALIDAR MONTO
+      // =================================================
+
       if (
-        !Number.isFinite(amountPaid)
+        !Number.isFinite(
+          amountPaid
+        )
       ) {
 
         throw new Error(
@@ -320,7 +356,9 @@ export function LeadDetail({
       }
 
 
-      if (amountPaid < 0) {
+      if (
+        amountPaid < 0
+      ) {
 
         throw new Error(
           'El monto pagado no puede ser negativo.'
@@ -328,7 +366,9 @@ export function LeadDetail({
       }
 
 
-      if (amountPaid > price) {
+      if (
+        amountPaid > price
+      ) {
 
         throw new Error(
           'El monto pagado no puede ser mayor al precio del producto.'
@@ -377,15 +417,24 @@ export function LeadDetail({
 
         lead_status:
           form.lead_status,
+
       }
 
+
+      // =================================================
+      // DEBUG
+      // =================================================
 
       console.log(
         '========================================'
       )
 
       console.log(
-        'ACTUALIZANDO LEAD:',
+        'ACTUALIZANDO LEAD'
+      )
+
+      console.log(
+        'ID:',
         lead.id
       )
 
@@ -400,7 +449,7 @@ export function LeadDetail({
 
 
       // =================================================
-      // ACTUALIZAR SUPABASE
+      // UPDATE SUPABASE
       // =================================================
 
       const {
@@ -408,7 +457,9 @@ export function LeadDetail({
         error: updateError,
       } = await supabase
         .from('leads')
-        .update(updatePayload)
+        .update(
+          updatePayload
+        )
         .eq(
           'id',
           lead.id
@@ -418,7 +469,7 @@ export function LeadDetail({
 
 
       // =================================================
-      // ERROR SUPABASE
+      // ERROR
       // =================================================
 
       if (updateError) {
@@ -428,7 +479,7 @@ export function LeadDetail({
         )
 
         console.error(
-          'ERROR SUPABASE AL GUARDAR LEAD'
+          'ERROR SUPABASE'
         )
 
         console.error(
@@ -463,13 +514,13 @@ export function LeadDetail({
 
 
       // =================================================
-      // SEGURIDAD EXTRA
+      // VALIDAR QUE REALMENTE SE ACTUALIZÓ
       // =================================================
 
       if (!data) {
 
         throw new Error(
-          'Supabase no devolvió el lead actualizado. Revisa las políticas RLS de la tabla leads.'
+          'No se encontró el lead después de actualizarlo.'
         )
       }
 
@@ -479,38 +530,34 @@ export function LeadDetail({
       // =================================================
 
       console.log(
-        '✅ LEAD GUARDADO CORRECTAMENTE'
-      )
-
-      console.log(
-        'LEAD ACTUALIZADO:',
+        '✅ LEAD ACTUALIZADO CORRECTAMENTE:',
         data
       )
 
 
       setSaved(true)
+
       setEditing(false)
 
 
       // =================================================
-      // RECARGAR DATOS
+      // RECARGAR PADRE
       // =================================================
 
       if (onSaved) {
 
         await onSaved()
-      }
 
+      }
 
     } catch (err) {
 
       console.error(
-        'Error completo al guardar:',
+        '❌ Error completo al guardar lead:',
         err
       )
 
       setError(
-
         err instanceof Error
           ? err.message
           : 'No se pudieron guardar los cambios.'
@@ -519,7 +566,9 @@ export function LeadDetail({
     } finally {
 
       setSaving(false)
+
     }
+
   }
 
 
@@ -533,24 +582,17 @@ export function LeadDetail({
   ) {
 
     return new Intl.NumberFormat(
-
       currency === 'USD'
         ? 'en-US'
         : 'es-MX',
-
       {
-        style:
-          'currency',
-
+        style: 'currency',
         currency,
-
-        minimumFractionDigits:
-          2,
-
-        maximumFractionDigits:
-          2,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
       }
     ).format(amount)
+
   }
 
 
@@ -578,7 +620,9 @@ export function LeadDetail({
 
       default:
         return product
+
     }
+
   }
 
 
@@ -588,8 +632,48 @@ export function LeadDetail({
 
   const currency =
     editing
-      ? productConfig?.currency || lead.currency
-      : lead.currency
+      ? productConfig?.currency ||
+        lead.currency ||
+        'MXN'
+      : lead.currency ||
+        'MXN'
+
+
+  // =====================================================
+  // VALORES VISUALES
+  // =====================================================
+
+  const displayedPrice =
+    editing
+      ? price
+      : Number(
+          lead.product_price || 0
+        )
+
+  const displayedAmountPaid =
+    editing
+      ? amountPaid
+      : Number(
+          lead.amount_paid || 0
+        )
+
+  const displayedBalance =
+    editing
+      ? balance
+      : Math.max(
+          Number(
+            lead.product_price || 0
+          ) -
+          Number(
+            lead.amount_paid || 0
+          ),
+          0
+        )
+
+  const displayedPaymentStatus =
+    editing
+      ? paymentStatus
+      : lead.payment_status
 
 
   // =====================================================
@@ -598,56 +682,62 @@ export function LeadDetail({
 
   return (
 
-    <div className="
-      max-w-3xl
-      mx-auto
-      p-4
-    ">
-
+    <div
+      className="
+        max-w-3xl
+        mx-auto
+        p-4
+      "
+    >
 
       {/* =================================================
-          ALERTA ERROR
+          ERROR
       ================================================= */}
 
       {error && (
 
-        <div className="
-          mb-4
-          bg-red-500/10
-          border
-          border-red-500/30
-          text-red-500
-          rounded-xl
-          p-4
-          text-sm
-        ">
+        <div
+          className="
+            mb-4
+            bg-red-500/10
+            border
+            border-red-500/30
+            text-red-500
+            rounded-xl
+            p-4
+            text-sm
+          "
+        >
 
           {error}
 
         </div>
+
       )}
 
 
       {/* =================================================
-          ALERTA GUARDADO
+          GUARDADO
       ================================================= */}
 
       {saved && (
 
-        <div className="
-          mb-4
-          bg-green-500/10
-          border
-          border-green-500/30
-          text-green-600
-          dark:text-green-400
-          rounded-xl
-          p-4
-          text-sm
-          flex
-          items-center
-          gap-2
-        ">
+        <div
+          className="
+            mb-4
+            bg-green-500/10
+            border
+            border-green-500/30
+            text-green-600
+            dark:text-green-400
+            rounded-xl
+            p-4
+            text-sm
+            flex
+            items-center
+            gap-2
+          "
+        >
 
           <CheckCircle2
             size={18}
@@ -656,6 +746,7 @@ export function LeadDetail({
           Cambios guardados correctamente.
 
         </div>
+
       )}
 
 
@@ -663,29 +754,32 @@ export function LeadDetail({
           CARD PRINCIPAL
       ================================================= */}
 
-      <div className="
-        bg-surface
-        border
-        border-border-color
-        rounded-xl
-        p-6
-        mb-6
-      ">
-
+      <div
+        className="
+          bg-surface
+          border
+          border-border-color
+          rounded-xl
+          p-6
+          mb-6
+        "
+      >
 
         {/* =================================================
             HEADER
         ================================================= */}
 
-        <div className="
-          flex
-          flex-col
-          md:flex-row
-          md:items-start
-          md:justify-between
-          gap-4
-          mb-6
-        ">
+        <div
+          className="
+            flex
+            flex-col
+            md:flex-row
+            md:items-start
+            md:justify-between
+            gap-4
+            mb-6
+          "
+        >
 
           <div className="flex-1">
 
@@ -714,23 +808,27 @@ export function LeadDetail({
 
             ) : (
 
-              <h1 className="
-                text-3xl
-                font-bold
-                text-foreground
-              ">
+              <h1
+                className="
+                  text-3xl
+                  font-bold
+                  text-foreground
+                "
+              >
 
                 {lead.full_name}
 
               </h1>
+
             )}
 
-
-            <p className="
-              text-sm
-              text-foreground/50
-              mt-2
-            ">
+            <p
+              className="
+                text-sm
+                text-foreground/50
+                mt-2
+              "
+            >
 
               {getProductLabel(
                 editing
@@ -744,12 +842,7 @@ export function LeadDetail({
 
 
           {/* =================================================
-              BOTONES DE EDICIÓN
-              
-              IMPORTANTE:
-              NO HAY RESTRICCIÓN DE ROL.
-              TODO USUARIO AUTENTICADO QUE LLEGUE
-              A ESTE COMPONENTE VE EL BOTÓN.
+              BOTONES
           ================================================= */}
 
           {!editing ? (
@@ -772,7 +865,6 @@ export function LeadDetail({
                 font-semibold
                 hover:opacity-90
                 transition
-                cursor-pointer
               "
             >
 
@@ -786,10 +878,12 @@ export function LeadDetail({
 
           ) : (
 
-            <div className="
-              flex
-              gap-2
-            ">
+            <div
+              className="
+                flex
+                gap-2
+              "
+            >
 
               <button
                 type="button"
@@ -813,7 +907,6 @@ export function LeadDetail({
                   font-semibold
                   hover:bg-foreground/5
                   disabled:opacity-50
-                  cursor-pointer
                 "
               >
 
@@ -846,7 +939,6 @@ export function LeadDetail({
                   font-semibold
                   hover:opacity-90
                   disabled:opacity-50
-                  cursor-pointer
                 "
               >
 
@@ -861,6 +953,7 @@ export function LeadDetail({
               </button>
 
             </div>
+
           )}
 
         </div>
@@ -870,14 +963,15 @@ export function LeadDetail({
             CONTACTO
         ================================================= */}
 
-        <div className="
-          grid
-          grid-cols-1
-          md:grid-cols-2
-          gap-4
-          mb-6
-        ">
-
+        <div
+          className="
+            grid
+            grid-cols-1
+            md:grid-cols-2
+            gap-4
+            mb-6
+          "
+        >
 
           {/* TELÉFONO */}
 
@@ -885,23 +979,28 @@ export function LeadDetail({
 
             {editing && (
 
-              <label className="
-                block
-                text-xs
-                text-foreground/50
-                mb-1
-              ">
+              <label
+                className="
+                  block
+                  text-xs
+                  text-foreground/50
+                  mb-1
+                "
+              >
 
                 Teléfono
 
               </label>
+
             )}
 
-            <div className="
-              flex
-              items-center
-              gap-2
-            ">
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+              "
+            >
 
               <Phone
                 size={20}
@@ -925,13 +1024,16 @@ export function LeadDetail({
                     border-border-color
                     rounded-lg
                     p-2
+                    text-foreground
                   "
                 />
 
               ) : (
 
                 <a
-                  href={`https://wa.me/${lead.phone_number.replace(/\D/g, '')}`}
+                  href={`https://wa.me/${(
+                    lead.phone_number || ''
+                  ).replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="
@@ -940,9 +1042,10 @@ export function LeadDetail({
                   "
                 >
 
-                  {lead.phone_number}
+                  {lead.phone_number || '—'}
 
                 </a>
+
               )}
 
             </div>
@@ -956,23 +1059,28 @@ export function LeadDetail({
 
             {editing && (
 
-              <label className="
-                block
-                text-xs
-                text-foreground/50
-                mb-1
-              ">
+              <label
+                className="
+                  block
+                  text-xs
+                  text-foreground/50
+                  mb-1
+                "
+              >
 
                 Email
 
               </label>
+
             )}
 
-            <div className="
-              flex
-              items-center
-              gap-2
-            ">
+            <div
+              className="
+                flex
+                items-center
+                gap-2
+              "
+            >
 
               <Mail
                 size={20}
@@ -997,6 +1105,7 @@ export function LeadDetail({
                     border-border-color
                     rounded-lg
                     p-2
+                    text-foreground
                   "
                 />
 
@@ -1007,6 +1116,7 @@ export function LeadDetail({
                   {lead.email || '—'}
 
                 </span>
+
               )}
 
             </div>
@@ -1016,11 +1126,13 @@ export function LeadDetail({
 
           {/* FECHA */}
 
-          <div className="
-            flex
-            items-center
-            gap-2
-          ">
+          <div
+            className="
+              flex
+              items-center
+              gap-2
+            "
+          >
 
             <Calendar
               size={20}
@@ -1029,11 +1141,13 @@ export function LeadDetail({
 
             <span>
 
-              {new Date(
-                lead.created_at
-              ).toLocaleDateString(
-                'es-MX'
-              )}
+              {lead.created_at
+                ? new Date(
+                    lead.created_at
+                  ).toLocaleDateString(
+                    'es-MX'
+                  )
+                : '—'}
 
             </span>
 
@@ -1047,13 +1161,14 @@ export function LeadDetail({
             {editing ? (
 
               <>
-
-                <label className="
-                  block
-                  text-xs
-                  text-foreground/50
-                  mb-1
-                ">
+                <label
+                  className="
+                    block
+                    text-xs
+                    text-foreground/50
+                    mb-1
+                  "
+                >
 
                   Campaña
 
@@ -1074,6 +1189,7 @@ export function LeadDetail({
                     border-border-color
                     rounded-lg
                     p-2
+                    text-foreground
                   "
                 />
 
@@ -1082,14 +1198,15 @@ export function LeadDetail({
             ) : (
 
               <>
-
                 <strong>
                   Campaña:
                 </strong>{' '}
 
-                {lead.campaign_name || '—'}
+                {lead.campaign_name ||
+                  '—'}
 
               </>
+
             )}
 
           </div>
@@ -1101,18 +1218,22 @@ export function LeadDetail({
             INFORMACIÓN COMERCIAL
         ================================================= */}
 
-        <div className="
-          border-t
-          border-border-color
-          pt-5
-          mb-6
-        ">
+        <div
+          className="
+            border-t
+            border-border-color
+            pt-5
+            mb-6
+          "
+        >
 
-          <h2 className="
-            font-bold
-            text-lg
-            mb-4
-          ">
+          <h2
+            className="
+              font-bold
+              text-lg
+              mb-4
+            "
+          >
 
             Información comercial
 
@@ -1125,12 +1246,14 @@ export function LeadDetail({
 
             <div className="mb-5">
 
-              <label className="
-                block
-                text-sm
-                font-semibold
-                mb-1
-              ">
+              <label
+                className="
+                  block
+                  text-sm
+                  font-semibold
+                  mb-1
+                "
+              >
 
                 Producto
 
@@ -1151,6 +1274,7 @@ export function LeadDetail({
                   border-border-color
                   rounded-lg
                   p-2.5
+                  text-foreground
                 "
               >
 
@@ -1173,41 +1297,49 @@ export function LeadDetail({
               </select>
 
             </div>
+
           )}
 
 
-          <div className="
-            grid
-            grid-cols-1
-            md:grid-cols-3
-            gap-4
-          ">
-
+          <div
+            className="
+              grid
+              grid-cols-1
+              md:grid-cols-3
+              gap-4
+            "
+          >
 
             {/* PRECIO */}
 
-            <div className="
-              bg-foreground/5
-              rounded-lg
-              p-4
-            ">
+            <div
+              className="
+                bg-foreground/5
+                rounded-lg
+                p-4
+              "
+            >
 
-              <p className="
-                text-xs
-                text-foreground/50
-              ">
+              <p
+                className="
+                  text-xs
+                  text-foreground/50
+                "
+              >
 
                 Precio
 
               </p>
 
-              <p className="
-                text-xl
-                font-bold
-              ">
+              <p
+                className="
+                  text-xl
+                  font-bold
+                "
+              >
 
                 {formatMoney(
-                  price,
+                  displayedPrice,
                   currency
                 )}
 
@@ -1218,16 +1350,20 @@ export function LeadDetail({
 
             {/* PAGADO */}
 
-            <div className="
-              bg-foreground/5
-              rounded-lg
-              p-4
-            ">
+            <div
+              className="
+                bg-foreground/5
+                rounded-lg
+                p-4
+              "
+            >
 
-              <p className="
-                text-xs
-                text-foreground/50
-              ">
+              <p
+                className="
+                  text-xs
+                  text-foreground/50
+                "
+              >
 
                 Pagado
 
@@ -1262,20 +1398,21 @@ export function LeadDetail({
 
               ) : (
 
-                <p className="
-                  text-xl
-                  font-bold
-                  text-green-500
-                ">
+                <p
+                  className="
+                    text-xl
+                    font-bold
+                    text-green-500
+                  "
+                >
 
                   {formatMoney(
-                    Number(
-                      lead.amount_paid || 0
-                    ),
-                    lead.currency
+                    displayedAmountPaid,
+                    currency
                   )}
 
                 </p>
+
               )}
 
             </div>
@@ -1283,55 +1420,39 @@ export function LeadDetail({
 
             {/* SALDO */}
 
-            <div className="
-              bg-foreground/5
-              rounded-lg
-              p-4
-            ">
+            <div
+              className="
+                bg-foreground/5
+                rounded-lg
+                p-4
+              "
+            >
 
-              <p className="
-                text-xs
-                text-foreground/50
-              ">
+              <p
+                className="
+                  text-xs
+                  text-foreground/50
+                "
+              >
 
                 Saldo pendiente
 
               </p>
 
               <p
-                className={`text-xl font-bold ${
-                  (
-                    editing
-                      ? balance
-                      : Math.max(
-                          Number(
-                            lead.product_price || 0
-                          ) -
-                          Number(
-                            lead.amount_paid || 0
-                          ),
-                          0
-                        )
-                  ) > 0
-                    ? 'text-brand-orange'
-                    : 'text-green-500'
-                }`}
+                className={`
+                  text-xl
+                  font-bold
+                  ${
+                    displayedBalance > 0
+                      ? 'text-brand-orange'
+                      : 'text-green-500'
+                  }
+                `}
               >
 
                 {formatMoney(
-
-                  editing
-                    ? balance
-                    : Math.max(
-                        Number(
-                          lead.product_price || 0
-                        ) -
-                        Number(
-                          lead.amount_paid || 0
-                        ),
-                        0
-                      ),
-
+                  displayedBalance,
                   currency
                 )}
 
@@ -1342,45 +1463,43 @@ export function LeadDetail({
           </div>
 
 
-          {/* ESTADO DE PAGO */}
+          {/* ESTADO PAGO */}
 
           <div className="mt-4">
 
             <span
-              className={`inline-flex px-3 py-1 rounded-full text-xs font-bold text-white ${
-                (
-                  editing
-                    ? paymentStatus
-                    : lead.payment_status
-                ) === 'paid'
+              className={`
+                inline-flex
+                px-3
+                py-1
+                rounded-full
+                text-xs
+                font-bold
+                text-white
 
-                  ? 'bg-green-500'
+                ${
+                  displayedPaymentStatus ===
+                  'paid'
 
-                  : (
-                      editing
-                        ? paymentStatus
-                        : lead.payment_status
-                    ) === 'partial'
+                    ? 'bg-green-500'
 
-                  ? 'bg-brand-orange'
+                    : displayedPaymentStatus ===
+                      'partial'
 
-                  : 'bg-gray-500'
-              }`}
+                    ? 'bg-brand-orange'
+
+                    : 'bg-gray-500'
+                }
+              `}
             >
 
-              {(
-                editing
-                  ? paymentStatus
-                  : lead.payment_status
-              ) === 'paid'
+              {displayedPaymentStatus ===
+              'paid'
 
                 ? 'Pagado'
 
-                : (
-                    editing
-                      ? paymentStatus
-                      : lead.payment_status
-                  ) === 'partial'
+                : displayedPaymentStatus ===
+                  'partial'
 
                 ? 'Pago parcial'
 
@@ -1397,17 +1516,21 @@ export function LeadDetail({
             ESTADO COMERCIAL
         ================================================= */}
 
-        <div className="
-          border-t
-          border-border-color
-          pt-5
-        ">
+        <div
+          className="
+            border-t
+            border-border-color
+            pt-5
+          "
+        >
 
-          <h2 className="
-            font-bold
-            text-lg
-            mb-4
-          ">
+          <h2
+            className="
+              font-bold
+              text-lg
+              mb-4
+            "
+          >
 
             Estado comercial
 
@@ -1431,6 +1554,7 @@ export function LeadDetail({
                 border-border-color
                 rounded-lg
                 p-2.5
+                text-foreground
               "
             >
 
@@ -1458,29 +1582,35 @@ export function LeadDetail({
 
           ) : (
 
-            <div className="
-              grid
-              grid-cols-3
-              gap-4
-            ">
+            <div
+              className="
+                grid
+                grid-cols-3
+                gap-4
+              "
+            >
 
               <div className="text-center">
 
-                <p className="
-                  text-foreground/60
-                  text-sm
-                ">
+                <p
+                  className="
+                    text-foreground/60
+                    text-sm
+                  "
+                >
 
                   Estado
 
                 </p>
 
-                <p className="
-                  font-bold
-                  text-lg
-                ">
+                <p
+                  className="
+                    font-bold
+                    text-lg
+                  "
+                >
 
-                  {lead.lead_status}
+                  {lead.lead_status || '—'}
 
                 </p>
 
@@ -1489,20 +1619,24 @@ export function LeadDetail({
 
               <div className="text-center">
 
-                <p className="
-                  text-foreground/60
-                  text-sm
-                ">
+                <p
+                  className="
+                    text-foreground/60
+                    text-sm
+                  "
+                >
 
                   Score
 
                 </p>
 
-                <p className="
-                  font-bold
-                  text-lg
-                  text-brand-orange
-                ">
+                <p
+                  className="
+                    font-bold
+                    text-lg
+                    text-brand-orange
+                  "
+                >
 
                   {lead.score ?? 0}/100
 
@@ -1513,20 +1647,24 @@ export function LeadDetail({
 
               <div className="text-center">
 
-                <p className="
-                  text-foreground/60
-                  text-sm
-                ">
+                <p
+                  className="
+                    text-foreground/60
+                    text-sm
+                  "
+                >
 
                   Engagement
 
                 </p>
 
-                <p className="
-                  font-bold
-                  text-lg
-                  text-red-500
-                ">
+                <p
+                  className="
+                    font-bold
+                    text-lg
+                    text-red-500
+                  "
+                >
 
                   {engagementLevel}
 
@@ -1535,6 +1673,7 @@ export function LeadDetail({
               </div>
 
             </div>
+
           )}
 
         </div>
@@ -1550,12 +1689,14 @@ export function LeadDetail({
 
             <>
 
-              <label className="
-                block
-                text-sm
-                font-semibold
-                mb-1
-              ">
+              <label
+                className="
+                  block
+                  text-sm
+                  font-semibold
+                  mb-1
+                "
+              >
 
                 Notas
 
@@ -1578,6 +1719,7 @@ export function LeadDetail({
                   rounded-lg
                   p-3
                   resize-none
+                  text-foreground
                 "
               />
 
@@ -1587,13 +1729,15 @@ export function LeadDetail({
 
             lead.notes && (
 
-              <div className="
-                p-4
-                bg-brand-orange/10
-                rounded
-                border-l-4
-                border-brand-orange
-              ">
+              <div
+                className="
+                  p-4
+                  bg-brand-orange/10
+                  rounded
+                  border-l-4
+                  border-brand-orange
+                "
+              >
 
                 <p className="text-sm">
 
@@ -1606,7 +1750,9 @@ export function LeadDetail({
                 </p>
 
               </div>
+
             )
+
           )}
 
         </div>
@@ -1618,22 +1764,26 @@ export function LeadDetail({
           INTERACCIONES
       ================================================= */}
 
-      <div className="
-        bg-surface
-        border
-        border-border-color
-        rounded-xl
-        p-6
-      ">
+      <div
+        className="
+          bg-surface
+          border
+          border-border-color
+          rounded-xl
+          p-6
+        "
+      >
 
-        <h2 className="
-          text-2xl
-          font-bold
-          mb-4
-          flex
-          items-center
-          gap-2
-        ">
+        <h2
+          className="
+            text-2xl
+            font-bold
+            mb-4
+            flex
+            items-center
+            gap-2
+          "
+        >
 
           <MessageCircle
             size={24}
@@ -1648,9 +1798,11 @@ export function LeadDetail({
 
         {interactions.length === 0 ? (
 
-          <p className="
-            text-foreground/50
-          ">
+          <p
+            className="
+              text-foreground/50
+            "
+          >
 
             Sin interacciones registradas
 
@@ -1658,7 +1810,11 @@ export function LeadDetail({
 
         ) : (
 
-          <div className="space-y-3">
+          <div
+            className="
+              space-y-3
+            "
+          >
 
             {interactions.map(
               interaction => (
@@ -1676,19 +1832,24 @@ export function LeadDetail({
                   "
                 >
 
-                  <div className="
-                    flex
-                    justify-between
-                    text-sm
-                    text-foreground/60
-                    mb-1
-                  ">
+                  <div
+                    className="
+                      flex
+                      justify-between
+                      text-sm
+                      text-foreground/60
+                      mb-1
+                    "
+                  >
 
-                    <span className="
-                      font-semibold
-                    ">
+                    <span
+                      className="
+                        font-semibold
+                      "
+                    >
 
-                      {interaction.direction === 'inbound'
+                      {interaction.direction ===
+                      'inbound'
                         ? '⬅️'
                         : '➡️'}{' '}
 
@@ -1710,19 +1871,23 @@ export function LeadDetail({
 
                   <p>
 
-                    {interaction.message || '—'}
+                    {interaction.message ||
+                      '—'}
 
                   </p>
 
                 </div>
+
               )
             )}
 
           </div>
+
         )}
 
       </div>
 
     </div>
+
   )
 }
