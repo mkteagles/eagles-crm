@@ -1,181 +1,666 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
 
-import LeadsClient from './LeadsClient'
+import Link from 'next/link'
 
-export default async function LeadsPage() {
-  const cookieStore = await cookies()
+import {
+  useSearchParams,
+} from 'next/navigation'
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
+import {
+  Plus,
+  Users,
+  GraduationCap,
+  Building2,
+  Globe2,
+} from 'lucide-react'
 
-        setAll(cookiesToSet) {
-          try {
-            cookiesToSet.forEach(
-              ({ name, value, options }) => {
-                cookieStore.set(
-                  name,
-                  value,
-                  options
-                )
-              }
-            )
-          } catch {
-            // Server Component
-          }
-        },
-      },
-    }
-  )
+import {
+  useEffect,
+  useState,
+} from 'react'
+
+import {
+  createClient,
+} from '@/lib/supabase/client'
+
+import {
+  LeadsTable,
+} from '@/components/LeadsTable'
+
+import type {
+  ProductFilter,
+} from '@/lib/types'
+
+import {
+  PRODUCT_ACCESS,
+} from '@/lib/hooks'
+
+
+// =======================================================
+// COMPONENTE
+// =======================================================
+
+export default function LeadsPage() {
+
+  const searchParams =
+    useSearchParams()
+
+
+  // =====================================================
+  // SUPABASE
+  // =====================================================
+
+  const supabase =
+    createClient()
+
 
   // =====================================================
   // USUARIO
   // =====================================================
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const [
+    userEmail,
+    setUserEmail,
+  ] = useState<string | null>(
+    null
+  )
 
-  if (!user) {
-    redirect('/auth/login')
-  }
+
+  const [
+    userName,
+    setUserName,
+  ] = useState<string | null>(
+    null
+  )
+
+
+  const [
+    role,
+    setRole,
+  ] = useState<string | null>(
+    null
+  )
+
 
   // =====================================================
-  // PERFIL
+  // CARGAR PERFIL
   // =====================================================
 
-  const { data: profile } =
-    await supabase
-      .from('user_profiles')
-      .select(
-        'full_name, email, role'
+  useEffect(() => {
+
+    let active = true
+
+
+    async function loadProfile() {
+
+      const {
+        data: {
+          user,
+        },
+      } =
+        await supabase.auth.getUser()
+
+
+      if (!user || !active) {
+
+        return
+
+      }
+
+
+      setUserEmail(
+        user.email?.toLowerCase() ||
+        null
       )
-      .eq('id', user.id)
-      .single()
 
-  const name =
-    profile?.full_name ||
-    user.user_metadata?.full_name ||
-    ''
 
-  const email =
-    profile?.email ||
-    user.email ||
-    ''
+      const {
+        data: profile,
+      } =
+        await supabase
+          .from(
+            'user_profiles'
+          )
+          .select(
+            'full_name, role'
+          )
+          .eq(
+            'id',
+            user.id
+          )
+          .maybeSingle()
 
-  const role =
-    profile?.role ||
-    'executor'
+
+      if (!active) return
+
+
+      setUserName(
+        profile?.full_name
+          ?.toLowerCase() ||
+        null
+      )
+
+
+      setRole(
+        profile?.role ||
+        null
+      )
+
+    }
+
+
+    loadProfile()
+
+
+    return () => {
+
+      active = false
+
+    }
+
+  }, [])
+
 
   // =====================================================
-  // NORMALIZAR
+  // NORMALIZAR USUARIO
   // =====================================================
 
   const normalizedName =
-    name
-      .trim()
-      .toLowerCase()
+    userName
+      ?.trim()
+      .toLowerCase() ||
+    ''
+
 
   const normalizedEmail =
-    email
-      .trim()
-      .toLowerCase()
+    userEmail
+      ?.trim()
+      .toLowerCase() ||
+    ''
 
-  // =====================================================
-  // IDENTIFICAR USUARIO
-  // =====================================================
 
   const isMarcos =
-    normalizedName.includes('marcos') ||
+    normalizedName.includes(
+      'marcos'
+    ) ||
     normalizedEmail ===
       'marcosc@eagles.com'
 
+
   const isUrsula =
-    normalizedName.includes('ursula') ||
-    normalizedName.includes('úrsula') ||
+    normalizedName.includes(
+      'ursula'
+    ) ||
+    normalizedName.includes(
+      'úrsula'
+    ) ||
     normalizedEmail ===
       'ursula@eagles.com'
+
 
   // =====================================================
   // PRODUCTOS PERMITIDOS
   // =====================================================
 
-  let allowedProducts: string[] = []
+  let allowedProducts:
+    ProductFilter[] = []
 
-  // -----------------------------------------------------
-  // ADMIN
-  // -----------------------------------------------------
 
-  if (role === 'admin') {
-    allowedProducts = [
-      'all',
-      'workshop',
-      'empresarial',
-      'costa_rica',
-    ]
+  if (
+    role === 'admin'
+  ) {
+
+    allowedProducts =
+      PRODUCT_ACCESS.admin ||
+      []
+
   }
-
-  // -----------------------------------------------------
-  // MARCOS
-  // -----------------------------------------------------
 
   else if (
     role === 'executor' &&
     isMarcos
   ) {
-    allowedProducts = [
-      'workshop',
-    ]
-  }
 
-  // -----------------------------------------------------
-  // URSULA
-  // -----------------------------------------------------
+    allowedProducts =
+      PRODUCT_ACCESS.executor_marcos ||
+      []
+
+  }
 
   else if (
     role === 'executor' &&
     isUrsula
   ) {
-    allowedProducts = [
-      'empresarial',
-      'costa_rica',
-    ]
+
+    allowedProducts =
+      PRODUCT_ACCESS.executor_ursula ||
+      []
+
   }
 
-  // -----------------------------------------------------
-  // OTROS EXECUTORES
-  // -----------------------------------------------------
-
-  else if (role === 'executor') {
-    allowedProducts = []
-  }
 
   // =====================================================
-  // SEGURIDAD
+  // FILTROS
+  // =====================================================
+
+  const allFilters = [
+
+    {
+      value:
+        'all' as ProductFilter,
+
+      label:
+        'Todos',
+
+      icon:
+        Users,
+    },
+
+    {
+      value:
+        'workshop_lite' as ProductFilter,
+
+      label:
+        'Workshop Lite',
+
+      icon:
+        GraduationCap,
+    },
+
+    {
+      value:
+        'workshop_high_ticket' as ProductFilter,
+
+      label:
+        'Workshop High Ticket',
+
+      icon:
+        GraduationCap,
+    },
+
+    {
+      value:
+        'empresarial' as ProductFilter,
+
+      label:
+        'Empresarial',
+
+      icon:
+        Building2,
+    },
+
+    {
+      value:
+        'costa_rica' as ProductFilter,
+
+      label:
+        'Costa Rica',
+
+      icon:
+        Globe2,
+    },
+
+  ]
+
+
+  // =====================================================
+  // FILTRAR
+  // =====================================================
+
+  const filters =
+    allFilters.filter(
+      (
+        filter
+      ) => {
+
+        // -----------------------------------------------
+        // ADMIN / ALL
+        // -----------------------------------------------
+
+        if (
+          allowedProducts.includes(
+            'all'
+          )
+        ) {
+
+          return true
+
+        }
+
+
+        // -----------------------------------------------
+        // PRODUCTO
+        // -----------------------------------------------
+
+        return allowedProducts.includes(
+          filter.value
+        )
+
+      }
+    )
+
+
+  // =====================================================
+  // PRODUCTO SOLICITADO
+  // =====================================================
+
+  const requestedProduct =
+    searchParams.get(
+      'product'
+    ) as ProductFilter | null
+
+
+  // =====================================================
+  // PRODUCTO ACTUAL
+  // =====================================================
+
+  const product:
+    ProductFilter =
+
+    requestedProduct &&
+    filters.some(
+      (
+        filter
+      ) =>
+        filter.value ===
+        requestedProduct
+    )
+
+      ? requestedProduct
+
+      : (
+          filters[0]?.value ||
+          'all'
+        )
+
+
+  // =====================================================
+  // CARGANDO PERMISOS
   // =====================================================
 
   if (
-    allowedProducts.length === 0
+    role === null
   ) {
-    redirect('/app1')
+
+    return (
+
+      <div
+        className="
+          p-6
+        "
+      >
+
+        <div
+          className="
+            bg-surface
+            border
+            border-border-color
+            rounded-xl
+            p-8
+            text-center
+          "
+        >
+
+          <div
+            className="
+              animate-pulse
+              text-foreground/60
+            "
+          >
+
+            Cargando ventas...
+
+          </div>
+
+        </div>
+
+      </div>
+
+    )
+
   }
 
+
   // =====================================================
-  // PASAR PERMISOS AL CLIENTE
+  // SIN PERMISOS
+  // =====================================================
+
+  if (
+    filters.length === 0
+  ) {
+
+    return (
+
+      <div
+        className="
+          p-6
+        "
+      >
+
+        <div
+          className="
+            bg-surface
+            border
+            border-border-color
+            rounded-xl
+            p-8
+            text-center
+          "
+        >
+
+          <div className="text-4xl mb-3">
+            🔒
+          </div>
+
+
+          <h1
+            className="
+              text-xl
+              font-bold
+            "
+          >
+
+            Sin productos asignados
+
+          </h1>
+
+
+          <p
+            className="
+              text-sm
+              text-foreground/60
+              mt-2
+            "
+          >
+
+            Tu usuario todavía no tiene productos
+            asignados para visualizar.
+
+          </p>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
+
+
+  // =====================================================
+  // RENDER
   // =====================================================
 
   return (
-    <LeadsClient
-      allowedProducts={
-        allowedProducts
-      }
-    />
+
+    <div
+      className="
+        p-6
+        space-y-6
+      "
+    >
+
+      {/* =================================================
+          HEADER
+      ================================================= */}
+
+      <div
+        className="
+          flex
+          flex-col
+          md:flex-row
+          md:items-center
+          md:justify-between
+          gap-4
+        "
+      >
+
+        <div>
+
+          <h1
+            className="
+              text-2xl
+              font-bold
+              text-foreground
+            "
+          >
+
+            Ventas
+
+          </h1>
+
+
+          <p
+            className="
+              text-sm
+              text-foreground/60
+              mt-1
+            "
+          >
+
+            Gestión y seguimiento de leads comerciales
+
+          </p>
+
+        </div>
+
+
+        <Link
+          href="/app1/leads/nuevo"
+          className="
+            inline-flex
+            items-center
+            gap-2
+            bg-brand-blue
+            text-white
+            px-4
+            py-2
+            rounded-lg
+            font-semibold
+            hover:opacity-90
+            transition
+          "
+        >
+
+          <Plus
+            size={18}
+          />
+
+          Nuevo lead
+
+        </Link>
+
+      </div>
+
+
+      {/* =================================================
+          FILTROS
+      ================================================= */}
+
+      <div
+        className="
+          flex
+          flex-wrap
+          gap-2
+        "
+      >
+
+        {filters.map(
+          (
+            filter
+          ) => {
+
+            const Icon =
+              filter.icon
+
+
+            const active =
+              product ===
+              filter.value
+
+
+            return (
+
+              <Link
+                key={
+                  filter.value
+                }
+                href={
+                  filter.value ===
+                  'all'
+
+                    ? '/app1/leads'
+
+                    : `/app1/leads?product=${filter.value}`
+                }
+                className={`
+                  inline-flex
+                  items-center
+                  gap-2
+                  px-4
+                  py-2
+                  rounded-lg
+                  text-sm
+                  font-semibold
+                  border
+                  transition
+
+                  ${
+                    active
+                      ? 'bg-brand-blue text-white border-brand-blue'
+                      : 'bg-surface border-border-color text-foreground hover:bg-foreground/5'
+                  }
+                `}
+              >
+
+                <Icon
+                  size={16}
+                />
+
+                {filter.label}
+
+              </Link>
+
+            )
+
+          }
+        )}
+
+      </div>
+
+
+      {/* =================================================
+          TABLA
+      ================================================= */}
+
+      <LeadsTable
+        product={
+          product
+        }
+      />
+
+    </div>
+
   )
+
 }

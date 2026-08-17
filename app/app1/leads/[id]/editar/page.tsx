@@ -2,33 +2,45 @@
 
 import { use } from 'react'
 
-import {
-  useLead,
-} from '@/lib/hooks'
+import { useLead } from '@/lib/hooks'
 
-import {
-  LeadDetail,
-} from '@/components/LeadDetail'
+import { LeadDetail } from '@/components/LeadDetail'
 
 
-export default function LeadDetailPage({
-  params,
-}: {
+// =======================================================
+// TIPOS
+// =======================================================
+
+interface LeadDetailPageProps {
   params: Promise<{
     id: string
   }>
-}) {
+}
+
+
+// =======================================================
+// PAGE
+// =======================================================
+
+export default function LeadDetailPage({
+  params,
+}: LeadDetailPageProps) {
 
   const {
     id,
   } = use(params)
 
 
+  // =====================================================
+  // OBTENER LEAD
+  // =====================================================
+
   const {
     lead,
     interactions,
     loading,
     error,
+    refetch,
   } = useLead(id)
 
 
@@ -43,6 +55,8 @@ export default function LeadDetailPage({
       <div className="p-6">
 
         <div className="
+          max-w-3xl
+          mx-auto
           bg-surface
           border
           border-border-color
@@ -54,7 +68,9 @@ export default function LeadDetailPage({
           <p className="
             text-foreground/60
           ">
+
             Cargando lead...
+
           </p>
 
         </div>
@@ -77,6 +93,8 @@ export default function LeadDetailPage({
       <div className="p-6">
 
         <div className="
+          max-w-3xl
+          mx-auto
           bg-red-500/10
           border
           border-red-500/30
@@ -85,15 +103,20 @@ export default function LeadDetailPage({
           p-6
         ">
 
-          <p className="font-bold">
-            Error cargando el lead
-          </p>
-
-          <p className="
-            text-sm
-            mt-1
+          <h2 className="
+            font-bold
+            text-lg
+            mb-2
           ">
+
+            Error cargando el lead
+
+          </h2>
+
+          <p className="text-sm">
+
             {error}
+
           </p>
 
         </div>
@@ -116,16 +139,33 @@ export default function LeadDetailPage({
       <div className="p-6">
 
         <div className="
+          max-w-3xl
+          mx-auto
           bg-surface
           border
           border-border-color
           rounded-xl
-          p-6
+          p-8
           text-center
         ">
 
-          <p className="font-bold">
+          <h2 className="
+            font-bold
+            text-xl
+          ">
+
             Lead no encontrado
+
+          </h2>
+
+          <p className="
+            text-sm
+            text-foreground/50
+            mt-2
+          ">
+
+            El lead que intentas consultar no existe.
+
           </p>
 
         </div>
@@ -138,7 +178,7 @@ export default function LeadDetailPage({
 
 
   // =====================================================
-  // DETALLE
+  // DETAIL
   // =====================================================
 
   return (
@@ -146,6 +186,7 @@ export default function LeadDetailPage({
     <LeadDetail
       lead={lead}
       interactions={interactions}
+      onSaved={refetch}
     />
 
   )

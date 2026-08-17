@@ -2,6 +2,8 @@
 
 import {
   useState,
+  type ChangeEvent,
+  type FormEvent,
 } from 'react'
 
 import {
@@ -16,64 +18,86 @@ import {
   PRODUCT_CONFIG,
 } from '@/lib/hooks'
 
-import {
+import type {
   ProductType,
+  Currency,
 } from '@/lib/types'
+
+
+// =========================================================
+// TIPO DEL FORMULARIO
+// =========================================================
+
+type LeadForm = {
+  full_name: string
+  phone_number: string
+  email: string
+  platform:
+    | 'fb'
+    | 'ig'
+    | 'whatsapp'
+    | 'hotmart'
+    | 'manychat'
+    | 'other'
+  campaign_name: string
+  product: ProductType
+  amount_paid: string
+  notes: string
+}
+
+
+// =========================================================
+// COMPONENTE
+// =========================================================
 
 export default function NuevoLeadPage() {
 
   const router = useRouter()
 
-  const supabase =
-    createClient()
+  const supabase = createClient()
 
-  const [
-    form,
-    setForm,
-  ] = useState({
 
+  // =======================================================
+  // FORM
+  // =======================================================
+
+  const [form, setForm] = useState<LeadForm>({
     full_name: '',
     phone_number: '',
     email: '',
-
-    platform:
-      'fb',
-
-    campaign_name:
-      '',
-
-    product:
-      'costa_rica' as ProductType,
-
-    amount_paid:
-      '0',
-
-    notes:
-      '',
+    platform: 'fb',
+    campaign_name: '',
+    product: 'costa_rica',
+    amount_paid: '0',
+    notes: '',
   })
 
-  const [
-    submitting,
-    setSubmitting,
-  ] = useState(false)
 
-  const [
-    error,
-    setError,
-  ] = useState<string | null>(null)
+  const [submitting, setSubmitting] =
+    useState(false)
+
+  const [error, setError] =
+    useState<string | null>(null)
 
 
-  /**
-   * PRODUCTO ACTUAL
-   */
+  // =======================================================
+  // PRODUCTO ACTUAL
+  // =======================================================
 
   const productConfig =
-    PRODUCT_CONFIG[
-      form.product
-    ]
+    PRODUCT_CONFIG[form.product]
 
   const price =
     productConfig.price
+
+  const currency:
+    Currency =
+      productConfig.currency
+
+
+  // =======================================================
+  // PAGO
+  // =======================================================
 
   const amountPaid =
     Number(
@@ -87,10 +111,6 @@ export default function NuevoLeadPage() {
     )
 
 
-  /**
-   * ESTADO DE PAGO
-   */
-
   const paymentStatus =
     amountPaid <= 0
       ? 'unpaid'
@@ -99,44 +119,97 @@ export default function NuevoLeadPage() {
       : 'paid'
 
 
-  /**
-   * CAMBIOS DEL FORM
-   */
+  // =======================================================
+  // CAMBIO DE INPUT
+  // =======================================================
 
   const handleChange = (
-    e: React.ChangeEvent<
+    e: ChangeEvent<
       HTMLInputElement |
       HTMLTextAreaElement |
       HTMLSelectElement
     >
   ) => {
 
-    setForm({
-      ...form,
-      [e.target.name]:
-        e.target.value,
-    })
+    const {
+      name,
+      value,
+    } = e.target
+
+
+    setForm(
+      previous => ({
+        ...previous,
+        [name]: value,
+      })
+    )
   }
 
 
-  /**
-   * CREAR LEAD
-   */
+  // =======================================================
+  // SUBMIT
+  // =======================================================
 
   const handleSubmit =
     async (
-      e: React.FormEvent
+      e: FormEvent
     ) => {
 
       e.preventDefault()
 
       setSubmitting(true)
+
       setError(null)
 
 
+      // ---------------------------------------------------
+      // VALIDACIONES
+      // ---------------------------------------------------
+
       if (
-        amountPaid >
-        price
+        !form.full_name.trim()
+      ) {
+
+        setError(
+          'El nombre es obligatorio.'
+        )
+
+        setSubmitting(false)
+
+        return
+      }
+
+
+      if (
+        !form.phone_number.trim()
+      ) {
+
+        setError(
+          'El teléfono es obligatorio.'
+        )
+
+        setSubmitting(false)
+
+        return
+      }
+
+
+      if (
+        amountPaid < 0
+      ) {
+
+        setError(
+          'El pago no puede ser negativo.'
+        )
+
+        setSubmitting(false)
+
+        return
+      }
+
+
+      if (
+        amountPaid > price
       ) {
 
         setError(
@@ -151,9 +224,9 @@ export default function NuevoLeadPage() {
 
       try {
 
-        /**
-         * Obtener usuario
-         */
+        // =================================================
+        // USUARIO
+        // =================================================
 
         const {
           data: {
@@ -172,33 +245,33 @@ export default function NuevoLeadPage() {
         }
 
 
-        /**
-         * Crear lead
-         */
+        // =================================================
+        // INSERTAR LEAD
+        // =================================================
 
         const {
-          error:
-            insertError,
+          data: newLead,
+          error: insertError,
         } =
           await supabase
             .from('leads')
             .insert({
 
               full_name:
-                form.full_name,
+                form.full_name.trim(),
 
               phone_number:
-                form.phone_number,
+                form.phone_number.trim(),
 
               email:
-                form.email ||
+                form.email.trim() ||
                 null,
 
               platform:
                 form.platform,
 
               campaign_name:
-                form.campaign_name ||
+                form.campaign_name.trim() ||
                 null,
 
               product:
@@ -208,7 +281,7 @@ export default function NuevoLeadPage() {
                 price,
 
               currency:
-                productConfig.currency,
+                currency,
 
               amount_paid:
                 amountPaid,
@@ -217,7 +290,7 @@ export default function NuevoLeadPage() {
                 paymentStatus,
 
               notes:
-                form.notes ||
+                form.notes.trim() ||
                 null,
 
               source:
@@ -230,6 +303,8 @@ export default function NuevoLeadPage() {
                 0,
 
             })
+            .select()
+            .single()
 
 
         if (insertError) {
@@ -241,15 +316,19 @@ export default function NuevoLeadPage() {
         }
 
 
-        /**
-         * REGRESAR A VENTAS
-         */
+        // =================================================
+        // REDIRECCIÓN
+        // =================================================
 
-        router.push(
-          `/app1/leads?product=${form.product}`
-        )
+        if (newLead) {
 
-        router.refresh()
+          router.push(
+            `/app1/leads?product=${form.product}`
+          )
+
+          router.refresh()
+
+        }
 
       } catch (err) {
 
@@ -267,35 +346,55 @@ export default function NuevoLeadPage() {
     }
 
 
+  // =======================================================
+  // FORMATO DE DINERO
+  // =======================================================
+
+  const formatMoney = (
+    value: number
+  ) => {
+
+    return new Intl.NumberFormat(
+      'es-MX',
+      {
+        style: 'currency',
+        currency: currency,
+      }
+    ).format(value)
+  }
+
+
+  // =======================================================
+  // RENDER
+  // =======================================================
+
   return (
 
     <div className="max-w-2xl mx-auto p-6">
 
-      {/* HEADER */}
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
       <div className="mb-6">
 
         <h1 className="text-2xl font-bold text-foreground">
-
           Nuevo lead
-
         </h1>
 
         <p className="text-sm text-foreground/60 mt-1">
-
           Agrega un nuevo prospecto al área de ventas.
-
         </p>
 
       </div>
 
 
-      {/* FORM */}
+      {/* =================================================
+          FORM
+      ================================================= */}
 
       <form
-        onSubmit={
-          handleSubmit
-        }
+        onSubmit={handleSubmit}
         className="
           bg-surface
           border
@@ -307,25 +406,21 @@ export default function NuevoLeadPage() {
         "
       >
 
-        {/* NOMBRE */}
+        {/* =================================================
+            NOMBRE
+        ================================================= */}
 
         <div>
 
-          <label className="block text-sm font-medium mb-1 text-foreground">
-
+          <label className="block text-sm font-medium mb-1">
             Nombre completo *
-
           </label>
 
           <input
             name="full_name"
             required
-            value={
-              form.full_name
-            }
-            onChange={
-              handleChange
-            }
+            value={form.full_name}
+            onChange={handleChange}
             placeholder="Nombre del prospecto"
             className="
               w-full
@@ -344,25 +439,21 @@ export default function NuevoLeadPage() {
         </div>
 
 
-        {/* TELÉFONO */}
+        {/* =================================================
+            TELÉFONO
+        ================================================= */}
 
         <div>
 
-          <label className="block text-sm font-medium mb-1 text-foreground">
-
+          <label className="block text-sm font-medium mb-1">
             Teléfono (WhatsApp) *
-
           </label>
 
           <input
             name="phone_number"
             required
-            value={
-              form.phone_number
-            }
-            onChange={
-              handleChange
-            }
+            value={form.phone_number}
+            onChange={handleChange}
             placeholder="506..."
             className="
               w-full
@@ -379,33 +470,27 @@ export default function NuevoLeadPage() {
           />
 
           <p className="text-xs text-foreground/50 mt-1">
-
             Incluye el código de país.
-
           </p>
 
         </div>
 
 
-        {/* EMAIL */}
+        {/* =================================================
+            EMAIL
+        ================================================= */}
 
         <div>
 
-          <label className="block text-sm font-medium mb-1 text-foreground">
-
+          <label className="block text-sm font-medium mb-1">
             Email
-
           </label>
 
           <input
             type="email"
             name="email"
-            value={
-              form.email
-            }
-            onChange={
-              handleChange
-            }
+            value={form.email}
+            onChange={handleChange}
             placeholder="correo@ejemplo.com"
             className="
               w-full
@@ -421,24 +506,20 @@ export default function NuevoLeadPage() {
         </div>
 
 
-        {/* PLATAFORMA */}
+        {/* =================================================
+            PLATAFORMA
+        ================================================= */}
 
         <div>
 
-          <label className="block text-sm font-medium mb-1 text-foreground">
-
+          <label className="block text-sm font-medium mb-1">
             Plataforma
-
           </label>
 
           <select
             name="platform"
-            value={
-              form.platform
-            }
-            onChange={
-              handleChange
-            }
+            value={form.platform}
+            onChange={handleChange}
             className="
               w-full
               bg-background
@@ -479,24 +560,20 @@ export default function NuevoLeadPage() {
         </div>
 
 
-        {/* PRODUCTO */}
+        {/* =================================================
+            PRODUCTO
+        ================================================= */}
 
         <div>
 
-          <label className="block text-sm font-medium mb-1 text-foreground">
-
+          <label className="block text-sm font-medium mb-1">
             Producto *
-
           </label>
 
           <select
             name="product"
-            value={
-              form.product
-            }
-            onChange={
-              handleChange
-            }
+            value={form.product}
+            onChange={handleChange}
             required
             className="
               w-full
@@ -510,15 +587,19 @@ export default function NuevoLeadPage() {
           >
 
             <option value="costa_rica">
-              🇨🇷 Costa Rica
+              🇨🇷 Costa Rica — $540 USD
+            </option>
+
+            <option value="workshop_lite">
+              🎓 Workshop Lite — $14 USD
             </option>
 
             <option value="workshop">
-              🎓 Workshop
+              🎓 Workshop High Ticket — $10,000 MXN
             </option>
 
             <option value="empresarial">
-              🏢 Empresarial
+              🏢 Empresarial — $5,997 MXN
             </option>
 
           </select>
@@ -526,7 +607,9 @@ export default function NuevoLeadPage() {
         </div>
 
 
-        {/* INFORMACIÓN DE PAGO */}
+        {/* =================================================
+            INFORMACIÓN COMERCIAL
+        ================================================= */}
 
         <div
           className="
@@ -541,45 +624,29 @@ export default function NuevoLeadPage() {
 
           <div>
 
-            <h2 className="font-bold text-foreground">
-
+            <h2 className="font-bold">
               Información comercial
-
             </h2>
 
             <p className="text-xs text-foreground/50 mt-1">
-
               El precio se asigna automáticamente según el producto.
-
             </p>
 
           </div>
 
 
-          {/* PRECIO */}
+          {/* PRECIO / PAGO */}
 
           <div className="grid grid-cols-2 gap-4">
 
             <div>
 
               <p className="text-xs text-foreground/50">
-
                 Precio
-
               </p>
 
-              <p className="text-xl font-bold text-foreground">
-
-                {new Intl.NumberFormat(
-                  'es-MX',
-                  {
-                    style:
-                      'currency',
-                    currency:
-                      productConfig.currency,
-                  }
-                ).format(price)}
-
+              <p className="text-xl font-bold">
+                {formatMoney(price)}
               </p>
 
             </div>
@@ -588,22 +655,17 @@ export default function NuevoLeadPage() {
             <div>
 
               <label className="text-xs text-foreground/50">
-
                 Apartado / pagado
-
               </label>
 
               <input
                 type="number"
                 min="0"
+                max={price}
                 step="0.01"
                 name="amount_paid"
-                value={
-                  form.amount_paid
-                }
-                onChange={
-                  handleChange
-                }
+                value={form.amount_paid}
+                onChange={handleChange}
                 className="
                   w-full
                   mt-1
@@ -637,9 +699,7 @@ export default function NuevoLeadPage() {
             <div>
 
               <p className="text-xs text-foreground/50">
-
                 Saldo pendiente
-
               </p>
 
               <p
@@ -653,17 +713,7 @@ export default function NuevoLeadPage() {
                   }
                 `}
               >
-
-                {new Intl.NumberFormat(
-                  'es-MX',
-                  {
-                    style:
-                      'currency',
-                    currency:
-                      productConfig.currency,
-                  }
-                ).format(balance)}
-
+                {formatMoney(balance)}
               </p>
 
             </div>
@@ -678,26 +728,20 @@ export default function NuevoLeadPage() {
                 font-bold
                 text-white
                 ${
-                  paymentStatus ===
-                  'paid'
+                  paymentStatus === 'paid'
                     ? 'bg-green-500'
-                    : paymentStatus ===
-                      'partial'
+                    : paymentStatus === 'partial'
                     ? 'bg-brand-orange'
                     : 'bg-gray-500'
                 }
               `}
             >
 
-              {
-                paymentStatus ===
-                'paid'
-                  ? 'Pagado'
-                  : paymentStatus ===
-                    'partial'
-                  ? 'Pago parcial'
-                  : 'Sin pago'
-              }
+              {paymentStatus === 'paid'
+                ? 'Pagado'
+                : paymentStatus === 'partial'
+                ? 'Pago parcial'
+                : 'Sin pago'}
 
             </span>
 
@@ -706,24 +750,20 @@ export default function NuevoLeadPage() {
         </div>
 
 
-        {/* CAMPAÑA */}
+        {/* =================================================
+            CAMPAÑA
+        ================================================= */}
 
         <div>
 
-          <label className="block text-sm font-medium mb-1 text-foreground">
-
+          <label className="block text-sm font-medium mb-1">
             Campaña
-
           </label>
 
           <input
             name="campaign_name"
-            value={
-              form.campaign_name
-            }
-            onChange={
-              handleChange
-            }
+            value={form.campaign_name}
+            onChange={handleChange}
             placeholder="Nombre de la campaña"
             className="
               w-full
@@ -739,24 +779,20 @@ export default function NuevoLeadPage() {
         </div>
 
 
-        {/* NOTAS */}
+        {/* =================================================
+            NOTAS
+        ================================================= */}
 
         <div>
 
-          <label className="block text-sm font-medium mb-1 text-foreground">
-
+          <label className="block text-sm font-medium mb-1">
             Notas
-
           </label>
 
           <textarea
             name="notes"
-            value={
-              form.notes
-            }
-            onChange={
-              handleChange
-            }
+            value={form.notes}
+            onChange={handleChange}
             rows={4}
             placeholder="Información adicional..."
             className="
@@ -773,7 +809,9 @@ export default function NuevoLeadPage() {
         </div>
 
 
-        {/* ERROR */}
+        {/* =================================================
+            ERROR
+        ================================================= */}
 
         {error && (
 
@@ -788,21 +826,19 @@ export default function NuevoLeadPage() {
               text-sm
             "
           >
-
             {error}
-
           </div>
 
         )}
 
 
-        {/* BOTÓN */}
+        {/* =================================================
+            BOTÓN
+        ================================================= */}
 
         <button
           type="submit"
-          disabled={
-            submitting
-          }
+          disabled={submitting}
           className="
             w-full
             bg-brand-blue
