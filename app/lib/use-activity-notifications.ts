@@ -77,7 +77,31 @@ export interface ActivityIdeaLike {
 
 
 // =========================================================
-// TIPOS DE NOTIFICACIÓN
+// PAYLOAD REALTIME
+// =========================================================
+
+interface RealtimePayload {
+
+  eventType:
+    | 'INSERT'
+    | 'UPDATE'
+    | 'DELETE'
+
+  new:
+    ActivityLike |
+    ActivityIdeaLike |
+    Record<string, unknown>
+
+  old:
+    ActivityLike |
+    ActivityIdeaLike |
+    Record<string, unknown>
+
+}
+
+
+// =========================================================
+// TIPOS
 // =========================================================
 
 export type NotificationType =
@@ -137,6 +161,7 @@ export function getActivityNotificationKey(
     activity.assigned_to ||
     'unassigned'
   }`
+
 }
 
 
@@ -152,8 +177,11 @@ export function getSeenActivities(
     !userId ||
     typeof window === 'undefined'
   ) {
+
     return []
+
   }
+
 
   try {
 
@@ -162,21 +190,33 @@ export function getSeenActivities(
         `${STORAGE_PREFIX}${userId}`
       )
 
+
     if (!stored) {
+
       return []
+
     }
+
 
     const parsed: unknown =
       JSON.parse(stored)
 
-    return Array.isArray(parsed)
-      ? parsed.filter(
-          (
-            item
-          ): item is string =>
-            typeof item === 'string'
-        )
-      : []
+
+    if (
+      !Array.isArray(parsed)
+    ) {
+
+      return []
+
+    }
+
+
+    return parsed.filter(
+      (
+        item
+      ): item is string =>
+        typeof item === 'string'
+    )
 
   } catch (error) {
 
@@ -186,7 +226,9 @@ export function getSeenActivities(
     )
 
     return []
+
   }
+
 }
 
 
@@ -203,8 +245,11 @@ export function markActivityAsSeen(
     !userId ||
     typeof window === 'undefined'
   ) {
+
     return
+
   }
+
 
   try {
 
@@ -213,19 +258,27 @@ export function markActivityAsSeen(
         activity
       )
 
+
     const seen =
       getSeenActivities(
         userId
       )
 
-    if (!seen.includes(key)) {
+
+    if (
+      !seen.includes(key)
+    ) {
+
       seen.push(key)
+
     }
+
 
     localStorage.setItem(
       `${STORAGE_PREFIX}${userId}`,
       JSON.stringify(seen)
     )
+
 
     window.dispatchEvent(
       new CustomEvent(
@@ -250,6 +303,7 @@ export function markActivityAsSeen(
     )
 
   }
+
 }
 
 
@@ -266,17 +320,22 @@ export function isActivitySeen(
     !userId ||
     typeof window === 'undefined'
   ) {
+
     return false
+
   }
+
 
   const key =
     getActivityNotificationKey(
       activity
     )
 
+
   return getSeenActivities(
     userId
   ).includes(key)
+
 }
 
 
@@ -293,6 +352,7 @@ export function isActivityNew(
     activity,
     userId
   )
+
 }
 
 
@@ -318,20 +378,19 @@ export function useActivityNotifications(
   user?: UserProfile | null
 ) {
 
-  // =======================================================
-  // CLIENTE SUPABASE ESTABLE
-  // =======================================================
+  // =====================================================
+  // SUPABASE ESTABLE
+  // =====================================================
 
-  const [
-    supabase,
-  ] = useState(
-    () => createClient()
+  const supabase = useMemo(
+    () => createClient(),
+    []
   )
 
 
-  // =======================================================
-  // ESTADOS
-  // =======================================================
+  // =====================================================
+  // STATE
+  // =====================================================
 
   const [
     notifications,
@@ -340,15 +399,16 @@ export function useActivityNotifications(
     NotificationItem[]
   >([])
 
+
   const [
     loading,
     setLoading,
   ] = useState(true)
 
 
-  // =======================================================
+  // =====================================================
   // NOMBRE USUARIO
-  // =======================================================
+  // =====================================================
 
   const getUserName =
     useCallback(
@@ -357,8 +417,11 @@ export function useActivityNotifications(
       ): Promise<string> => {
 
         if (!userId) {
+
           return 'Usuario'
+
         }
+
 
         try {
 
@@ -379,6 +442,7 @@ export function useActivityNotifications(
               )
               .maybeSingle()
 
+
           if (error) {
 
             console.error(
@@ -387,7 +451,9 @@ export function useActivityNotifications(
             )
 
             return 'Usuario'
+
           }
+
 
           return (
             data?.full_name ||
@@ -402,16 +468,19 @@ export function useActivityNotifications(
           )
 
           return 'Usuario'
+
         }
 
       },
-      [supabase]
+      [
+        supabase,
+      ]
     )
 
 
-  // =======================================================
+  // =====================================================
   // NOTIFICACIÓN DEL NAVEGADOR
-  // =======================================================
+  // =====================================================
 
   const showBrowserNotification =
     useCallback(
@@ -424,21 +493,30 @@ export function useActivityNotifications(
         if (
           typeof window === 'undefined'
         ) {
+
           return
+
         }
+
 
         if (
           !('Notification' in window)
         ) {
+
           return
+
         }
+
 
         if (
           Notification.permission !==
           'granted'
         ) {
+
           return
+
         }
+
 
         try {
 
@@ -467,9 +545,9 @@ export function useActivityNotifications(
     )
 
 
-  // =======================================================
+  // =====================================================
   // CREAR NOTIFICACIÓN
-  // =======================================================
+  // =====================================================
 
   const createNotification =
     useCallback(
@@ -480,20 +558,30 @@ export function useActivityNotifications(
       ) => {
 
         if (!user?.id) {
+
           return
+
         }
+
+
+        // -------------------------------------------------
+        // NO NOTIFICARSE A SÍ MISMO
+        // -------------------------------------------------
 
         if (
           actorId &&
           actorId === user.id
         ) {
+
           return
+
         }
 
-        let shouldNotify =
-          false
+
+        let shouldNotify = false
 
         let message = ''
+
 
         const actorName =
           await getUserName(
@@ -508,13 +596,14 @@ export function useActivityNotifications(
         if (
           type === 'assigned' &&
           activity.assigned_to ===
-          user.id
+            user.id
         ) {
 
           shouldNotify = true
 
           message =
-            `${actorName} te asignó la actividad "${activity.title}"`
+            `${actorName} te asignó la actividad "${activity.title || 'Sin título'}"`
+
         }
 
 
@@ -525,13 +614,14 @@ export function useActivityNotifications(
         if (
           type === 'completed' &&
           activity.created_by ===
-          user.id
+            user.id
         ) {
 
           shouldNotify = true
 
           message =
-            `${actorName} completó la actividad "${activity.title}"`
+            `${actorName} completó la actividad "${activity.title || 'Sin título'}"`
+
         }
 
 
@@ -542,13 +632,14 @@ export function useActivityNotifications(
         if (
           type === 'approved' &&
           activity.assigned_to ===
-          user.id
+            user.id
         ) {
 
           shouldNotify = true
 
           message =
-            `${actorName} aprobó la actividad "${activity.title}"`
+            `${actorName} aprobó la actividad "${activity.title || 'Sin título'}"`
+
         }
 
 
@@ -559,13 +650,14 @@ export function useActivityNotifications(
         if (
           type === 'rejected' &&
           activity.assigned_to ===
-          user.id
+            user.id
         ) {
 
           shouldNotify = true
 
           message =
-            `${actorName} rechazó la actividad "${activity.title}"`
+            `${actorName} rechazó la actividad "${activity.title || 'Sin título'}"`
+
 
           if (
             activity.description
@@ -575,6 +667,7 @@ export function useActivityNotifications(
               `: ${activity.description}`
 
           }
+
         }
 
 
@@ -585,13 +678,14 @@ export function useActivityNotifications(
         if (
           type === 'updated' &&
           activity.assigned_to ===
-          user.id
+            user.id
         ) {
 
           shouldNotify = true
 
           message =
-            `${actorName} actualizó la actividad "${activity.title}"`
+            `${actorName} actualizó la actividad "${activity.title || 'Sin título'}"`
+
         }
 
 
@@ -600,7 +694,9 @@ export function useActivityNotifications(
         // -------------------------------------------------
 
         if (!shouldNotify) {
+
           return
+
         }
 
 
@@ -639,8 +735,7 @@ export function useActivityNotifications(
             activity,
 
             createdAt:
-              new Date()
-                .toISOString(),
+              new Date().toISOString(),
 
             notificationKey,
 
@@ -649,6 +744,7 @@ export function useActivityNotifications(
                 activity,
                 user.id
               ),
+
           }
 
 
@@ -670,14 +766,19 @@ export function useActivityNotifications(
                     notification.notificationKey
               )
 
+
             if (exists) {
+
               return previous
+
             }
+
 
             return [
               notification,
               ...previous,
             ]
+
           }
         )
 
@@ -701,9 +802,9 @@ export function useActivityNotifications(
     )
 
 
-  // =======================================================
+  // =====================================================
   // IDEA
-  // =======================================================
+  // =====================================================
 
   const createIdeaNotification =
     useCallback(
@@ -712,27 +813,37 @@ export function useActivityNotifications(
       ) => {
 
         if (!user?.id) {
+
           return
+
         }
+
 
         if (
           idea.assigned_to !==
           user.id
         ) {
+
           return
+
         }
+
 
         if (
           idea.created_by ===
           user.id
         ) {
+
           return
+
         }
+
 
         const actorName =
           await getUserName(
             idea.created_by
           )
+
 
         const activity:
           ActivityLike =
@@ -761,13 +872,17 @@ export function useActivityNotifications(
 
             updated_at:
               idea.updated_at,
+
           }
+
 
         const notificationKey =
           `idea:${idea.id}:${idea.assigned_to}`
 
+
         const message =
           `${actorName} te envió la idea "${idea.title || 'Sin título'}"`
+
 
         const notification:
           NotificationItem =
@@ -791,8 +906,7 @@ export function useActivityNotifications(
             activity,
 
             createdAt:
-              new Date()
-                .toISOString(),
+              new Date().toISOString(),
 
             notificationKey,
 
@@ -801,7 +915,9 @@ export function useActivityNotifications(
                 activity,
                 user.id
               ),
+
           }
+
 
         setNotifications(
           previous => {
@@ -813,9 +929,13 @@ export function useActivityNotifications(
                   notificationKey
               )
 
+
             if (exists) {
+
               return previous
+
             }
+
 
             return [
               notification,
@@ -824,6 +944,7 @@ export function useActivityNotifications(
 
           }
         )
+
 
         showBrowserNotification(
           'Nueva idea',
@@ -840,19 +961,23 @@ export function useActivityNotifications(
     )
 
 
-  // =======================================================
+  // =====================================================
   // PROCESAR CAMBIO
-  // =======================================================
+  // =====================================================
 
   const processActivityChange =
     useCallback(
       async (
-        payload: any
+        payload:
+          RealtimePayload
       ) => {
 
         if (!user?.id) {
+
           return
+
         }
+
 
         const eventType =
           payload.eventType
@@ -870,6 +995,7 @@ export function useActivityNotifications(
           const activity =
             payload.new as ActivityLike
 
+
           if (
             activity.assigned_to ===
             user.id
@@ -880,9 +1006,12 @@ export function useActivityNotifications(
               activity,
               activity.created_by
             )
+
           }
 
+
           return
+
         }
 
 
@@ -894,12 +1023,15 @@ export function useActivityNotifications(
           eventType !==
           'UPDATE'
         ) {
+
           return
+
         }
 
 
         const oldActivity =
           payload.old as ActivityLike
+
 
         const newActivity =
           payload.new as ActivityLike
@@ -913,9 +1045,11 @@ export function useActivityNotifications(
           oldActivity.assigned_to ===
           user.id
 
+
         const isAssigned =
           newActivity.assigned_to ===
           user.id
+
 
         if (
           !wasAssigned &&
@@ -927,6 +1061,7 @@ export function useActivityNotifications(
             newActivity,
             newActivity.created_by
           )
+
         }
 
 
@@ -938,9 +1073,11 @@ export function useActivityNotifications(
           oldActivity.status ===
           'completed'
 
+
         const isCompleted =
           newActivity.status ===
           'completed'
+
 
         if (
           !wasCompleted &&
@@ -952,6 +1089,7 @@ export function useActivityNotifications(
             newActivity,
             newActivity.assigned_to
           )
+
         }
 
 
@@ -963,9 +1101,11 @@ export function useActivityNotifications(
           oldActivity.status ===
           'approved'
 
+
         const isApproved =
           newActivity.status ===
           'approved'
+
 
         if (
           !wasApproved &&
@@ -977,6 +1117,7 @@ export function useActivityNotifications(
             newActivity,
             newActivity.approved_by
           )
+
         }
 
 
@@ -988,9 +1129,11 @@ export function useActivityNotifications(
           oldActivity.status ===
           'rejected'
 
+
         const isRejected =
           newActivity.status ===
           'rejected'
+
 
         if (
           !wasRejected &&
@@ -1002,6 +1145,7 @@ export function useActivityNotifications(
             newActivity,
             newActivity.approved_by
           )
+
         }
 
 
@@ -1013,17 +1157,21 @@ export function useActivityNotifications(
           oldActivity.status !==
           newActivity.status
 
+
         const titleChanged =
           oldActivity.title !==
           newActivity.title
+
 
         const descriptionChanged =
           oldActivity.description !==
           newActivity.description
 
+
         const assignmentChanged =
           oldActivity.assigned_to !==
           newActivity.assigned_to
+
 
         const specialStatusChange =
           (
@@ -1038,6 +1186,7 @@ export function useActivityNotifications(
             !wasRejected &&
             isRejected
           )
+
 
         if (
           isAssigned &&
@@ -1059,6 +1208,7 @@ export function useActivityNotifications(
             newActivity,
             newActivity.created_by
           )
+
         }
 
       },
@@ -1069,11 +1219,15 @@ export function useActivityNotifications(
     )
 
 
-  // =======================================================
+  // =====================================================
   // REALTIME
-  // =======================================================
+  // =====================================================
 
   useEffect(() => {
+
+    // ---------------------------------------------------
+    // SIN USUARIO
+    // ---------------------------------------------------
 
     if (!user?.id) {
 
@@ -1082,23 +1236,51 @@ export function useActivityNotifications(
       setLoading(false)
 
       return
+
     }
 
 
     let active = true
 
+    let retryTimer:
+      ReturnType<typeof setTimeout> |
+      null = null
+
+
     const channelName =
       `activity_notifications_${user.id}`
 
+
+    console.log(
+      '📡 Iniciando Realtime:',
+      channelName
+    )
+
+
+    // ---------------------------------------------------
+    // CREAR CANAL
+    // ---------------------------------------------------
+
     const channel =
       supabase.channel(
-        channelName
+        channelName,
+        {
+          config: {
+            broadcast: {
+              self: false,
+            },
+
+            presence: {
+              key: user.id,
+            },
+          },
+        }
       )
 
 
-    // =====================================================
+    // ===================================================
     // ACTIVIDADES
-    // =====================================================
+    // ===================================================
 
     channel.on(
       'postgres_changes',
@@ -1107,11 +1289,16 @@ export function useActivityNotifications(
         schema: 'public',
         table: 'activities',
       },
-      async payload => {
+      async (
+        payload
+      ) => {
 
         if (!active) {
+
           return
+
         }
+
 
         try {
 
@@ -1120,14 +1307,15 @@ export function useActivityNotifications(
             payload
           )
 
+
           await processActivityChange(
-            payload
+            payload as unknown as RealtimePayload
           )
 
         } catch (error) {
 
           console.error(
-            '❌ Error procesando actividad realtime:',
+            'Error procesando actividad realtime:',
             error
           )
 
@@ -1137,9 +1325,9 @@ export function useActivityNotifications(
     )
 
 
-    // =====================================================
+    // ===================================================
     // IDEAS
-    // =====================================================
+    // ===================================================
 
     channel.on(
       'postgres_changes',
@@ -1148,11 +1336,16 @@ export function useActivityNotifications(
         schema: 'public',
         table: 'activity_ideas',
       },
-      async payload => {
+      async (
+        payload
+      ) => {
 
         if (!active) {
+
           return
+
         }
+
 
         try {
 
@@ -1161,8 +1354,10 @@ export function useActivityNotifications(
             payload
           )
 
+
           const idea =
             payload.new as ActivityIdeaLike
+
 
           await createIdeaNotification(
             idea
@@ -1171,7 +1366,7 @@ export function useActivityNotifications(
         } catch (error) {
 
           console.error(
-            '❌ Error procesando idea realtime:',
+            'Error procesando idea realtime:',
             error
           )
 
@@ -1181,16 +1376,22 @@ export function useActivityNotifications(
     )
 
 
-    // =====================================================
-    // SUSCRIBIR
-    // =====================================================
+    // ===================================================
+    // SUBSCRIBE
+    // ===================================================
 
     channel.subscribe(
-      status => {
+      (
+        status,
+        error
+      ) => {
 
         if (!active) {
+
           return
+
         }
+
 
         console.log(
           '📡 Notifications realtime:',
@@ -1198,25 +1399,35 @@ export function useActivityNotifications(
         )
 
 
+        // ------------------------------------------------
+        // CONECTADO
+        // ------------------------------------------------
+
         if (
           status ===
           'SUBSCRIBED'
         ) {
 
           console.log(
-            '✅ Notificaciones conectadas'
+            '✅ Notificaciones Realtime conectadas'
           )
+
+          return
 
         }
 
+
+        // ------------------------------------------------
+        // ERROR
+        // ------------------------------------------------
 
         if (
           status ===
           'CHANNEL_ERROR'
         ) {
 
-          console.error(
-            '❌ Error realtime notificaciones',
+          console.warn(
+            '⚠️ Realtime de notificaciones no disponible.',
             {
               channel:
                 channelName,
@@ -1224,29 +1435,97 @@ export function useActivityNotifications(
               userId:
                 user.id,
 
-              status,
+              error,
             }
           )
 
+
+          // ----------------------------------------------
+          // NO LANZAR ERROR
+          // ----------------------------------------------
+
+          // IMPORTANTE:
+          // Realtime NO debe romper la aplicación.
+          //
+          // La aplicación sigue funcionando aunque
+          // Realtime esté temporalmente deshabilitado.
+          // ----------------------------------------------
+
+
+          if (
+            active
+          ) {
+
+            retryTimer =
+              setTimeout(
+                () => {
+
+                  if (
+                    !active
+                  ) {
+
+                    return
+
+                  }
+
+
+                  console.log(
+                    '🔄 Reintentando conexión Realtime...'
+                  )
+
+
+                  supabase
+                    .removeChannel(
+                      channel
+                    )
+
+
+                  // Recargar el efecto creando
+                  // nuevamente el canal.
+                  //
+                  // No modificamos estado aquí para
+                  // evitar loops innecesarios.
+
+                },
+                5000
+              )
+
+          }
+
+          return
+
         }
 
+
+        // ------------------------------------------------
+        // TIMEOUT
+        // ------------------------------------------------
 
         if (
           status ===
           'TIMED_OUT'
         ) {
 
-          console.error(
-            '⏱️ Timeout realtime notificaciones',
-            {
-              channel:
-                channelName,
+          console.warn(
+            '⏱️ Realtime de notificaciones agotó el tiempo.'
+          )
 
-              userId:
-                user.id,
+          return
 
-              status,
-            }
+        }
+
+
+        // ------------------------------------------------
+        // CLOSED
+        // ------------------------------------------------
+
+        if (
+          status ===
+          'CLOSED'
+        ) {
+
+          console.log(
+            '📴 Canal Realtime cerrado.'
           )
 
         }
@@ -1255,18 +1534,40 @@ export function useActivityNotifications(
     )
 
 
+    // ===================================================
+    // LOADING
+    // ===================================================
+
     setLoading(false)
 
 
-    // =====================================================
+    // ===================================================
     // CLEANUP
-    // =====================================================
+    // ===================================================
 
     return () => {
 
       active = false
 
-      void supabase.removeChannel(
+
+      if (
+        retryTimer
+      ) {
+
+        clearTimeout(
+          retryTimer
+        )
+
+      }
+
+
+      console.log(
+        '🧹 Cerrando Realtime:',
+        channelName
+      )
+
+
+      supabase.removeChannel(
         channel
       )
 
@@ -1280,9 +1581,9 @@ export function useActivityNotifications(
   ])
 
 
-  // =======================================================
+  // =====================================================
   // MARCAR UNA
-  // =======================================================
+  // =====================================================
 
   const markAsRead =
     useCallback(
@@ -1292,13 +1593,17 @@ export function useActivityNotifications(
       ) => {
 
         if (!user?.id) {
+
           return
+
         }
+
 
         markActivityAsSeen(
           notification.activity,
           user.id
         )
+
 
         setNotifications(
           previous =>
@@ -1315,21 +1620,26 @@ export function useActivityNotifications(
         )
 
       },
-      [user?.id]
+      [
+        user?.id,
+      ]
     )
 
 
-  // =======================================================
+  // =====================================================
   // MARCAR TODAS
-  // =======================================================
+  // =====================================================
 
   const markAllAsRead =
     useCallback(
       () => {
 
         if (!user?.id) {
+
           return
+
         }
+
 
         notifications.forEach(
           notification => {
@@ -1341,6 +1651,7 @@ export function useActivityNotifications(
 
           }
         )
+
 
         setNotifications(
           previous =>
@@ -1360,9 +1671,9 @@ export function useActivityNotifications(
     )
 
 
-  // =======================================================
+  // =====================================================
   // OCULTAR
-  // =======================================================
+  // =====================================================
 
   const removeNotification =
     useCallback(
@@ -1384,9 +1695,9 @@ export function useActivityNotifications(
     )
 
 
-  // =======================================================
+  // =====================================================
   // CONTADOR
-  // =======================================================
+  // =====================================================
 
   const unreadCount =
     useMemo(
@@ -1395,13 +1706,15 @@ export function useActivityNotifications(
           notification =>
             !notification.read
         ).length,
-      [notifications]
+      [
+        notifications,
+      ]
     )
 
 
-  // =======================================================
+  // =====================================================
   // RETURN
-  // =======================================================
+  // =====================================================
 
   return {
 
@@ -1418,4 +1731,5 @@ export function useActivityNotifications(
     removeNotification,
 
   }
+
 }

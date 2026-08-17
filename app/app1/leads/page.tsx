@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 
 import {
+  Suspense,
   useEffect,
   useState,
 } from 'react'
@@ -37,10 +38,10 @@ import {
 
 
 // =======================================================
-// COMPONENTE
+// COMPONENTE INTERNO
 // =======================================================
 
-export default function LeadsPage() {
+function LeadsPageContent() {
 
   const searchParams =
     useSearchParams()
@@ -90,61 +91,109 @@ export default function LeadsPage() {
 
     let active = true
 
-
     async function loadProfile() {
 
-      const {
-        data: {
-          user,
-        },
-      } =
-        await supabase.auth.getUser()
+      try {
+
+        const {
+          data: {
+            user,
+          },
+          error: authError,
+        } =
+          await supabase.auth.getUser()
 
 
-      if (!user || !active) {
+        if (
+          authError ||
+          !user ||
+          !active
+        ) {
 
-        return
+          if (active) {
+
+            setRole(null)
+
+          }
+
+          return
+
+        }
+
+
+        // -----------------------------------------------
+        // EMAIL
+        // -----------------------------------------------
+
+        setUserEmail(
+          user.email?.toLowerCase() ||
+          null
+        )
+
+
+        // -----------------------------------------------
+        // PERFIL
+        // -----------------------------------------------
+
+        const {
+          data: profile,
+          error: profileError,
+        } =
+          await supabase
+            .from(
+              'user_profiles'
+            )
+            .select(
+              'full_name, role'
+            )
+            .eq(
+              'id',
+              user.id
+            )
+            .maybeSingle()
+
+
+        if (!active) {
+          return
+        }
+
+
+        if (profileError) {
+
+          console.error(
+            'Error cargando perfil:',
+            profileError
+          )
+
+        }
+
+
+        setUserName(
+          profile?.full_name
+            ?.toLowerCase() ||
+          null
+        )
+
+
+        setRole(
+          profile?.role ||
+          null
+        )
+
+      } catch (error) {
+
+        console.error(
+          'Error cargando usuario:',
+          error
+        )
+
+        if (active) {
+
+          setRole(null)
+
+        }
 
       }
-
-
-      setUserEmail(
-        user.email?.toLowerCase() ||
-        null
-      )
-
-
-      const {
-        data: profile,
-      } =
-        await supabase
-          .from(
-            'user_profiles'
-          )
-          .select(
-            'full_name, role'
-          )
-          .eq(
-            'id',
-            user.id
-          )
-          .maybeSingle()
-
-
-      if (!active) return
-
-
-      setUserName(
-        profile?.full_name
-          ?.toLowerCase() ||
-        null
-      )
-
-
-      setRole(
-        profile?.role ||
-        null
-      )
 
     }
 
@@ -158,7 +207,7 @@ export default function LeadsPage() {
 
     }
 
-  }, [])
+  }, [supabase])
 
 
   // =====================================================
@@ -178,6 +227,10 @@ export default function LeadsPage() {
       .toLowerCase() ||
     ''
 
+
+  // =====================================================
+  // USUARIOS ESPECIALES
+  // =====================================================
 
   const isMarcos =
     normalizedName.includes(
@@ -304,17 +357,15 @@ export default function LeadsPage() {
 
 
   // =====================================================
-  // FILTRAR
+  // FILTRAR PRODUCTOS
   // =====================================================
 
   const filters =
     allFilters.filter(
-      (
-        filter
-      ) => {
+      filter => {
 
         // -----------------------------------------------
-        // ADMIN / ALL
+        // ADMIN / TODOS
         // -----------------------------------------------
 
         if (
@@ -359,9 +410,7 @@ export default function LeadsPage() {
 
     requestedProduct &&
     filters.some(
-      (
-        filter
-      ) =>
+      filter =>
         filter.value ===
         requestedProduct
     )
@@ -384,29 +433,21 @@ export default function LeadsPage() {
 
     return (
 
-      <div
-        className="
-          p-6
-        "
-      >
+      <div className="p-6">
 
-        <div
-          className="
-            bg-surface
-            border
-            border-border-color
-            rounded-xl
-            p-8
-            text-center
-          "
-        >
+        <div className="
+          bg-surface
+          border
+          border-border-color
+          rounded-xl
+          p-8
+          text-center
+        ">
 
-          <div
-            className="
-              animate-pulse
-              text-foreground/60
-            "
-          >
+          <div className="
+            animate-pulse
+            text-foreground/60
+          ">
 
             Cargando ventas...
 
@@ -431,47 +472,42 @@ export default function LeadsPage() {
 
     return (
 
-      <div
-        className="
-          p-6
-        "
-      >
+      <div className="p-6">
 
-        <div
-          className="
-            bg-surface
-            border
-            border-border-color
-            rounded-xl
-            p-8
-            text-center
-          "
-        >
+        <div className="
+          bg-surface
+          border
+          border-border-color
+          rounded-xl
+          p-8
+          text-center
+        ">
 
-          <div className="text-4xl mb-3">
+          <div className="
+            text-4xl
+            mb-3
+          ">
+
             🔒
+
           </div>
 
 
-          <h1
-            className="
-              text-xl
-              font-bold
-            "
-          >
+          <h1 className="
+            text-xl
+            font-bold
+          ">
 
             Sin productos asignados
 
           </h1>
 
 
-          <p
-            className="
-              text-sm
-              text-foreground/60
-              mt-2
-            "
-          >
+          <p className="
+            text-sm
+            text-foreground/60
+            mt-2
+          ">
 
             Tu usuario todavía no tiene productos
             asignados para visualizar.
@@ -493,50 +529,42 @@ export default function LeadsPage() {
 
   return (
 
-    <div
-      className="
-        p-6
-        space-y-6
-      "
-    >
+    <div className="
+      p-6
+      space-y-6
+    ">
 
       {/* =================================================
           HEADER
       ================================================= */}
 
-      <div
-        className="
-          flex
-          flex-col
-          md:flex-row
-          md:items-center
-          md:justify-between
-          gap-4
-        "
-      >
+      <div className="
+        flex
+        flex-col
+        md:flex-row
+        md:items-center
+        md:justify-between
+        gap-4
+      ">
 
         <div>
 
-          <h1
-            className="
-              text-2xl
-              font-bold
-              text-foreground
-            "
-          >
+          <h1 className="
+            text-2xl
+            font-bold
+            text-foreground
+          ">
 
             Ventas
 
           </h1>
 
 
-          <p
-            className="
-              text-sm
-              text-foreground/60
-              mt-1
-            "
-          >
+          <p className="
+            text-sm
+            text-foreground/60
+            mt-1
+          ">
 
             Gestión y seguimiento de leads comerciales
 
@@ -577,18 +605,14 @@ export default function LeadsPage() {
           FILTROS
       ================================================= */}
 
-      <div
-        className="
-          flex
-          flex-wrap
-          gap-2
-        "
-      >
+      <div className="
+        flex
+        flex-wrap
+        gap-2
+      ">
 
         {filters.map(
-          (
-            filter
-          ) => {
+          filter => {
 
             const Icon =
               filter.icon
@@ -660,6 +684,66 @@ export default function LeadsPage() {
       />
 
     </div>
+
+  )
+
+}
+
+
+// =======================================================
+// LOADING DE SUSPENSE
+// =======================================================
+
+function LeadsPageLoading() {
+
+  return (
+
+    <div className="p-6">
+
+      <div className="
+        bg-surface
+        border
+        border-border-color
+        rounded-xl
+        p-8
+        text-center
+      ">
+
+        <div className="
+          animate-pulse
+          text-foreground/60
+        ">
+
+          Cargando ventas...
+
+        </div>
+
+      </div>
+
+    </div>
+
+  )
+
+}
+
+
+// =======================================================
+// PAGE
+// =======================================================
+
+export default function LeadsPage() {
+
+  return (
+
+    <Suspense
+      fallback={
+        <LeadsPageLoading />
+      }
+    >
+
+      <LeadsPageContent />
+
+    </Suspense>
 
   )
 
