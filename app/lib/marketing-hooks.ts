@@ -1,9 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import {
+  useCallback,
+  useEffect,
+  useState,
+} from 'react'
 
 import {
+  createClient,
+} from '@/lib/supabase/client'
+
+import type {
   Activity,
   ActivityWithUser,
   UserProfile,
@@ -11,101 +18,181 @@ import {
   ConsolidatedReport,
 } from '@/lib/marketing-types'
 
+
 // =========================================================
 // USUARIO ACTUAL
 // =========================================================
 
 export const useCurrentUser = () => {
-  const [user, setUser] =
-    useState<UserProfile | null>(null)
 
-  const [loading, setLoading] =
-    useState(true)
+  const [
+    user,
+    setUser,
+  ] = useState<UserProfile | null>(null)
 
-  const [mounted, setMounted] =
-    useState(false)
+  const [
+    loading,
+    setLoading,
+  ] = useState(true)
 
-  const supabase = createClient()
+  const [
+    mounted,
+    setMounted,
+  ] = useState(false)
+
+  const supabase =
+    createClient()
+
 
   // -------------------------------------------------------
   // MOUNT
   // -------------------------------------------------------
 
   useEffect(() => {
+
     setMounted(true)
+
   }, [])
+
 
   // -------------------------------------------------------
   // OBTENER USUARIO
   // -------------------------------------------------------
 
   useEffect(() => {
-    if (!mounted) return
+
+    if (!mounted) {
+      return
+    }
 
     let isActive = true
 
-    const getUser = async () => {
-      try {
-        const {
-          data: {
-            user: authUser,
-          },
-        } = await supabase.auth.getUser()
 
-        if (!isActive) return
+    const getUser =
+      async () => {
 
-        if (!authUser) {
-          setUser(null)
-          return
-        }
+        try {
 
-        const {
-          data,
-          error,
-        } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', authUser.id)
-          .single()
+          const {
+            data: {
+              user: authUser,
+            },
+            error: authError,
+          } =
+            await supabase.auth.getUser()
 
-        if (!isActive) return
 
-        if (error) {
+          if (!isActive) {
+            return
+          }
+
+
+          if (authError) {
+
+            console.error(
+              'Error obteniendo usuario autenticado:',
+              authError
+            )
+
+            setUser(null)
+
+            return
+
+          }
+
+
+          if (!authUser) {
+
+            setUser(null)
+
+            return
+
+          }
+
+
+          const {
+            data,
+            error,
+          } =
+            await supabase
+              .from(
+                'user_profiles'
+              )
+              .select('*')
+              .eq(
+                'id',
+                authUser.id
+              )
+              .single()
+
+
+          if (!isActive) {
+            return
+          }
+
+
+          if (error) {
+
+            console.error(
+              'Error obteniendo perfil:',
+              error
+            )
+
+            setUser(null)
+
+            return
+
+          }
+
+
+          setUser(
+            data as UserProfile
+          )
+
+        } catch (error) {
+
           console.error(
-            'Error fetching user profile:',
+            'Error obteniendo usuario actual:',
             error
           )
 
-          setUser(null)
-          return
+          if (isActive) {
+            setUser(null)
+          }
+
+        } finally {
+
+          if (isActive) {
+            setLoading(false)
+          }
+
         }
 
-        setUser(data)
-      } catch (error) {
-        console.error(
-          'Error fetching current user:',
-          error
-        )
-      } finally {
-        if (isActive) {
-          setLoading(false)
-        }
       }
-    }
+
 
     getUser()
 
+
     return () => {
+
       isActive = false
+
     }
-  }, [mounted])
+
+  }, [
+    mounted,
+  ])
+
 
   return {
     user,
     loading,
     mounted,
   }
+
 }
+
 
 // =========================================================
 // ACTIVIDADES
@@ -118,6 +205,7 @@ export const useCurrentUser = () => {
 // - Realtime
 // - Actividades nuevas
 // - markActivityAsSeen
+// - refetch
 //
 // IMPORTANTE:
 // No recibe area.
@@ -129,49 +217,73 @@ export const useActivities = () => {
   const [
     activities,
     setActivities,
-  ] = useState<any[]>([])
+  ] =
+    useState<ActivityWithUser[]>([])
+
 
   const [
     loading,
     setLoading,
-  ] = useState(true)
+  ] =
+    useState(true)
+
+
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(null)
+
 
   const [
     newActivityIds,
     setNewActivityIds,
-  ] = useState<number[]>([])
+  ] =
+    useState<number[]>([])
+
 
   const {
     user,
     mounted,
-  } = useCurrentUser()
+  } =
+    useCurrentUser()
 
-  const supabase =
-    createClient()
 
-  useEffect(() => {
+  // =======================================================
+  // FETCH ACTIVIDADES
+  // =======================================================
 
-    if (
-      !mounted ||
-      !user
-    ) {
-      return
-    }
-
-    let isActive = true
-
-    // ===================================================
-    // CARGAR ACTIVIDADES
-    // ===================================================
-
-    const fetchActivities =
+  const fetchActivities =
+    useCallback(
       async () => {
+
+        if (
+          !mounted ||
+          !user
+        ) {
+          return
+        }
+
+
+        setLoading(true)
+        setError(null)
+
 
         try {
 
+          const supabase =
+            createClient()
+
+
+          // ------------------------------------------------
+          // ACTIVIDADES
+          // ------------------------------------------------
+
           let query =
             supabase
-              .from('activities')
+              .from(
+                'activities'
+              )
               .select('*')
               .order(
                 'due_date',
@@ -187,6 +299,7 @@ export const useActivities = () => {
                 }
               )
 
+
           // ------------------------------------------------
           // EXECUTOR
           // ------------------------------------------------
@@ -201,7 +314,13 @@ export const useActivities = () => {
                 'assigned_to',
                 user.id
               )
+
           }
+
+
+          // ------------------------------------------------
+          // CONSULTAS
+          // ------------------------------------------------
 
           const [
             activitiesResult,
@@ -221,84 +340,114 @@ export const useActivities = () => {
 
             ])
 
-          if (!isActive) {
-            return
+
+          // ------------------------------------------------
+          // ERROR ACTIVIDADES
+          // ------------------------------------------------
+
+          if (
+            activitiesResult.error
+          ) {
+
+            throw activitiesResult.error
+
           }
 
-          const {
-            data,
-            error,
-          } =
-            activitiesResult
 
-          const {
-            data: profiles,
-          } =
-            profilesResult
+          // ------------------------------------------------
+          // PROFILES
+          // ------------------------------------------------
 
-          if (error) {
+          if (
+            profilesResult.error
+          ) {
 
             console.error(
-              'Error cargando actividades:',
-              error
+              'Error cargando perfiles:',
+              profilesResult.error
             )
 
-            return
           }
+
+
+          const data =
+            activitiesResult.data || []
+
+
+          const profiles =
+            profilesResult.data || []
+
 
           // ------------------------------------------------
           // MAPA DE USUARIOS
           // ------------------------------------------------
 
           const nameById =
-            new Map(
-              (profiles || [])
-                .map(
-                  (profile: any) => [
-                    profile.id,
-                    profile.full_name,
-                  ]
-                )
+            new Map<
+              string,
+              string
+            >(
+              profiles.map(
+                (
+                  profile
+                ) => [
+
+                  profile.id,
+
+                  profile.full_name,
+
+                ]
+              )
             )
 
+
           // ------------------------------------------------
-          // AGREGAR NOMBRES
+          // ACTIVIDADES CON NOMBRES
           // ------------------------------------------------
 
           const activitiesWithNames =
-            (data || []).map(
-              (activity: any) => ({
+            data.map(
+              (
+                activity
+              ) => {
 
-                ...activity,
+                const item =
+                  activity as Activity
 
-                assigned_to_name:
-                  nameById.get(
-                    activity.assigned_to
-                  ) ||
-                  activity.assigned_to,
 
-                created_by_name:
-                  nameById.get(
-                    activity.created_by
-                  ) ||
-                  activity.created_by,
+                return {
 
-                approved_by_name:
-                  activity.approved_by
-                    ? (
-                        nameById.get(
+                  ...item,
+
+                  assigned_to_name:
+                    nameById.get(
+                      activity.assigned_to
+                    ) ||
+                    activity.assigned_to ||
+                    'Sin asignar',
+
+                  created_by_name:
+                    nameById.get(
+                      activity.created_by
+                    ) ||
+                    activity.created_by ||
+                    'Desconocido',
+
+                  approved_by_name:
+                    activity.approved_by
+                      ? (
+                          nameById.get(
+                            activity.approved_by
+                          ) ||
                           activity.approved_by
-                        ) ||
-                        activity.approved_by
-                      )
-                    : undefined,
+                        )
+                      : undefined,
 
-              })
+                } as ActivityWithUser
+
+              }
             )
 
-          if (!isActive) {
-            return
-          }
 
           setActivities(
             activitiesWithNames
@@ -311,32 +460,76 @@ export const useActivities = () => {
             error
           )
 
+
+          setError(
+            error instanceof Error
+              ? error.message
+              : 'Error cargando actividades.'
+          )
+
+
+          setActivities([])
+
         } finally {
 
-          if (isActive) {
-            setLoading(false)
-          }
+          setLoading(false)
 
         }
-      }
 
-    // ===================================================
+      },
+      [
+        mounted,
+        user?.id,
+        user?.role,
+      ]
+    )
+
+
+  // =======================================================
+  // CARGA INICIAL + REALTIME
+  // =======================================================
+
+  useEffect(() => {
+
+    if (
+      !mounted ||
+      !user
+    ) {
+      return
+    }
+
+
+    let isActive = true
+
+
+    const supabase =
+      createClient()
+
+
+    // -----------------------------------------------------
     // CARGA INICIAL
-    // ===================================================
+    // -----------------------------------------------------
 
     fetchActivities()
 
-    // ===================================================
-    // REALTIME
-    // ===================================================
+
+    // -----------------------------------------------------
+    // CHANNEL
+    // -----------------------------------------------------
 
     const channelName =
-      `activities_realtime_${user.id}_${Date.now()}`
+      `activities_realtime_${user.id}`
+
 
     const channel =
       supabase.channel(
         channelName
       )
+
+
+    // =====================================================
+    // REALTIME
+    // =====================================================
 
     channel.on(
       'postgres_changes',
@@ -345,21 +538,24 @@ export const useActivities = () => {
         schema: 'public',
         table: 'activities',
       },
-      async (payload) => {
+      async (
+        payload
+      ) => {
 
         if (!isActive) {
           return
         }
 
+
         console.log(
           '🔔 Cambio Realtime:',
-          payload.eventType,
-          payload
+          payload.eventType
         )
 
-        // ===============================================
+
+        // =================================================
         // INSERT
-        // ===============================================
+        // =================================================
 
         if (
           payload.eventType ===
@@ -367,7 +563,12 @@ export const useActivities = () => {
         ) {
 
           const newActivity =
-            payload.new as any
+            payload.new as Activity
+
+
+          // -----------------------------------------------
+          // EXECUTOR
+          // -----------------------------------------------
 
           if (
             user.role ===
@@ -379,35 +580,44 @@ export const useActivities = () => {
             await fetchActivities()
 
             return
+
           }
+
 
           const newId =
             Number(
               newActivity.id
             )
 
+
           setNewActivityIds(
-            (previous) => {
+            previous => {
 
               if (
                 previous.includes(
                   newId
                 )
               ) {
+
                 return previous
+
               }
+
 
               return [
                 ...previous,
                 newId,
               ]
+
             }
           )
+
         }
 
-        // ===============================================
+
+        // =================================================
         // UPDATE
-        // ===============================================
+        // =================================================
 
         if (
           payload.eventType ===
@@ -415,10 +625,16 @@ export const useActivities = () => {
         ) {
 
           const oldActivity =
-            payload.old as any
+            payload.old as Partial<Activity>
+
 
           const updatedActivity =
-            payload.new as any
+            payload.new as Activity
+
+
+          // -----------------------------------------------
+          // EXECUTOR
+          // -----------------------------------------------
 
           if (
             user.role ===
@@ -426,12 +642,18 @@ export const useActivities = () => {
           ) {
 
             const wasAssigned =
-              oldActivity?.assigned_to ===
+              oldActivity.assigned_to ===
               user.id
 
+
             const isAssigned =
-              updatedActivity?.assigned_to ===
+              updatedActivity.assigned_to ===
               user.id
+
+
+            // ---------------------------------------------
+            // NUEVA ACTIVIDAD ASIGNADA
+            // ---------------------------------------------
 
             if (
               !wasAssigned &&
@@ -443,30 +665,39 @@ export const useActivities = () => {
                   updatedActivity.id
                 )
 
+
               setNewActivityIds(
-                (previous) => {
+                previous => {
 
                   if (
                     previous.includes(
                       updatedId
                     )
                   ) {
+
                     return previous
+
                   }
+
 
                   return [
                     ...previous,
                     updatedId,
                   ]
+
                 }
               )
+
             }
+
           }
+
         }
 
-        // ===============================================
+
+        // =================================================
         // DELETE
-        // ===============================================
+        // =================================================
 
         if (
           payload.eventType ===
@@ -474,42 +705,49 @@ export const useActivities = () => {
         ) {
 
           const deleted =
-            payload.old as any
+            payload.old as Partial<Activity>
+
 
           const deletedId =
             Number(
               deleted.id
             )
 
+
           setNewActivityIds(
-            (previous) =>
+            previous =>
               previous.filter(
-                (id) =>
+                id =>
                   id !==
                   deletedId
               )
           )
+
         }
 
-        // ===============================================
+
+        // =================================================
         // RECARGAR
-        // ===============================================
+        // =================================================
 
         await fetchActivities()
+
       }
     )
 
-    // ===================================================
+
+    // -----------------------------------------------------
     // SUBSCRIBE
-    // ===================================================
+    // -----------------------------------------------------
 
     channel.subscribe(
-      (status) => {
+      status => {
 
         console.log(
           '📡 Activities realtime:',
           status
         )
+
 
         if (
           status ===
@@ -519,7 +757,9 @@ export const useActivities = () => {
           console.log(
             '✅ Realtime conectado'
           )
+
         }
+
 
         if (
           status ===
@@ -529,7 +769,9 @@ export const useActivities = () => {
           console.error(
             '❌ Error Realtime'
           )
+
         }
+
 
         if (
           status ===
@@ -539,13 +781,16 @@ export const useActivities = () => {
           console.error(
             '⏱️ Realtime timeout'
           )
+
         }
+
       }
     )
 
-    // ===================================================
+
+    // -----------------------------------------------------
     // CLEANUP
-    // ===================================================
+    // -----------------------------------------------------
 
     return () => {
 
@@ -554,17 +799,20 @@ export const useActivities = () => {
       supabase.removeChannel(
         channel
       )
+
     }
 
   }, [
     mounted,
     user?.id,
     user?.role,
+    fetchActivities,
   ])
 
-  // =====================================================
-  // MARCAR COMO VISTA
-  // =====================================================
+
+  // =======================================================
+  // MARCAR ACTIVIDAD COMO VISTA
+  // =======================================================
 
   const markActivityAsSeen =
     (
@@ -572,26 +820,49 @@ export const useActivities = () => {
     ) => {
 
       const id =
-        Number(activityId)
+        Number(
+          activityId
+        )
+
 
       setNewActivityIds(
-        (previous) =>
+        previous =>
           previous.filter(
-            (existingId) =>
-              existingId !== id
+            existingId =>
+              existingId !==
+              id
           )
       )
+
     }
 
+
+  // =======================================================
+  // RETURN
+  // =======================================================
+
   return {
+
     activities,
+
     loading,
+
+    error,
+
     newActivityIds,
+
     markActivityAsSeen,
+
     clearNewActivity:
       markActivityAsSeen,
+
+    refetch:
+      fetchActivities,
+
   }
+
 }
+
 
 // =========================================================
 // USUARIOS
@@ -602,37 +873,59 @@ export const useUsers = () => {
   const [
     users,
     setUsers,
-  ] = useState<UserProfile[]>([])
+  ] =
+    useState<UserProfile[]>([])
+
 
   const [
     loaded,
     setLoaded,
-  ] = useState(false)
+  ] =
+    useState(false)
 
-  const supabase =
-    createClient()
+
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(null)
+
 
   useEffect(() => {
 
     let isActive = true
+
 
     const fetchUsers =
       async () => {
 
         try {
 
+          const supabase =
+            createClient()
+
+
           const {
             data,
             error,
-          } = await supabase
-            .from(
-              'user_profiles'
-            )
-            .select('*')
+          } =
+            await supabase
+              .from(
+                'user_profiles'
+              )
+              .select('*')
+              .order(
+                'full_name',
+                {
+                  ascending: true,
+                }
+              )
+
 
           if (!isActive) {
             return
           }
+
 
           if (error) {
 
@@ -641,11 +934,19 @@ export const useUsers = () => {
               error
             )
 
+
+            setError(
+              error.message
+            )
+
+
             return
+
           }
 
+
           setUsers(
-            data || []
+            (data || []) as UserProfile[]
           )
 
         } catch (error) {
@@ -655,27 +956,54 @@ export const useUsers = () => {
             error
           )
 
+
+          if (isActive) {
+
+            setError(
+              error instanceof Error
+                ? error.message
+                : 'Error cargando usuarios.'
+            )
+
+          }
+
         } finally {
 
           if (isActive) {
+
             setLoaded(true)
+
           }
+
         }
+
       }
+
 
     fetchUsers()
 
+
     return () => {
+
       isActive = false
+
     }
 
   }, [])
 
+
   return {
+
     users,
+
     loaded,
+
+    error,
+
   }
+
 }
+
 
 // =========================================================
 // REPORTE DIARIO
@@ -694,49 +1022,77 @@ export const useDailyReport = (
       null
     )
 
+
   const [
     loading,
     setLoading,
   ] =
     useState(true)
 
-  const supabase =
-    createClient()
+
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null
+    )
+
 
   useEffect(() => {
 
-    if (!userId) {
+    if (
+      !userId ||
+      !reportDate
+    ) {
+
+      setLoading(false)
+
       return
+
     }
 
+
     let isActive = true
+
 
     const fetchReport =
       async () => {
 
+        setLoading(true)
+        setError(null)
+
+
         try {
+
+          const supabase =
+            createClient()
+
 
           const {
             data,
             error,
-          } = await supabase
-            .from(
-              'daily_reports'
-            )
-            .select('*')
-            .eq(
-              'user_id',
-              userId
-            )
-            .eq(
-              'report_date',
-              reportDate
-            )
-            .single()
+          } =
+            await supabase
+              .from(
+                'daily_reports'
+              )
+              .select('*')
+              .eq(
+                'user_id',
+                userId
+              )
+              .eq(
+                'report_date',
+                reportDate
+              )
+              .maybeSingle()
+
 
           if (!isActive) {
             return
           }
+
 
           if (error) {
 
@@ -745,10 +1101,22 @@ export const useDailyReport = (
               error
             )
 
+
+            setError(
+              error.message
+            )
+
+
+            setReport(null)
+
             return
+
           }
 
-          setReport(data)
+
+          setReport(
+            data as DailyReport | null
+          )
 
         } catch (error) {
 
@@ -757,18 +1125,37 @@ export const useDailyReport = (
             error
           )
 
+
+          if (isActive) {
+
+            setError(
+              error instanceof Error
+                ? error.message
+                : 'Error cargando reporte.'
+            )
+
+          }
+
         } finally {
 
           if (isActive) {
+
             setLoading(false)
+
           }
+
         }
+
       }
+
 
     fetchReport()
 
+
     return () => {
+
       isActive = false
+
     }
 
   }, [
@@ -776,11 +1163,19 @@ export const useDailyReport = (
     reportDate,
   ])
 
+
   return {
+
     report,
+
     loading,
+
+    error,
+
   }
+
 }
+
 
 // =========================================================
 // REPORTES CONSOLIDADOS
@@ -797,31 +1192,56 @@ export const useConsolidatedReports =
         ConsolidatedReport[]
       >([])
 
+
+    const [
+      loading,
+      setLoading,
+    ] =
+      useState(true)
+
+
+    const [
+      error,
+      setError,
+    ] =
+      useState<string | null>(
+        null
+      )
+
+
     const {
       user,
       mounted,
     } =
       useCurrentUser()
 
-    const supabase =
-      createClient()
 
-    useEffect(() => {
-
-      if (
-        !mounted ||
-        user?.role !==
-          'admin'
-      ) {
-        return
-      }
-
-      let isActive = true
-
-      const fetchReports =
+    const fetchReports =
+      useCallback(
         async () => {
 
+          if (
+            !mounted ||
+            user?.role !==
+              'admin'
+          ) {
+
+            setLoading(false)
+
+            return
+
+          }
+
+
+          setLoading(true)
+          setError(null)
+
+
           try {
+
+            const supabase =
+              createClient()
+
 
             const {
               data,
@@ -840,9 +1260,6 @@ export const useConsolidatedReports =
                   }
                 )
 
-            if (!isActive) {
-              return
-            }
 
             if (error) {
 
@@ -851,11 +1268,19 @@ export const useConsolidatedReports =
                 error
               )
 
+
+              setError(
+                error.message
+              )
+
+
               return
+
             }
 
+
             setReports(
-              data || []
+              (data || []) as ConsolidatedReport[]
             )
 
           } catch (error) {
@@ -864,25 +1289,52 @@ export const useConsolidatedReports =
               'Error fetching consolidated reports:',
               error
             )
+
+
+            setError(
+              error instanceof Error
+                ? error.message
+                : 'Error cargando reportes consolidados.'
+            )
+
+          } finally {
+
+            setLoading(false)
+
           }
-        }
+
+        },
+        [
+          mounted,
+          user?.role,
+        ]
+      )
+
+
+    useEffect(() => {
 
       fetchReports()
 
-      return () => {
-        isActive = false
-      }
-
     }, [
-      user?.id,
-      user?.role,
-      mounted,
+      fetchReports,
     ])
 
+
     return {
+
       reports,
+
+      loading,
+
+      error,
+
+      refetch:
+        fetchReports,
+
     }
+
   }
+
 
 // =========================================================
 // ROLES
