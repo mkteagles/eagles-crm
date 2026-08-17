@@ -8,6 +8,7 @@ import {
   Building2,
   Globe2,
   DollarSign,
+  ArrowUpRight,
 } from 'lucide-react'
 
 import type {
@@ -26,15 +27,14 @@ import { useLeads } from '@/lib/hooks'
 function getProductInfo(
   product?: ProductFilter | string | null
 ) {
-
   switch (product) {
-
     case 'workshop':
+    case 'workshop_high_ticket':
       return {
-        label: 'Workshop High Ticket',
+        label: 'High Ticket',
         icon: GraduationCap,
         className:
-          'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+          'bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300',
       }
 
     case 'workshop_lite':
@@ -42,7 +42,7 @@ function getProductInfo(
         label: 'Workshop Lite',
         icon: GraduationCap,
         className:
-          'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+          'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
       }
 
     case 'empresarial':
@@ -50,7 +50,7 @@ function getProductInfo(
         label: 'Empresarial',
         icon: Building2,
         className:
-          'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+          'bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300',
       }
 
     case 'costa_rica':
@@ -58,7 +58,7 @@ function getProductInfo(
         label: 'Costa Rica',
         icon: Globe2,
         className:
-          'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+          'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-300',
       }
 
     default:
@@ -66,7 +66,7 @@ function getProductInfo(
         label: 'Sin producto',
         icon: DollarSign,
         className:
-          'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+          'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-300',
       }
   }
 }
@@ -80,7 +80,6 @@ function formatMoney(
   amount: number | null | undefined,
   currency: Currency | string | null | undefined
 ) {
-
   if (
     amount === undefined ||
     amount === null
@@ -100,8 +99,8 @@ function formatMoney(
     {
       style: 'currency',
       currency: safeCurrency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }
   ).format(
     Number(amount)
@@ -116,41 +115,27 @@ function formatMoney(
 function getPaymentBadge(
   status?: string | null
 ) {
+  switch (status) {
+    case 'paid':
+      return {
+        label: 'Pagado',
+        className:
+          'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-300',
+      }
 
-  if (status === 'paid') {
+    case 'partial':
+      return {
+        label: 'Parcial',
+        className:
+          'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-300',
+      }
 
-    return {
-      label: 'Pagado',
-      className: `
-        bg-green-100
-        text-green-700
-        dark:bg-green-900/30
-        dark:text-green-300
-      `,
-    }
-  }
-
-  if (status === 'partial') {
-
-    return {
-      label: 'Pago parcial',
-      className: `
-        bg-yellow-100
-        text-yellow-700
-        dark:bg-yellow-900/30
-        dark:text-yellow-300
-      `,
-    }
-  }
-
-  return {
-    label: 'Sin pago',
-    className: `
-      bg-gray-100
-      text-gray-600
-      dark:bg-gray-800
-      dark:text-gray-300
-    `,
+    default:
+      return {
+        label: 'Sin pago',
+        className:
+          'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
+      }
   }
 }
 
@@ -162,106 +147,68 @@ function getPaymentBadge(
 function getLeadStatusInfo(
   status?: string | null
 ) {
-
   switch (status) {
-
     case 'qualified':
       return {
         label: 'Calificado',
-        className: `
-          bg-green-100
-          text-green-700
-          dark:bg-green-900/30
-          dark:text-green-300
-        `,
+        className:
+          'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-300',
       }
 
     case 'contacted':
       return {
         label: 'Contactado',
-        className: `
-          bg-orange-100
-          text-orange-700
-          dark:bg-orange-900/30
-          dark:text-orange-300
-        `,
+        className:
+          'bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-300',
       }
 
     case 'interested':
       return {
         label: 'Interesado',
-        className: `
-          bg-blue-100
-          text-blue-700
-          dark:bg-blue-900/30
-          dark:text-blue-300
-        `,
+        className:
+          'bg-blue-100 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
       }
 
     case 'follow_up':
       return {
         label: 'Seguimiento',
-        className: `
-          bg-yellow-100
-          text-yellow-700
-          dark:bg-yellow-900/30
-          dark:text-yellow-300
-        `,
+        className:
+          'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-300',
       }
 
     case 'negotiation':
       return {
         label: 'Negociación',
-        className: `
-          bg-purple-100
-          text-purple-700
-          dark:bg-purple-900/30
-          dark:text-purple-300
-        `,
+        className:
+          'bg-purple-100 text-purple-700 dark:bg-purple-500/10 dark:text-purple-300',
       }
 
     case 'won':
       return {
         label: 'Ganado',
-        className: `
-          bg-green-100
-          text-green-700
-          dark:bg-green-900/30
-          dark:text-green-300
-        `,
+        className:
+          'bg-green-100 text-green-700 dark:bg-green-500/10 dark:text-green-300',
       }
 
     case 'lost':
       return {
         label: 'Perdido',
-        className: `
-          bg-red-100
-          text-red-700
-          dark:bg-red-900/30
-          dark:text-red-300
-        `,
+        className:
+          'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300',
       }
 
     case 'inactive':
       return {
         label: 'Inactivo',
-        className: `
-          bg-gray-100
-          text-gray-600
-          dark:bg-gray-800
-          dark:text-gray-300
-        `,
+        className:
+          'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
       }
 
     default:
       return {
         label: 'Nuevo',
-        className: `
-          bg-gray-100
-          text-gray-600
-          dark:bg-gray-800
-          dark:text-gray-300
-        `,
+        className:
+          'bg-gray-100 text-gray-600 dark:bg-white/5 dark:text-gray-400',
       }
   }
 }
@@ -296,28 +243,26 @@ export function LeadsTable({
   // =====================================================
 
   if (loading) {
-
     return (
       <div
         className="
           bg-surface
           border
           border-border-color
-          rounded-xl
+          rounded-2xl
           p-8
           text-center
         "
       >
-
         <div
           className="
             animate-pulse
+            text-sm
             text-foreground/60
           "
         >
           Cargando leads...
         </div>
-
       </div>
     )
   }
@@ -328,30 +273,27 @@ export function LeadsTable({
   // =====================================================
 
   if (error) {
-
     return (
       <div
         className="
           bg-red-50
-          dark:bg-red-950/30
+          dark:bg-red-950/20
           border
           border-red-200
-          dark:border-red-900
-          rounded-xl
-          p-6
+          dark:border-red-900/50
+          rounded-2xl
+          p-5
           text-red-700
           dark:text-red-300
         "
       >
-
-        <p className="font-semibold">
+        <p className="font-semibold text-sm">
           Error cargando leads
         </p>
 
-        <p className="text-sm mt-1">
+        <p className="text-sm mt-1 opacity-80">
           {error}
         </p>
-
       </div>
     )
   }
@@ -365,24 +307,22 @@ export function LeadsTable({
     !leads ||
     leads.length === 0
   ) {
-
     return (
       <div
         className="
           bg-surface
           border
           border-border-color
-          rounded-xl
+          rounded-2xl
           p-10
           text-center
         "
       >
-
         <div
           className="
             mx-auto
-            w-12
-            h-12
+            w-11
+            h-11
             rounded-xl
             bg-foreground/5
             flex
@@ -390,11 +330,9 @@ export function LeadsTable({
             justify-center
           "
         >
-
-          <span className="text-xl">
+          <span className="text-lg">
             👥
           </span>
-
         </div>
 
         <p
@@ -416,7 +354,6 @@ export function LeadsTable({
         >
           No hay leads con este producto o filtro.
         </p>
-
       </div>
     )
   }
@@ -429,434 +366,685 @@ export function LeadsTable({
   return (
     <div
       className="
-        overflow-x-auto
+        w-full
+        overflow-hidden
         bg-surface
         border
         border-border-color
-        rounded-xl
+        rounded-2xl
         shadow-sm
       "
     >
 
-      <table
-        className="
-          w-full
-          border-collapse
-          min-w-[1150px]
-        "
-      >
+      {/* =================================================
+          CONTENEDOR SCROLL
+      ================================================= */}
 
-        {/* =================================================
-            HEADER
-        ================================================= */}
+      <div className="overflow-x-auto">
 
-        <thead>
+        <table
+          className="
+            w-full
+            min-w-[1000px]
+            border-collapse
+          "
+        >
 
-          <tr
-            className="
-              bg-foreground/[0.03]
-              border-b
-              border-border-color
-            "
-          >
+          {/* =================================================
+              HEADER
+          ================================================= */}
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Nombre
-            </th>
+          <thead>
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Producto
-            </th>
+            <tr
+              className="
+                bg-foreground/[0.025]
+                border-b
+                border-border-color
+              "
+            >
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Teléfono
-            </th>
+              <th
+                className="
+                  px-4
+                  py-3
+                  text-left
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[220px]
+                "
+              >
+                Lead
+              </th>
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Precio
-            </th>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-left
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[145px]
+                "
+              >
+                Producto
+              </th>
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Pagado
-            </th>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-left
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[150px]
+                "
+              >
+                Contacto
+              </th>
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Saldo
-            </th>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-right
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[110px]
+                "
+              >
+                Precio
+              </th>
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Pago
-            </th>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-right
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[105px]
+                "
+              >
+                Pagado
+              </th>
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Estado
-            </th>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-right
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[105px]
+                "
+              >
+                Saldo
+              </th>
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Score
-            </th>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-left
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[100px]
+                "
+              >
+                Pago
+              </th>
 
-            <th className="p-4 text-left text-xs font-bold uppercase tracking-wide">
-              Acción
-            </th>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-left
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[120px]
+                "
+              >
+                Estado
+              </th>
 
-          </tr>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-center
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[70px]
+                "
+              >
+                Score
+              </th>
 
-        </thead>
+              <th
+                className="
+                  px-3
+                  py-3
+                  text-right
+                  text-[10px]
+                  font-bold
+                  uppercase
+                  tracking-wider
+                  text-foreground/50
+                  w-[90px]
+                "
+              >
+                Acción
+              </th>
 
+            </tr>
 
-        {/* =================================================
-            BODY
-        ================================================= */}
-
-        <tbody>
-
-          {leads.map(
-            (lead: Lead) => {
-
-              const productInfo =
-                getProductInfo(
-                  lead.product
-                )
-
-              const ProductIcon =
-                productInfo.icon
-
-
-              const price =
-                Number(
-                  lead.product_price || 0
-                )
-
-
-              const paid =
-                Number(
-                  lead.amount_paid || 0
-                )
-
-
-              const balance =
-                Math.max(
-                  price - paid,
-                  0
-                )
-
-
-              const paymentBadge =
-                getPaymentBadge(
-                  lead.payment_status
-                )
-
-
-              const statusInfo =
-                getLeadStatusInfo(
-                  lead.lead_status
-                )
+          </thead>
 
 
-              return (
+          {/* =================================================
+              BODY
+          ================================================= */}
 
-                <tr
-                  key={lead.id}
-                  className="
-                    border-b
-                    border-border-color
-                    last:border-b-0
-                    hover:bg-foreground/[0.025]
-                    transition
-                  "
-                >
+          <tbody>
 
-                  {/* =======================================
-                      NOMBRE
-                  ======================================= */}
+            {leads.map(
+              (lead: Lead) => {
 
-                  <td className="p-4">
+                const productInfo =
+                  getProductInfo(
+                    lead.product
+                  )
 
-                    <div
-                      className="
-                        font-semibold
-                        text-foreground
-                      "
-                    >
-                      {lead.full_name}
-                    </div>
+                const ProductIcon =
+                  productInfo.icon
 
-                    {lead.email && (
+
+                const price =
+                  Number(
+                    lead.product_price || 0
+                  )
+
+
+                const paid =
+                  Number(
+                    lead.amount_paid || 0
+                  )
+
+
+                const balance =
+                  Math.max(
+                    price - paid,
+                    0
+                  )
+
+
+                const paymentBadge =
+                  getPaymentBadge(
+                    lead.payment_status
+                  )
+
+
+                const statusInfo =
+                  getLeadStatusInfo(
+                    lead.lead_status
+                  )
+
+
+                return (
+
+                  <tr
+                    key={lead.id}
+                    className="
+                      group
+                      border-b
+                      border-border-color
+                      last:border-b-0
+                      hover:bg-foreground/[0.025]
+                      transition-colors
+                    "
+                  >
+
+                    {/* =====================================
+                        LEAD
+                    ===================================== */}
+
+                    <td className="px-4 py-3">
 
                       <div
                         className="
-                          mt-1
-                          text-xs
-                          text-foreground/50
+                          min-w-0
+                          max-w-[210px]
                         "
                       >
-                        {lead.email}
+
+                        <Link
+                          href={`/app1/leads/${lead.id}`}
+                          className="
+                            block
+                            truncate
+                            text-sm
+                            font-semibold
+                            text-foreground
+                            hover:text-brand-blue
+                            transition-colors
+                          "
+                          title={
+                            lead.full_name ||
+                            'Sin nombre'
+                          }
+                        >
+                          {lead.full_name ||
+                            'Sin nombre'}
+                        </Link>
+
+
+                        {lead.email && (
+
+                          <div
+                            className="
+                              mt-0.5
+                              truncate
+                              text-[11px]
+                              text-foreground/45
+                            "
+                            title={
+                              lead.email
+                            }
+                          >
+                            {lead.email}
+                          </div>
+
+                        )}
+
                       </div>
 
-                    )}
-
-                  </td>
+                    </td>
 
 
-                  {/* =======================================
-                      PRODUCTO
-                  ======================================= */}
+                    {/* =====================================
+                        PRODUCTO
+                    ===================================== */}
 
-                  <td className="p-4">
+                    <td className="px-3 py-3">
 
-                    <span
-                      className={`
-                        inline-flex
-                        items-center
-                        gap-2
+                      <span
+                        className={`
+                          inline-flex
+                          items-center
+                          gap-1.5
+                          px-2
+                          py-1
+                          rounded-md
+                          text-[10px]
+                          font-bold
+                          whitespace-nowrap
+                          ${productInfo.className}
+                        `}
+                      >
+
+                        <ProductIcon
+                          size={12}
+                          strokeWidth={2.5}
+                        />
+
+                        {productInfo.label}
+
+                      </span>
+
+                    </td>
+
+
+                    {/* =====================================
+                        CONTACTO
+                    ===================================== */}
+
+                    <td className="px-3 py-3">
+
+                      {lead.phone_number ? (
+
+                        <a
+                          href={`https://wa.me/${lead.phone_number.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="
+                            inline-flex
+                            max-w-[145px]
+                            items-center
+                            gap-1.5
+                            text-xs
+                            text-green-600
+                            dark:text-green-400
+                            hover:underline
+                            font-medium
+                            truncate
+                          "
+                          title={
+                            lead.phone_number
+                          }
+                        >
+
+                          <Phone
+                            size={13}
+                            className="shrink-0"
+                          />
+
+                          <span className="truncate">
+                            {lead.phone_number}
+                          </span>
+
+                        </a>
+
+                      ) : (
+
+                        <span
+                          className="
+                            text-xs
+                            text-foreground/30
+                          "
+                        >
+                          —
+                        </span>
+
+                      )}
+
+                    </td>
+
+
+                    {/* =====================================
+                        PRECIO
+                    ===================================== */}
+
+                    <td
+                      className="
                         px-3
-                        py-1.5
-                        rounded-lg
-                        text-xs
-                        font-bold
-                        whitespace-nowrap
-                        ${productInfo.className}
-                      `}
+                        py-3
+                        text-right
+                      "
                     >
 
-                      <ProductIcon size={14} />
+                      <span
+                        className="
+                          text-xs
+                          font-semibold
+                          text-foreground
+                          whitespace-nowrap
+                        "
+                      >
+                        {formatMoney(
+                          price,
+                          lead.currency
+                        )}
+                      </span>
 
-                      {productInfo.label}
-
-                    </span>
-
-                  </td>
+                    </td>
 
 
-                  {/* =======================================
-                      TELÉFONO
-                  ======================================= */}
+                    {/* =====================================
+                        PAGADO
+                    ===================================== */}
 
-                  <td className="p-4">
+                    <td
+                      className="
+                        px-3
+                        py-3
+                        text-right
+                      "
+                    >
 
-                    {lead.phone_number ? (
+                      <span
+                        className="
+                          text-xs
+                          font-semibold
+                          text-green-600
+                          dark:text-green-400
+                          whitespace-nowrap
+                        "
+                      >
+                        {formatMoney(
+                          paid,
+                          lead.currency
+                        )}
+                      </span>
 
-                      <a
-                        href={`https://wa.me/${lead.phone_number.replace(/\D/g, '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    </td>
+
+
+                    {/* =====================================
+                        SALDO
+                    ===================================== */}
+
+                    <td
+                      className="
+                        px-3
+                        py-3
+                        text-right
+                      "
+                    >
+
+                      <span
+                        className={`
+                          text-xs
+                          font-semibold
+                          whitespace-nowrap
+                          ${
+                            balance > 0
+                              ? 'text-orange-600 dark:text-orange-400'
+                              : 'text-green-600 dark:text-green-400'
+                          }
+                        `}
+                      >
+                        {formatMoney(
+                          balance,
+                          lead.currency
+                        )}
+                      </span>
+
+                    </td>
+
+
+                    {/* =====================================
+                        PAGO
+                    ===================================== */}
+
+                    <td className="px-3 py-3">
+
+                      <span
+                        className={`
+                          inline-flex
+                          px-2
+                          py-1
+                          rounded-md
+                          text-[10px]
+                          font-bold
+                          whitespace-nowrap
+                          ${paymentBadge.className}
+                        `}
+                      >
+                        {paymentBadge.label}
+                      </span>
+
+                    </td>
+
+
+                    {/* =====================================
+                        ESTADO
+                    ===================================== */}
+
+                    <td className="px-3 py-3">
+
+                      <span
+                        className={`
+                          inline-flex
+                          px-2
+                          py-1
+                          rounded-md
+                          text-[10px]
+                          font-bold
+                          whitespace-nowrap
+                          ${statusInfo.className}
+                        `}
+                      >
+                        {statusInfo.label}
+                      </span>
+
+                    </td>
+
+
+                    {/* =====================================
+                        SCORE
+                    ===================================== */}
+
+                    <td
+                      className="
+                        px-3
+                        py-3
+                        text-center
+                      "
+                    >
+
+                      <span
                         className="
                           inline-flex
                           items-center
-                          gap-2
-                          text-green-600
-                          dark:text-green-400
-                          hover:underline
-                          font-medium
+                          justify-center
+                          min-w-[42px]
+                          px-1.5
+                          py-1
+                          rounded-md
+                          bg-foreground/5
+                          text-xs
+                          font-bold
+                          text-foreground
+                        "
+                      >
+                        {lead.score ?? 0}
+                      </span>
+
+                    </td>
+
+
+                    {/* =====================================
+                        ACCIÓN
+                    ===================================== */}
+
+                    <td
+                      className="
+                        px-3
+                        py-3
+                        text-right
+                      "
+                    >
+
+                      <Link
+                        href={`/app1/leads/${lead.id}`}
+                        className="
+                          inline-flex
+                          items-center
+                          justify-center
+                          gap-1
+                          px-2.5
+                          py-1.5
+                          rounded-md
+                          text-[11px]
+                          font-semibold
+                          bg-brand-blue
+                          text-white
+                          hover:opacity-90
+                          transition
+                          whitespace-nowrap
                         "
                       >
 
-                        <Phone size={15} />
+                        Ver
 
-                        {lead.phone_number}
+                        <ArrowUpRight
+                          size={12}
+                        />
 
-                      </a>
+                      </Link>
 
-                    ) : (
+                    </td>
 
-                      <span className="text-foreground/40">
-                        —
-                      </span>
+                  </tr>
 
-                    )}
+                )
+              }
+            )}
 
-                  </td>
+          </tbody>
 
+        </table>
 
-                  {/* =======================================
-                      PRECIO
-                  ======================================= */}
-
-                  <td className="p-4">
-
-                    <div
-                      className="
-                        font-semibold
-                        text-foreground
-                        whitespace-nowrap
-                      "
-                    >
-
-                      {formatMoney(
-                        price,
-                        lead.currency
-                      )}
-
-                    </div>
-
-                  </td>
+      </div>
 
 
-                  {/* =======================================
-                      PAGADO
-                  ======================================= */}
+      {/* =================================================
+          FOOTER
+      ================================================= */}
 
-                  <td className="p-4">
+      <div
+        className="
+          flex
+          items-center
+          justify-between
+          px-4
+          py-2.5
+          border-t
+          border-border-color
+          bg-foreground/[0.015]
+        "
+      >
 
-                    <div
-                      className="
-                        font-semibold
-                        text-green-600
-                        dark:text-green-400
-                        whitespace-nowrap
-                      "
-                    >
+        <span
+          className="
+            text-[11px]
+            text-foreground/45
+          "
+        >
+          {leads.length}{' '}
+          {leads.length === 1
+            ? 'lead'
+            : 'leads'}
+        </span>
 
-                      {formatMoney(
-                        paid,
-                        lead.currency
-                      )}
+        <span
+          className="
+            text-[11px]
+            text-foreground/35
+          "
+        >
+          Desliza horizontalmente para ver más
+        </span>
 
-                    </div>
-
-                  </td>
-
-
-                  {/* =======================================
-                      SALDO
-                  ======================================= */}
-
-                  <td className="p-4">
-
-                    <div
-                      className={`
-                        font-semibold
-                        whitespace-nowrap
-                        ${
-                          balance > 0
-                            ? `
-                              text-orange-600
-                              dark:text-orange-400
-                            `
-                            : `
-                              text-green-600
-                              dark:text-green-400
-                            `
-                        }
-                      `}
-                    >
-
-                      {formatMoney(
-                        balance,
-                        lead.currency
-                      )}
-
-                    </div>
-
-                  </td>
-
-
-                  {/* =======================================
-                      PAGO
-                  ======================================= */}
-
-                  <td className="p-4">
-
-                    <span
-                      className={`
-                        inline-flex
-                        px-2.5
-                        py-1
-                        rounded-full
-                        text-xs
-                        font-bold
-                        ${paymentBadge.className}
-                      `}
-                    >
-
-                      {paymentBadge.label}
-
-                    </span>
-
-                  </td>
-
-
-                  {/* =======================================
-                      ESTADO
-                  ======================================= */}
-
-                  <td className="p-4">
-
-                    <span
-                      className={`
-                        inline-flex
-                        px-2.5
-                        py-1
-                        rounded-full
-                        text-xs
-                        font-bold
-                        whitespace-nowrap
-                        ${statusInfo.className}
-                      `}
-                    >
-
-                      {statusInfo.label}
-
-                    </span>
-
-                  </td>
-
-
-                  {/* =======================================
-                      SCORE
-                  ======================================= */}
-
-                  <td className="p-4">
-
-                    <span
-                      className="
-                        font-bold
-                        text-foreground
-                      "
-                    >
-                      {lead.score ?? 0}/100
-                    </span>
-
-                  </td>
-
-
-                  {/* =======================================
-                      ACCIÓN
-                  ======================================= */}
-
-                  <td className="p-4">
-
-                    <Link
-                      href={`/app1/leads/${lead.id}`}
-                      className="
-                        inline-flex
-                        items-center
-                        px-3
-                        py-2
-                        rounded-lg
-                        text-sm
-                        font-semibold
-                        bg-brand-blue
-                        text-white
-                        hover:opacity-90
-                        transition
-                      "
-                    >
-                      Ver más
-                    </Link>
-
-                  </td>
-
-                </tr>
-
-              )
-            }
-          )}
-
-        </tbody>
-
-      </table>
+      </div>
 
     </div>
   )
