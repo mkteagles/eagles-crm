@@ -196,7 +196,6 @@ export function LeadDetail({
           metrics[0]?.engagement_level ||
           'low'
         )
-
       }
 
       return (
@@ -405,6 +404,7 @@ export function LeadDetail({
       // =================================================
 
       const {
+        data,
         error: updateError,
       } = await supabase
         .from('leads')
@@ -413,6 +413,8 @@ export function LeadDetail({
           'id',
           lead.id
         )
+        .select()
+        .single()
 
 
       // =================================================
@@ -461,11 +463,28 @@ export function LeadDetail({
 
 
       // =================================================
+      // SEGURIDAD EXTRA
+      // =================================================
+
+      if (!data) {
+
+        throw new Error(
+          'Supabase no devolvió el lead actualizado. Revisa las políticas RLS de la tabla leads.'
+        )
+      }
+
+
+      // =================================================
       // ÉXITO
       // =================================================
 
       console.log(
         '✅ LEAD GUARDADO CORRECTAMENTE'
+      )
+
+      console.log(
+        'LEAD ACTUALIZADO:',
+        data
       )
 
 
@@ -725,7 +744,12 @@ export function LeadDetail({
 
 
           {/* =================================================
-              BOTONES
+              BOTONES DE EDICIÓN
+              
+              IMPORTANTE:
+              NO HAY RESTRICCIÓN DE ROL.
+              TODO USUARIO AUTENTICADO QUE LLEGUE
+              A ESTE COMPONENTE VE EL BOTÓN.
           ================================================= */}
 
           {!editing ? (
@@ -748,6 +772,7 @@ export function LeadDetail({
                 font-semibold
                 hover:opacity-90
                 transition
+                cursor-pointer
               "
             >
 
@@ -788,6 +813,7 @@ export function LeadDetail({
                   font-semibold
                   hover:bg-foreground/5
                   disabled:opacity-50
+                  cursor-pointer
                 "
               >
 
@@ -820,6 +846,7 @@ export function LeadDetail({
                   font-semibold
                   hover:opacity-90
                   disabled:opacity-50
+                  cursor-pointer
                 "
               >
 
@@ -1271,23 +1298,25 @@ export function LeadDetail({
 
               </p>
 
-              <p className={`text-xl font-bold ${
-                (
-                  editing
-                    ? balance
-                    : Math.max(
-                        Number(
-                          lead.product_price || 0
-                        ) -
-                        Number(
-                          lead.amount_paid || 0
-                        ),
-                        0
-                      )
-                ) > 0
-                  ? 'text-brand-orange'
-                  : 'text-green-500'
-              }`}>
+              <p
+                className={`text-xl font-bold ${
+                  (
+                    editing
+                      ? balance
+                      : Math.max(
+                          Number(
+                            lead.product_price || 0
+                          ) -
+                          Number(
+                            lead.amount_paid || 0
+                          ),
+                          0
+                        )
+                  ) > 0
+                    ? 'text-brand-orange'
+                    : 'text-green-500'
+                }`}
+              >
 
                 {formatMoney(
 
@@ -1317,25 +1346,27 @@ export function LeadDetail({
 
           <div className="mt-4">
 
-            <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold text-white ${
-              (
-                editing
-                  ? paymentStatus
-                  : lead.payment_status
-              ) === 'paid'
+            <span
+              className={`inline-flex px-3 py-1 rounded-full text-xs font-bold text-white ${
+                (
+                  editing
+                    ? paymentStatus
+                    : lead.payment_status
+                ) === 'paid'
 
-                ? 'bg-green-500'
+                  ? 'bg-green-500'
 
-                : (
-                    editing
-                      ? paymentStatus
-                      : lead.payment_status
-                  ) === 'partial'
+                  : (
+                      editing
+                        ? paymentStatus
+                        : lead.payment_status
+                    ) === 'partial'
 
-                ? 'bg-brand-orange'
+                  ? 'bg-brand-orange'
 
-                : 'bg-gray-500'
-            }`}>
+                  : 'bg-gray-500'
+              }`}
+            >
 
               {(
                 editing
