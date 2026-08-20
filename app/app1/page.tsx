@@ -11,10 +11,15 @@ import {
   ClipboardList,
   UserCog,
   Video,
+  Wrench,
 } from "lucide-react";
 
 export default async function App1Home() {
   const supabase = await createClient();
+
+  // =========================================================
+  // USUARIO AUTENTICADO
+  // =========================================================
 
   const {
     data: { user },
@@ -24,11 +29,15 @@ export default async function App1Home() {
     redirect("/auth/login");
   }
 
+  // =========================================================
+  // PERFIL
+  // =========================================================
+
   const { data: profile } = await supabase
     .from("user_profiles")
-    .select("full_name, role")
+    .select("full_name, email, role")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
   const name =
     profile?.full_name ||
@@ -46,27 +55,29 @@ export default async function App1Home() {
 
   const normalizedName = name.trim().toLowerCase();
 
+  const normalizedEmail =
+    (profile?.email || user.email || "")
+      .trim()
+      .toLowerCase();
+
   const isChuy =
     normalizedName.includes("chuy") ||
     normalizedName.includes("jesus") ||
-    normalizedName.includes("jesús");
+    normalizedName.includes("jesús") ||
+    normalizedEmail === "chuy@eagles.com";
 
   const isMarcos =
-    normalizedName.includes("marcos");
+    normalizedName.includes("marcos") ||
+    normalizedEmail === "marcosc@eagles.com";
 
   const isUrsula =
     normalizedName.includes("ursula") ||
-    normalizedName.includes("úrsula");
+    normalizedName.includes("úrsula") ||
+    normalizedEmail === "ursula@eagles.com";
 
   // =========================================================
-  // PERMISOS GENERALES
+  // ADMIN
   // =========================================================
-
-  /*
-   * ADMINISTRACIÓN:
-   *
-   * Los admins ven todas las áreas.
-   */
 
   const canSeeAllSections =
     role === "admin";
@@ -75,35 +86,59 @@ export default async function App1Home() {
   // VENTAS
   // =========================================================
 
-  /*
-   * Ventas puede ser vista por:
-   *
-   * ADMIN
-   * MARCOS
-   * URSULA
-   *
-   * Chuy NO entra aquí.
-   */
-
   const canSeeSales =
     canSeeAllSections ||
     isMarcos ||
     isUrsula;
 
   // =========================================================
+  // MARKETING
+  // =========================================================
+
+  const canSeeMarketing =
+    canSeeAllSections ||
+    isMarcos ||
+    isUrsula ||
+    isChuy;
+
+  // =========================================================
   // EDICIÓN DE VIDEO
   // =========================================================
 
-  /*
-   * Edición de Video:
-   *
-   * Chuy
-   * Admin
-   */
-
   const canSeeVideoEditing =
-    isChuy ||
-    canSeeAllSections;
+    canSeeAllSections ||
+    isChuy;
+
+  // =========================================================
+  // TALLER
+  // =========================================================
+  //
+  // ADMIN:
+  // acceso automático.
+  //
+  // EXECUTOR:
+  // necesita registro activo en taller_user_access.
+  //
+  // access_level puede ser:
+  // manager
+  // operator
+  //
+  // =========================================================
+
+  const { data: tallerAccess } = await supabase
+    .from("taller_user_access")
+    .select("access_level, is_active")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  const canSeeTaller =
+    canSeeAllSections ||
+    !!tallerAccess?.is_active;
+
+  // =========================================================
+  // RENDER
+  // =========================================================
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -145,7 +180,6 @@ export default async function App1Home() {
               href="/app1/leads"
               className="group"
             >
-
               <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
 
                 <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-green-100 dark:bg-green-900/20 blur-2xl" />
@@ -155,12 +189,10 @@ export default async function App1Home() {
                   <div className="flex items-center justify-between mb-8">
 
                     <div className="w-14 h-14 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-
                       <TrendingUp
                         size={28}
                         className="text-green-600 dark:text-green-400"
                       />
-
                     </div>
 
                     <ArrowRight
@@ -185,84 +217,73 @@ export default async function App1Home() {
                     </p>
 
                     <div className="flex items-center gap-2 mt-5 text-sm font-semibold text-gray-700 dark:text-gray-300">
-
                       <Users size={16} />
-
                       Dashboard de Leads
-
                     </div>
 
                   </div>
 
                 </div>
-
               </div>
-
             </Link>
           )}
 
           {/* ===================================================
-              MARKETING + ACTIVIDADES
+              MARKETING
           =================================================== */}
 
-          <Link
-            href="/app1/marketing"
-            className="group"
-          >
+          {canSeeMarketing && (
+            <Link
+              href="/app1/marketing"
+              className="group"
+            >
+              <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
 
-            <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+                <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-blue-100 dark:bg-blue-900/20 blur-2xl" />
 
-              <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-blue-100 dark:bg-blue-900/20 blur-2xl" />
+                <div className="relative p-7 flex flex-col h-full">
 
-              <div className="relative p-7 flex flex-col h-full">
+                  <div className="flex items-center justify-between mb-8">
 
-                <div className="flex items-center justify-between mb-8">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                      <Megaphone
+                        size={28}
+                        className="text-blue-600 dark:text-blue-400"
+                      />
+                    </div>
 
-                  <div className="w-14 h-14 rounded-2xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-
-                    <Megaphone
-                      size={28}
-                      className="text-blue-600 dark:text-blue-400"
+                    <ArrowRight
+                      size={22}
+                      className="text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all"
                     />
 
                   </div>
 
-                  <ArrowRight
-                    size={22}
-                    className="text-gray-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all"
-                  />
+                  <div className="mt-auto">
 
-                </div>
+                    <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-2">
+                      MARKETING Y OPERACIÓN
+                    </p>
 
-                <div className="mt-auto">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      Marketing + Actividades
+                    </h2>
 
-                  <p className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-2">
-                    MARKETING Y OPERACIÓN
-                  </p>
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Gestiona contenido, actividades, tareas y reportes.
+                    </p>
 
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Marketing + Actividades
-                  </h2>
-
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
-                    Gestiona contenido, actividades, tareas y reportes.
-                  </p>
-
-                  <div className="flex items-center gap-2 mt-5 text-sm font-semibold text-gray-700 dark:text-gray-300">
-
-                    <ClipboardList size={16} />
-
-                    Actividades y contenido
+                    <div className="flex items-center gap-2 mt-5 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      <ClipboardList size={16} />
+                      Actividades y contenido
+                    </div>
 
                   </div>
 
                 </div>
-
               </div>
-
-            </div>
-
-          </Link>
+            </Link>
+          )}
 
           {/* ===================================================
               ADMINISTRACIÓN
@@ -273,7 +294,6 @@ export default async function App1Home() {
               href="/app1/administracion"
               className="group"
             >
-
               <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
 
                 <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-purple-100 dark:bg-purple-900/20 blur-2xl" />
@@ -283,12 +303,10 @@ export default async function App1Home() {
                   <div className="flex items-center justify-between mb-8">
 
                     <div className="w-14 h-14 rounded-2xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-
                       <Building2
                         size={28}
                         className="text-purple-600 dark:text-purple-400"
                       />
-
                     </div>
 
                     <ArrowRight
@@ -313,19 +331,14 @@ export default async function App1Home() {
                     </p>
 
                     <div className="flex items-center gap-2 mt-5 text-sm font-semibold text-gray-700 dark:text-gray-300">
-
                       <UserCog size={16} />
-
                       Gestión administrativa
-
                     </div>
 
                   </div>
 
                 </div>
-
               </div>
-
             </Link>
           )}
 
@@ -338,7 +351,6 @@ export default async function App1Home() {
               href="/app1/edicion-video"
               className="group"
             >
-
               <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
 
                 <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-orange-100 dark:bg-orange-900/20 blur-2xl" />
@@ -348,12 +360,10 @@ export default async function App1Home() {
                   <div className="flex items-center justify-between mb-8">
 
                     <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-
                       <Video
                         size={28}
                         className="text-orange-600 dark:text-orange-400"
                       />
-
                     </div>
 
                     <ArrowRight
@@ -378,19 +388,71 @@ export default async function App1Home() {
                     </p>
 
                     <div className="flex items-center gap-2 mt-5 text-sm font-semibold text-gray-700 dark:text-gray-300">
-
                       <Video size={16} />
-
                       Producción de contenido
-
                     </div>
 
                   </div>
 
                 </div>
-
               </div>
+            </Link>
+          )}
 
+          {/* ===================================================
+              TALLER
+          =================================================== */}
+
+          {canSeeTaller && (
+            <Link
+              href="/app1/taller"
+              className="group"
+            >
+              <div className="relative overflow-hidden h-full min-h-[280px] rounded-2xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1">
+
+                <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-orange-100 dark:bg-orange-900/20 blur-2xl" />
+
+                <div className="relative p-7 flex flex-col h-full">
+
+                  <div className="flex items-center justify-between mb-8">
+
+                    <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                      <Wrench
+                        size={28}
+                        className="text-orange-600 dark:text-orange-400"
+                      />
+                    </div>
+
+                    <ArrowRight
+                      size={22}
+                      className="text-gray-400 group-hover:text-orange-600 group-hover:translate-x-1 transition-all"
+                    />
+
+                  </div>
+
+                  <div className="mt-auto">
+
+                    <p className="text-sm font-semibold text-orange-600 dark:text-orange-400 mb-2">
+                      OPERACIÓN
+                    </p>
+
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                      Taller
+                    </h2>
+
+                    <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                      Gestiona órdenes de trabajo, clientes, vehículos y operación del taller.
+                    </p>
+
+                    <div className="flex items-center gap-2 mt-5 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                      <Wrench size={16} />
+                      Gestión del taller
+                    </div>
+
+                  </div>
+
+                </div>
+              </div>
             </Link>
           )}
 
@@ -407,11 +469,9 @@ export default async function App1Home() {
             <div className="flex items-center gap-3">
 
               <div className="w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-
                 <span className="text-lg">
                   ✨
                 </span>
-
               </div>
 
               <div>

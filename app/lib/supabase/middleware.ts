@@ -122,7 +122,7 @@ export async function updateSession(
       'id',
       user.id
     )
-    .single()
+    .maybeSingle()
 
   // =====================================================
   // DATOS DEL USUARIO
@@ -208,8 +208,21 @@ export async function updateSession(
     )
 
   // =====================================================
+  // TALLER
+  // =====================================================
+
+  const isTaller =
+    pathname === '/app1/taller' ||
+    pathname.startsWith(
+      '/app1/taller/'
+    )
+
+  // =====================================================
   // ADMIN
   // =====================================================
+  //
+  // Los admins conservan exactamente su comportamiento
+  // actual.
   //
   // Hugo
   // Jonathan
@@ -222,6 +235,81 @@ export async function updateSession(
 
   if (role === 'admin') {
     return response
+  }
+
+  // =====================================================
+  // TALLER
+  // =====================================================
+  //
+  // IMPORTANTE:
+  //
+  // El Taller NO depende del role general.
+  //
+  // Un executor puede entrar si tiene registro activo
+  // en taller_user_access.
+  // =====================================================
+
+  if (isTaller) {
+
+    const {
+      data: tallerAccess,
+      error: tallerError,
+    } = await supabase
+      .from('taller_user_access')
+      .select(
+        'user_id, access_level, is_active'
+      )
+      .eq(
+        'user_id',
+        user.id
+      )
+      .eq(
+        'is_active',
+        true
+      )
+      .maybeSingle()
+
+    // ---------------------------------------------------
+    // DEBUG
+    // ---------------------------------------------------
+
+    console.log(
+      '[TALLER MIDDLEWARE]',
+      {
+        userId: user.id,
+        email: user.email,
+        role,
+        tallerAccess,
+        tallerError,
+      }
+    )
+
+    // ---------------------------------------------------
+    // TIENE ACCESO
+    // ---------------------------------------------------
+
+    if (
+      tallerAccess &&
+      tallerAccess.is_active
+    ) {
+      return response
+    }
+
+    // ---------------------------------------------------
+    // NO TIENE ACCESO
+    // ---------------------------------------------------
+
+    const homeUrl =
+      request.nextUrl.clone()
+
+    homeUrl.pathname =
+      '/app1'
+
+    homeUrl.search = ''
+
+    return NextResponse.redirect(
+      homeUrl
+    )
   }
 
   // =====================================================
@@ -249,23 +337,13 @@ export async function updateSession(
     // ===================================================
     // VENTAS
     // ===================================================
-    //
-    // Marcos -> Workshop
-    //
-    // Ursula -> Empresarial + Costa Rica
-    //
-    // Chuy -> NO ventas
-    //
-    // IMPORTANTE:
-    // Aquí solamente permitimos entrar a /leads.
-    //
-    // El filtrado de productos se controla
-    // posteriormente desde la aplicación.
-    // ===================================================
 
     if (isSales) {
 
-      if (isMarcos || isUrsula) {
+      if (
+        isMarcos ||
+        isUrsula
+      ) {
         return response
       }
 
@@ -308,9 +386,6 @@ export async function updateSession(
     // ===================================================
     // ADMINISTRACIÓN
     // ===================================================
-    //
-    // Los executors NO entran.
-    // ===================================================
 
     if (isAdministration) {
 
@@ -329,7 +404,7 @@ export async function updateSession(
 
     // ===================================================
     // CUALQUIER OTRA RUTA
-    // ===================================================
+    // =====================================================
 
     const homeUrl =
       request.nextUrl.clone()
