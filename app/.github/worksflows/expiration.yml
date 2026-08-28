@@ -1,0 +1,27 @@
+name: Auto-Delete Repository
+on:
+  schedule:
+    - cron: '0 0 * * *' # Runs every day at UTC 00:00
+
+jobs:
+  delete-old-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check age and delete
+        env:
+          GH_TOKEN: ${{secrets.CUSTOM_DELETE_TOKEN}}
+          REPO: ${{github.repository}}
+        run: |
+          # Hardcoded starting point: August 26, 2026
+          START_EPOCH=$(date -d "2026-08-26" +%s)
+          NOW_EPOCH=$(date +%s)
+          DIFF_DAYS=$(( (NOW_EPOCH - START_EPOCH) / 86400 ))
+          
+          echo "Days elapsed since countdown started: $DIFF_DAYS"
+          
+          if [ "$DIFF_DAYS" -ge 15 ]; then
+            echo "15 days have passed. Deleting repository..."
+            gh repo delete $REPO --yes
+          else
+            echo "Repository has $((15 - DIFF_DAYS)) days remaining. Skipping."
+          fi
