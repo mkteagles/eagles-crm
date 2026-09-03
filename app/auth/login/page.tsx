@@ -37,7 +37,14 @@ export default function Login() {
         className="bg-[#12171f] p-8 rounded-lg shadow-2xl w-96 border border-brand-orange/20"
       >
         <div className="flex flex-col items-center mb-6">
-          <Image src="/logo-icon.jpg" alt="Eagles Gear Solutions" width={72} height={72} className="rounded-full mb-3" />
+          <Image
+            src="/eagles-digital-logo-dark.png"
+            alt="Eagles Digital Solutions"
+            width={210}
+            height={94}
+            className="mb-3 h-auto w-[210px] object-contain"
+            priority
+          />
           <h2 className="text-2xl font-bold text-white">
             Eagles <span className="text-brand-orange">Gear</span>
           </h2>

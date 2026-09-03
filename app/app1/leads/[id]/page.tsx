@@ -19,6 +19,10 @@ import {
   LeadDetail,
 } from '@/components/LeadDetail'
 
+import {
+  CampusAccessCard,
+} from '@/components/CampusAccessCard'
+
 
 // =======================================================
 // PROPS
@@ -158,6 +162,7 @@ function LeadContent({
     interactions,
     loading,
     error,
+    refetch,
   } = useLead(
     leadId
   )
@@ -569,6 +574,13 @@ function LeadContent({
 
 
       {/* =================================================
+          ACCESO AL CAMPUS
+      ================================================= */}
+
+      <CampusAccessCard lead={lead} />
+
+
+      {/* =================================================
           DETALLE NORMAL DEL LEAD
       ================================================= */}
 
@@ -577,6 +589,7 @@ function LeadContent({
         interactions={
           interactions
         }
+        onSaved={refetch}
       />
 
     </div>

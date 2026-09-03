@@ -1,21 +1,28 @@
-import { createClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
+import { NextRequest, NextResponse } from 'next/server'
 
-/**
- * Hotmart manda el "Hottok" en el header `x-hotmart-hottok`.
- * Lo validamos contra HOTMART_HOTTOK (Configuración → Webhooks en Hotmart)
- * para que nadie pueda marcar leads como comprados con un POST falso.
- */
+import { createAdminClient } from '@/lib/supabase/admin'
+
 function isValidHottok(req: NextRequest) {
   const hottok = req.headers.get('x-hotmart-hottok')
   if (!process.env.HOTMART_HOTTOK || !hottok) return false
 
-  // Comparación en tiempo constante para evitar timing attacks.
   const expected = Buffer.from(process.env.HOTMART_HOTTOK)
   const received = Buffer.from(hottok)
-  if (expected.length !== received.length) return false
-  return crypto.timingSafeEqual(expected, received)
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received)
+}
+
+function normalizePhone(value: string | undefined) {
+  return String(value || '').replace(/\D/g, '')
+}
+
+function purchaseDateToIso(value: unknown) {
+  if (typeof value === 'number' || (typeof value === 'string' && value.trim())) {
+    const raw = Number(value)
+    const date = new Date(raw < 10_000_000_000 ? raw * 1000 : raw)
+    if (!Number.isNaN(date.getTime())) return date.toISOString()
+  }
+  return new Date().toISOString()
 }
 
 export async function POST(req: NextRequest) {
@@ -25,65 +32,95 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const supabase = await createClient()
-
-    // Estructura real de Hotmart: evento en `event`, datos en `data`.
-    const event = body.event as string | undefined
-    const buyerEmail = body.data?.buyer?.email as string | undefined
-    const buyerPhone = body.data?.buyer?.checkout_phone as string | undefined
-    const productName = body.data?.product?.name as string | undefined
-    const purchaseDate = body.data?.purchase?.order_date as number | undefined
-    const hotmartCustomerId = body.data?.buyer?.ucode as string | undefined
+    const event = String(body.event || '')
+    const buyerEmail = String(body.data?.buyer?.email || '').trim().toLowerCase()
+    const buyerPhone = normalizePhone(body.data?.buyer?.checkout_phone)
+    const productName = String(body.data?.product?.name || '').trim()
+    const transactionId = String(body.data?.purchase?.transaction || '').trim()
+    const hotmartCustomerId = String(body.data?.buyer?.ucode || '').trim()
+    const purchaseAmount = Number(body.data?.purchase?.price?.value || 0)
+    const purchaseDate = purchaseDateToIso(body.data?.purchase?.order_date)
 
     if (!buyerEmail && !buyerPhone) {
       return NextResponse.json({ error: 'Sin email ni teléfono del comprador' }, { status: 400 })
     }
 
     const isApproved = event === 'PURCHASE_APPROVED' || event === 'PURCHASE_COMPLETE'
-    const isRefundOrCancel =
-      event === 'PURCHASE_REFUNDED' || event === 'PURCHASE_CANCELED' || event === 'PURCHASE_CHARGEBACK'
-
+    const isRefundOrCancel = ['PURCHASE_REFUNDED', 'PURCHASE_CANCELED', 'PURCHASE_CHARGEBACK'].includes(event)
     if (!isApproved && !isRefundOrCancel) {
-      // Otros eventos (boleto generado, carrito abandonado, etc.) los ignoramos por ahora.
       return NextResponse.json({ success: true, ignored: event })
     }
 
-    // Buscamos primero por email y, si no hay match, por teléfono
-    // (útil cuando el lead vino de WhatsApp/ManyChat y no tenía email).
-    let query = supabase.from('leads').select('id')
-    query = buyerEmail ? query.eq('email', buyerEmail) : query.eq('phone_number', buyerPhone as string)
-    const { data: matches } = await query
+    const supabase = createAdminClient()
+    const selected = 'id,notes,product_price,academy_customer_id'
+    let matches: Array<{
+      id: number
+      notes: string | null
+      product_price: number | string | null
+      academy_customer_id: number | null
+    }> = []
 
-    if (!matches || matches.length === 0) {
-      // No hay lead para vincular la compra: lo dejamos registrado igual
-      // para no perder el dato, pero avisamos con 200 (Hotmart no debe reintentar).
+    if (buyerEmail) {
+      const { data, error } = await supabase.from('leads').select(selected).ilike('email', buyerEmail)
+      if (error) throw error
+      matches = data || []
+    }
+
+    if (matches.length === 0 && buyerPhone) {
+      const { data, error } = await supabase.from('leads').select(selected).eq('phone_number', buyerPhone)
+      if (error) throw error
+      matches = data || []
+    }
+
+    if (matches.length === 0) {
       return NextResponse.json({ success: true, matched: false })
     }
 
-    const updates = isApproved
-      ? {
-          has_purchased: true,
-          hotmart_customer_id: hotmartCustomerId || null,
-          purchase_date: purchaseDate ? new Date(purchaseDate).toISOString() : new Date().toISOString(),
-          purchase_amount: body.data?.purchase?.price?.value ?? null,
-          lead_status: 'qualified' as const,
-          score: 100,
-          notes: productName ? `Compró: ${productName}` : undefined,
-        }
-      : {
-          has_purchased: false,
-          lead_status: 'lost' as const,
-        }
+    for (const lead of matches) {
+      const note = isApproved
+        ? `Compra Hotmart aprobada${productName ? `: ${productName}` : ''}${transactionId ? ` (${transactionId})` : ''}`
+        : `Compra Hotmart revertida: ${event}${transactionId ? ` (${transactionId})` : ''}`
+      const notes = [lead.notes, note].filter(Boolean).join('\n')
+      const amount = purchaseAmount > 0 ? purchaseAmount : Number(lead.product_price || 0)
 
-    const ids = matches.map((m) => m.id)
-    const { error } = await supabase.from('leads').update(updates).in('id', ids)
+      const updates = isApproved
+        ? {
+            has_purchased: true,
+            hotmart_customer_id: hotmartCustomerId || null,
+            hotmart_transaction_id: transactionId || null,
+            purchase_date: purchaseDate,
+            purchase_amount: amount,
+            payment_status: 'paid',
+            amount_paid: amount,
+            purchased_product: productName || null,
+            lead_status: 'qualified',
+            score: 100,
+            notes,
+          }
+        : {
+            has_purchased: false,
+            payment_status: 'unpaid',
+            amount_paid: 0,
+            lead_status: 'lost',
+            notes,
+          }
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      const { error } = await supabase.from('leads').update(updates).eq('id', lead.id)
+      if (error) throw error
+
+      if (isApproved && hotmartCustomerId && lead.academy_customer_id) {
+        const { error: customerError } = await supabase
+          .from('academy_customers')
+          .update({ hotmart_customer_id: hotmartCustomerId })
+          .eq('id', lead.academy_customer_id)
+          .is('hotmart_customer_id', null)
+        if (customerError) throw customerError
+      }
     }
 
-    return NextResponse.json({ success: true, matched: true, updated: ids.length })
-  } catch {
-    return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
+    return NextResponse.json({ success: true, matched: true, updated: matches.length })
+  } catch (error) {
+    console.error('Error procesando webhook Hotmart:', error)
+    return NextResponse.json({ error: 'No fue posible procesar el webhook.' }, { status: 500 })
   }
 }

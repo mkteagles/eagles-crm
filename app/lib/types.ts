@@ -177,6 +177,8 @@ export interface Lead {
 
   email: string | null
 
+  academy_customer_id?: number | null
+
   // -----------------------------------------------------
   // ORIGEN
   // -----------------------------------------------------
@@ -192,6 +194,8 @@ export interface Lead {
   // -----------------------------------------------------
 
   product: ProductType
+
+  product_interest?: string | null
 
   product_price: number
 
@@ -216,6 +220,12 @@ export interface Lead {
   temperature?: LeadTemperature | null
 
   has_purchased: boolean
+
+  hotmart_customer_id?: string | null
+
+  purchase_date?: string | null
+
+  purchase_amount?: number | null
 
   // -----------------------------------------------------
   // INFORMACIÓN ADICIONAL

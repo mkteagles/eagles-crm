@@ -343,15 +343,24 @@ export function Navbar() {
           >
 
             <Image
-              src="/logo-banner.jpg"
-              alt="Eagles Gear CRM"
-              width={36}
-              height={36}
-              className="rounded-md w-[36px] h-[36px] object-cover"
-              loading="eager"
+              src="/eagles-digital-logo-light.png"
+              alt="Eagles Digital Solutions"
+              width={154}
+              height={69}
+              className="h-10 w-auto object-contain dark:hidden"
+              priority
             />
 
-            <span className="font-semibold text-foreground">
+            <Image
+              src="/eagles-digital-logo-dark.png"
+              alt="Eagles Digital Solutions"
+              width={154}
+              height={69}
+              className="hidden h-10 w-auto object-contain dark:block"
+              priority
+            />
+
+            <span className="hidden font-semibold text-foreground sm:inline">
               Eagles Gear CRM
             </span>
 
