@@ -81,9 +81,18 @@ type WhatsAppDestination = {
   phoneLabel: string | null
 }
 
+type WhatsAppSchedule = {
+  campaignCode: string
+  timezone: string
+  sendTime1: string
+  sendTime2: string
+  nextSlot: string | null
+}
+
 type WhatsAppPreview = {
   asset: WhatsAppAsset | null
   destination: WhatsAppDestination | null
+  schedule: WhatsAppSchedule | null
 }
 
 const EMPTY_FORM: CopyForm = {
@@ -124,6 +133,13 @@ function isOctoberWorkshop(item: Pick<CopyRequest, 'campaign_month' | 'product_t
   return item.campaign_month === '2026-10' && normalizeName(item.product_topic || '').includes('workshop')
 }
 
+function isOctoberWorkshopWarmup(item: Pick<CopyRequest, 'campaign_month' | 'product_topic' | 'channels' | 'objective'> | null | undefined) {
+  if (!item) return false
+  return isOctoberWorkshop(item)
+    && item.channels.includes('WhatsApp')
+    && item.objective === 'Calentamiento'
+}
+
 function userName(users: UserProfile[], id: string | null) {
   if (!id) return 'Sin asignar'
   return users.find((item) => item.id === id)?.full_name || 'Usuario'
@@ -137,6 +153,19 @@ function displayDate(value: string | null) {
     year: 'numeric',
     timeZone: 'UTC',
   }).format(new Date(`${value}T12:00:00Z`))
+}
+
+function displayScheduledDateTime(value: string | null, timeZone = 'America/Mexico_City') {
+  if (!value) return 'Se asignará al aprobar'
+  return new Intl.DateTimeFormat('es-MX', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone,
+  }).format(new Date(value))
 }
 
 export default function CopyCenterDashboard() {
@@ -338,7 +367,12 @@ export default function CopyCenterDashboard() {
         reviewer_id: (form.campaign_month === '2026-10' && normalizeName(productTopic).includes('workshop'))
           ? users.find((item) => item.email.trim().toLowerCase() === 'marcosc@eagles.com')?.id || user.id
           : form.reviewer_id || null,
-        due_date: form.due_date || null,
+        due_date: (
+          form.campaign_month === '2026-10'
+          && normalizeName(productTopic).includes('workshop')
+          && form.channels.includes('WhatsApp')
+          && form.objective === 'Calentamiento'
+        ) ? null : form.due_date || null,
         requested_by: user.id,
         status: 'pending',
       })
@@ -551,7 +585,7 @@ export default function CopyCenterDashboard() {
   }
 
 
-  const approveAndSendWhatsAppTest = async () => {
+  const approveAndScheduleWhatsApp = async () => {
     if (!selected) return
     if (!editorCopy.trim()) {
       setNotice('El copy está vacío.')
@@ -569,20 +603,20 @@ export default function CopyCenterDashboard() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          action: 'approve-send-test',
+          action: 'approve-schedule',
           caption: editorCopy.trim(),
         }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'No se pudo enviar la prueba por WhatsApp.')
+      if (!response.ok) throw new Error(payload.error || 'No se pudo programar el calentamiento.')
 
       const updated = payload.request as CopyRequest
       setSelected(updated)
       setEditorCopy(updated.final_copy || updated.generated_copy || '')
-      setNotice(`Aprobado y enviado a ${payload.destination?.groupName || 'Prueba Victoria'} desde ${payload.destination?.instanceName || 'WORKSHOP'}.`)
+      setNotice(`Aprobado y programado para ${displayScheduledDateTime(payload.schedule?.scheduledAt || null, payload.schedule?.timezone || 'America/Mexico_City')} · ${payload.destination?.groupName || 'Prueba Victoria'}.`)
       await Promise.all([loadData(), loadWhatsAppPreview(selected.id)])
     } catch (sendError) {
-      setNotice(sendError instanceof Error ? sendError.message : 'No se pudo enviar la prueba por WhatsApp.')
+      setNotice(sendError instanceof Error ? sendError.message : 'No se pudo programar el calentamiento.')
     } finally {
       setWorking(false)
     }
@@ -620,12 +654,17 @@ export default function CopyCenterDashboard() {
   const isAdmin = user.role === 'admin'
   const canWorkSelected = Boolean(selected && (isAdmin || selected.assigned_to === user.id || selected.requested_by === user.id))
   const selectedIsWorkshop = isOctoberWorkshop(selected)
+  const selectedIsWorkshopWarmup = isOctoberWorkshopWarmup(selected)
   const currentUserEmail = user.email.trim().toLowerCase()
   const canReviewSelected = Boolean(selected && (
     selectedIsWorkshop
       ? currentUserEmail === 'marcosc@eagles.com'
       : isAdmin || selected.reviewer_id === user.id
   ))
+  const formIsWorkshopWarmup = form.campaign_month === '2026-10'
+    && normalizeName(form.product_topic || '').includes('workshop')
+    && form.channels.includes('WhatsApp')
+    && form.objective === 'Calentamiento'
 
   return (
     <div className="space-y-6">
@@ -696,7 +735,7 @@ export default function CopyCenterDashboard() {
             <div className="mt-3 flex items-center gap-3 text-xs text-foreground/55">
               <img src={workshop.groupIcon} alt="Icono del grupo" className="size-10 rounded-lg object-cover" />
               <img src={workshop.referenceFlyer} alt="Flyer inicial" className="size-10 rounded-lg object-cover" />
-              <span>Referencias visuales guardadas para la línea gráfica de esta Workshop.</span>
+              <span>Referencias visuales guardadas · calentamientos programables automáticamente a las 10:00 AM y 5:00 PM.</span>
             </div>
           </div>
         ))}
@@ -753,7 +792,7 @@ export default function CopyCenterDashboard() {
                 </div>
                 <div className="text-sm"><p className="text-xs text-foreground/45">Responsable</p><p className="mt-1 font-medium">{userName(users, item.assigned_to)}</p></div>
                 <div className="text-sm"><p className="text-xs text-foreground/45">Revisión</p><p className="mt-1 font-medium">{userName(users, item.reviewer_id)}</p></div>
-                <div className="text-sm sm:text-right"><p className="text-xs text-foreground/45">Entrega</p><p className="mt-1 font-medium">{displayDate(item.due_date)}</p></div>
+                <div className="text-sm sm:text-right"><p className="text-xs text-foreground/45">{isOctoberWorkshopWarmup(item) ? 'Programación' : 'Entrega'}</p><p className="mt-1 font-medium">{isOctoberWorkshopWarmup(item) && !item.due_date ? 'Al aprobar · 10 AM / 5 PM' : displayDate(item.due_date)}</p></div>
               </button>
             ))}
           </div>
@@ -778,7 +817,14 @@ export default function CopyCenterDashboard() {
                   <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Dato que no debe faltar</span><textarea value={form.brief} onChange={(event) => setForm({ ...form, brief: event.target.value })} rows={2} placeholder="Fechas, precio o modalidad confirmada" className="w-full rounded-xl border border-border-color bg-background p-3" /></label>
                   <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border-color p-3 sm:col-span-2"><input type="checkbox" checked={form.needs_image} onChange={(event) => setForm({ ...form, needs_image: event.target.checked })} className="size-5 accent-orange-500" /><span className="font-semibold">También necesito imagen</span></label>
                   {form.needs_image && <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Qué debe verse</span><textarea value={form.image_brief} onChange={(event) => setForm({ ...form, image_brief: event.target.value })} rows={2} placeholder="Ej. transmisión 6L80, fondo de taller, formato vertical" className="w-full rounded-xl border border-border-color bg-background p-3" /></label>}
-                  <label><span className="mb-1.5 block text-sm font-semibold">Fecha de entrega</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
+                  {formIsWorkshopWarmup ? (
+                    <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 sm:col-span-2">
+                      <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Programación automática</p>
+                      <p className="mt-1 text-xs text-foreground/60">No necesitas elegir fecha de entrega. Al aprobar, el CRM toma el siguiente espacio libre: 10:00 AM o 5:00 PM (hora de México).</p>
+                    </div>
+                  ) : (
+                    <label><span className="mb-1.5 block text-sm font-semibold">Fecha de entrega</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
+                  )}
                   <label><span className="mb-1.5 block text-sm font-semibold">Responsable</span><select value={form.assigned_to} onChange={(event) => setForm({ ...form, assigned_to: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin asignar</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label>
                   <label><span className="mb-1.5 block text-sm font-semibold">Revisora</span><select value={form.reviewer_id} onChange={(event) => setForm({ ...form, reviewer_id: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin revisora</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label>
                   <label><span className="mb-1.5 block text-sm font-semibold">Tono</span><select value={form.tone} onChange={(event) => setForm({ ...form, tone: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_TONES.map((item) => <option key={item}>{item}</option>)}</select></label>
@@ -804,12 +850,12 @@ export default function CopyCenterDashboard() {
                 {selected.generation_error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-500">{selected.generation_error}</div>}
                 <label><span className="mb-2 block text-sm font-bold">Copy de trabajo</span><textarea value={editorCopy} onChange={(event) => setEditorCopy(event.target.value)} disabled={!canWorkSelected && !canReviewSelected} rows={13} placeholder="Genera el borrador con n8n o escribe aquí el copy manualmente." className="w-full rounded-xl border border-border-color bg-background p-4 leading-6 outline-none focus:border-brand-orange disabled:opacity-70" /></label>
 
-                {(selected.channels.includes('WhatsApp') || normalizeName(selected.product_topic).includes('workshop')) && (
+                {selected.channels.includes('WhatsApp') && (
                   <div className="overflow-hidden rounded-2xl border border-emerald-500/25 bg-[#efeae2] text-slate-900 shadow-sm dark:bg-[#111b21] dark:text-slate-100">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white/80 px-4 py-3 dark:border-white/10 dark:bg-white/5">
                       <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">Vista previa WhatsApp · Prueba</p>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{selectedIsWorkshop ? 'Esta Workshop solo la revisas y apruebas tú.' : 'Esto es lo que la persona revisora aprobará antes del envío.'}</p>
+                        <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">Vista previa WhatsApp · Programación</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{selectedIsWorkshop ? 'Solo tú apruebas esta Workshop. El envío queda en cola para 10:00 AM o 5:00 PM.' : 'Esto es lo que la persona revisora aprobará antes del envío.'}</p>
                       </div>
                       {whatsAppPreview?.destination && (
                         <span className="rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">
@@ -866,6 +912,8 @@ export default function CopyCenterDashboard() {
                         <div className="text-right text-xs text-slate-500 dark:text-slate-400">
                           <p><strong>Instancia:</strong> {whatsAppPreview?.destination?.instanceName || 'WORKSHOP'}</p>
                           <p><strong>Grupo:</strong> {whatsAppPreview?.destination?.groupName || 'PRUEBA_VICTORIA'}</p>
+                          {selectedIsWorkshopWarmup && <p><strong>Próximo espacio:</strong> {displayScheduledDateTime(whatsAppPreview?.schedule?.nextSlot || null, whatsAppPreview?.schedule?.timezone || 'America/Mexico_City')}</p>}
+                          {selectedIsWorkshopWarmup && <p><strong>Horarios:</strong> 10:00 AM · 5:00 PM</p>}
                           {whatsAppPreview?.asset && <p><strong>Contenido:</strong> {whatsAppPreview.asset.asset_type === 'video' ? 'Video' : 'Imagen'}</p>}
                         </div>
                       </div>
@@ -877,7 +925,7 @@ export default function CopyCenterDashboard() {
               </div>
 
               <aside className="space-y-4">
-                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">Entrega</dt><dd className="font-semibold">{displayDate(selected.due_date)}</dd></div></dl></div>
+                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">{selectedIsWorkshopWarmup ? 'Programación' : 'Entrega'}</dt><dd className="font-semibold">{selectedIsWorkshopWarmup && !selected.due_date ? 'Se asigna al aprobar · 10 AM / 5 PM' : displayDate(selected.due_date)}</dd></div></dl></div>
                 <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Publicación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Tema</dt><dd className="font-semibold">{selected.product_topic}</dd></div><div><dt className="text-foreground/45">Canales</dt><dd className="font-semibold">{selected.channels.join(', ')}</dd></div><div><dt className="text-foreground/45">Objetivo</dt><dd className="font-semibold">{selected.objective}</dd></div><div><dt className="text-foreground/45">Tono</dt><dd className="font-semibold">{selected.tone}</dd></div></dl></div>
                 {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> Requiere contenido visual</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
               </aside>
@@ -889,8 +937,8 @@ export default function CopyCenterDashboard() {
               {canWorkSelected && ['pending', 'draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void saveDraft()} className="min-h-11 rounded-xl border border-brand-orange px-4 font-semibold text-brand-orange disabled:opacity-50">Guardar borrador</button>}
               {canWorkSelected && ['draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void sendToReview()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-orange px-4 font-semibold text-white disabled:opacity-50"><Send size={17} /> {selectedIsWorkshop ? 'Enviar a mi revisión' : 'Enviar a Victoria'}</button>}
               {canReviewSelected && selected.status === 'review' && <button disabled={working} onClick={() => void reviewRequest('changes_requested')} className="min-h-11 rounded-xl border border-rose-500 px-4 font-semibold text-rose-500 disabled:opacity-50">Solicitar cambios</button>}
-              {canReviewSelected && selected.status === 'review' && (selected.channels.includes('WhatsApp') || normalizeName(selected.product_topic).includes('workshop')) && <button disabled={working || !whatsAppPreview?.asset?.public_url} onClick={() => void approveAndSendWhatsAppTest()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar y enviar prueba</button>}
-              {canReviewSelected && selected.status === 'review' && !(selected.channels.includes('WhatsApp') || normalizeName(selected.product_topic).includes('workshop')) && <button disabled={working} onClick={() => void reviewRequest('approved')} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar</button>}
+              {canReviewSelected && selected.status === 'review' && selectedIsWorkshopWarmup && <button disabled={working || !whatsAppPreview?.asset?.public_url} onClick={() => void approveAndScheduleWhatsApp()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar y programar</button>}
+              {canReviewSelected && selected.status === 'review' && !selectedIsWorkshopWarmup && <button disabled={working} onClick={() => void reviewRequest('approved')} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar</button>}
               {(canReviewSelected || canWorkSelected) && selected.status === 'approved' && <button disabled={working} onClick={() => void markPublished()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-600 px-4 font-semibold text-white disabled:opacity-50"><Check size={17} /> Marcar publicado</button>}
             </div>
           </div>

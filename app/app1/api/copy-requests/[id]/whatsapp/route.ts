@@ -6,7 +6,7 @@ import type { CopyRequest } from '@/lib/copy-center'
 
 export const maxDuration = 60
 
-const TEST_GROUP_CODE = 'PRUEBA_VICTORIA'
+const WORKSHOP_CAMPAIGN_CODE = 'WORKSHOP_OCTUBRE'
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const MAX_VIDEO_SIZE = 16 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -103,7 +103,33 @@ async function getSessionContext(id: string) {
   }
 }
 
-async function getTestGroup(admin: ReturnType<typeof createAdminClient>) {
+type CampaignSettingRecord = {
+  code: string
+  name: string
+  campaign_month: string | null
+  target_group_code: string
+  timezone: string
+  send_time_1: string
+  send_time_2: string
+  is_active: boolean
+}
+
+async function getWorkshopSetting(admin: ReturnType<typeof createAdminClient>) {
+  const { data, error } = await admin
+    .from('whatsapp_campaign_settings')
+    .select('*')
+    .eq('code', WORKSHOP_CAMPAIGN_CODE)
+    .eq('is_active', true)
+    .maybeSingle()
+
+  if (error) throw error
+  return data as CampaignSettingRecord | null
+}
+
+async function getConfiguredGroup(
+  admin: ReturnType<typeof createAdminClient>,
+  groupCode: string,
+) {
   const { data, error } = await admin
     .from('whatsapp_groups')
     .select(`
@@ -124,12 +150,26 @@ async function getTestGroup(admin: ReturnType<typeof createAdminClient>) {
         phone_label
       )
     `)
-    .eq('code', TEST_GROUP_CODE)
+    .eq('code', groupCode)
     .eq('is_active', true)
     .maybeSingle()
 
   if (error) throw error
   return data as unknown as GroupRecord | null
+}
+
+function dateKeyInTimeZone(value: string, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(value))
+
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+  return year && month && day ? `${year}-${month}-${day}` : null
 }
 
 async function getSelectedAsset(admin: ReturnType<typeof createAdminClient>, copyId: string) {
@@ -161,10 +201,17 @@ export async function GET(
 
   try {
     const admin = createAdminClient()
-    const [asset, group] = await Promise.all([
+    const setting = session.workshopOnlyMarcos ? await getWorkshopSetting(admin) : null
+    const destinationCode = setting?.target_group_code || 'PRUEBA_VICTORIA'
+    const [asset, group, nextSlotResult] = await Promise.all([
       getSelectedAsset(admin, id),
-      getTestGroup(admin),
+      getConfiguredGroup(admin, destinationCode),
+      setting
+        ? admin.rpc('next_whatsapp_campaign_slot', { p_campaign_code: setting.code })
+        : Promise.resolve({ data: null, error: null }),
     ])
+
+    if (nextSlotResult.error) throw nextSlotResult.error
 
     return NextResponse.json({
       asset,
@@ -174,11 +221,20 @@ export async function GET(
             groupName: group.name,
             groupJid: group.group_jid,
             purpose: group.purpose,
-            defaultSendTime1: group.default_send_time_1,
-            defaultSendTime2: group.default_send_time_2,
+            defaultSendTime1: setting?.send_time_1 || group.default_send_time_1,
+            defaultSendTime2: setting?.send_time_2 || group.default_send_time_2,
             instanceCode: group.whatsapp_instances?.code || null,
             instanceName: group.whatsapp_instances?.instance_name || null,
             phoneLabel: group.whatsapp_instances?.phone_label || group.whatsapp_instances?.name || null,
+          }
+        : null,
+      schedule: setting
+        ? {
+            campaignCode: setting.code,
+            timezone: setting.timezone,
+            sendTime1: setting.send_time_1,
+            sendTime2: setting.send_time_2,
+            nextSlot: nextSlotResult.data || null,
           }
         : null,
     })
@@ -330,7 +386,7 @@ export async function POST(
 
 
 
-  if (payload.action !== 'approve-send-test') {
+  if (payload.action !== 'approve-schedule') {
     return NextResponse.json({ error: 'Acción no válida.' }, { status: 400 })
   }
 
@@ -338,8 +394,12 @@ export async function POST(
     return NextResponse.json({
       error: session.workshopOnlyMarcos
         ? 'Esta Workshop solo puede ser revisada y aprobada por marcosc@eagles.com.'
-        : 'No tienes permiso para aprobar y enviar esta prueba.',
+        : 'No tienes permiso para aprobar y programar este contenido.',
     }, { status: 403 })
+  }
+
+  if (!session.workshopOnlyMarcos) {
+    return NextResponse.json({ error: 'La programación automática solo está activa para la Workshop de octubre.' }, { status: 400 })
   }
 
   const caption = String(payload.caption || session.item.final_copy || session.item.generated_copy || '').trim()
@@ -349,144 +409,71 @@ export async function POST(
 
   try {
     const admin = createAdminClient()
-    const [asset, group] = await Promise.all([
-      getSelectedAsset(admin, id),
-      getTestGroup(admin),
-    ])
+    const asset = await getSelectedAsset(admin, id)
 
     if (!asset?.public_url) {
-      return NextResponse.json({ error: 'Falta subir y seleccionar una imagen o video para aprobar.' }, { status: 400 })
+      return NextResponse.json({ error: 'Falta subir y seleccionar una imagen o video para programar.' }, { status: 400 })
     }
 
-    if (!group?.whatsapp_instances) {
-      return NextResponse.json({ error: 'No se encontró el destino PRUEBA_VICTORIA o su instancia WORKSHOP.' }, { status: 500 })
+    const setting = await getWorkshopSetting(admin)
+    if (!setting) {
+      return NextResponse.json({ error: 'No existe la configuración WORKSHOP_OCTUBRE.' }, { status: 500 })
     }
 
-    const evolutionApiKey = process.env.EVOLUTION_API_KEY?.trim()
-    if (!evolutionApiKey) {
-      return NextResponse.json(
-        { error: 'Falta configurar EVOLUTION_API_KEY en Vercel del CRM.' },
-        { status: 503 },
-      )
-    }
+    const { data: delivery, error: scheduleError } = await admin.rpc(
+      'schedule_whatsapp_campaign_delivery',
+      {
+        p_campaign_code: setting.code,
+        p_copy_request_ref: id,
+        p_asset_id: asset.id,
+        p_caption: caption,
+        p_approved_by: session.userId,
+      },
+    )
 
-    const now = new Date().toISOString()
-    const { data: delivery, error: deliveryError } = await admin
-      .from('whatsapp_deliveries')
-      .insert({
-        copy_request_ref: id,
-        asset_id: asset.id,
-        instance_id: group.instance_id,
-        group_id: group.id,
-        caption,
-        scheduled_at: now,
-        status: 'sending',
-        approved_by: session.userId,
-        approved_at: now,
+    if (scheduleError || !delivery) throw scheduleError || new Error('No se pudo reservar el horario del calentamiento.')
+
+    const scheduledAt = String(delivery.scheduled_at)
+    const dueDate = dateKeyInTimeZone(scheduledAt, setting.timezone)
+
+    const { data: updatedCopy, error: updateCopyError } = await session.supabase
+      .from('copy_requests')
+      .update({
+        final_copy: caption,
+        status: 'approved',
+        feedback: null,
+        reviewed_at: new Date().toISOString(),
+        due_date: dueDate,
       })
+      .eq('id', id)
       .select('*')
       .single()
 
-    if (deliveryError) throw deliveryError
+    if (updateCopyError) throw updateCopyError
 
-    try {
-      const endpoint = `${group.whatsapp_instances.base_url.replace(/\/$/, '')}/message/sendMedia/${encodeURIComponent(group.whatsapp_instances.instance_name)}`
-      const evolutionResponse = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          apikey: evolutionApiKey,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          number: group.group_jid,
-          mediatype: asset.asset_type === 'video' ? 'video' : 'image',
-          mimetype: String(asset.metadata?.mime_type || (
-            asset.asset_type === 'video'
-              ? 'video/mp4'
-              : asset.public_url.toLowerCase().includes('.png')
-                ? 'image/png'
-                : asset.public_url.toLowerCase().includes('.webp')
-                  ? 'image/webp'
-                  : 'image/jpeg'
-          )),
-          media: asset.public_url,
-          caption,
-        }),
-        cache: 'no-store',
-        signal: AbortSignal.timeout(45000),
-      })
+    const group = await getConfiguredGroup(admin, setting.target_group_code)
 
-      const evolutionPayload: unknown = await evolutionResponse.json().catch(async () => ({
-        raw: await evolutionResponse.text().catch(() => ''),
-      }))
-
-      if (!evolutionResponse.ok) {
-        throw new Error(`Evolution respondió con estado ${evolutionResponse.status}.`)
-      }
-
-      const responseObject = evolutionPayload && typeof evolutionPayload === 'object'
-        ? evolutionPayload as Record<string, unknown>
-        : {}
-      const keyObject = responseObject.key && typeof responseObject.key === 'object'
-        ? responseObject.key as Record<string, unknown>
-        : {}
-      const messageId = String(keyObject.id || responseObject.messageId || responseObject.id || '').trim() || null
-
-      await admin
-        .from('whatsapp_deliveries')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          evolution_message_id: messageId,
-          response_payload: evolutionPayload,
-          error_message: null,
-        })
-        .eq('id', delivery.id)
-
-      const { data: updatedCopy, error: updateCopyError } = await session.supabase
-        .from('copy_requests')
-        .update({
-          final_copy: caption,
-          status: 'approved',
-          feedback: null,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select('*')
-        .single()
-
-      if (updateCopyError) throw updateCopyError
-
-      return NextResponse.json({
-        request: updatedCopy,
-        delivery: {
-          ...delivery,
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          evolution_message_id: messageId,
-        },
-        destination: {
-          groupCode: group.code,
-          groupName: group.name,
-          instanceName: group.whatsapp_instances.instance_name,
-        },
-      })
-    } catch (sendError) {
-      const message = sendError instanceof Error ? sendError.message : 'No se pudo enviar por Evolution.'
-      await admin
-        .from('whatsapp_deliveries')
-        .update({
-          status: 'failed',
-          error_message: message,
-          retry_count: Number(delivery.retry_count || 0) + 1,
-        })
-        .eq('id', delivery.id)
-
-      return NextResponse.json({ error: message }, { status: 502 })
-    }
+    return NextResponse.json({
+      request: updatedCopy,
+      delivery,
+      destination: group
+        ? {
+            groupCode: group.code,
+            groupName: group.name,
+            instanceName: group.whatsapp_instances?.instance_name || null,
+          }
+        : null,
+      schedule: {
+        campaignCode: setting.code,
+        timezone: setting.timezone,
+        scheduledAt,
+        sendTime1: setting.send_time_1,
+        sendTime2: setting.send_time_2,
+      },
+    })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'No se pudo preparar el envío de prueba.' },
+      { error: error instanceof Error ? error.message : 'No se pudo programar el calentamiento.' },
       { status: 500 },
     )
   }
