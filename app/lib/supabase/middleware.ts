@@ -107,6 +107,17 @@ export async function updateSession(
     return response
   }
 
+  // Las rutas internas de copys validan la sesión y los permisos nuevamente
+  // dentro de cada Route Handler. Permitirlas aquí evita que los usuarios
+  // executor sean redirigidos a /app1 antes de que el POST llegue al handler.
+  if (
+    pathname.startsWith(
+      '/app1/api/copy-requests/'
+    )
+  ) {
+    return response
+  }
+
   // =====================================================
   // OBTENER PERFIL
   // =====================================================
