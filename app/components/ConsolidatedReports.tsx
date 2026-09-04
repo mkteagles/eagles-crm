@@ -443,10 +443,9 @@ export default function ConsolidatedReports() {
             .select(
               "id, full_name, role"
             )
-            .in("role", [
-              "executor",
-              "admin",
-            ]),
+            .order("full_name", {
+              ascending: true,
+            }),
 
           // -----------------------------------------------
           // ACTIVIDADES
@@ -455,16 +454,12 @@ export default function ConsolidatedReports() {
           supabase
             .from("activities")
             .select("*")
-            .gte(
-              "due_date",
-              reportStartDate
-            )
-            .lt(
-              "due_date",
-              exclusiveEndDate
+            .or(
+              `and(due_date.gte.${reportStartDate},due_date.lt.${exclusiveEndDate}),and(updated_at.gte.${reportStartDate}T00:00:00,updated_at.lt.${exclusiveEndDate}T00:00:00)`
             )
             .order("due_date", {
               ascending: true,
+              nullsFirst: false,
             }),
 
           // -----------------------------------------------
@@ -659,16 +654,42 @@ export default function ConsolidatedReports() {
   // USUARIOS
   // =====================================================
 
-  const executors =
-    profiles.filter(
-      (profile) =>
-        profile.role ===
-        "executor"
+  const hugo =
+    profiles.find((profile) =>
+      (profile.full_name || "")
+        .toLocaleLowerCase("es-MX")
+        .includes("hugo")
+    ) ||
+    profiles.find((profile) =>
+      profile.role === "admin"
     );
 
-  const hugo = profiles.find(
-    (profile) =>
-      profile.role === "admin"
+  // No asumimos que solo existe un administrador. Luis y cualquier otro
+  // miembro que tenga actividad o reporte dentro del periodo debe aparecer.
+  // También permite mostrar a Victoria aunque su rol no sea executor/admin.
+  const reportUsers = profiles.filter(
+    (profile) => {
+      if (profile.id === hugo?.id) {
+        return false;
+      }
+
+      return (
+        profile.role === "executor" ||
+        profile.role === "admin" ||
+        activities.some(
+          (activity) =>
+            activity.assigned_to === profile.id
+        ) ||
+        suggestions.some(
+          (suggestion) =>
+            suggestion.created_by === profile.id
+        ) ||
+        dailyReports.some(
+          (report) =>
+            report.user_id === profile.id
+        )
+      );
+    }
   );
 
   // =====================================================
@@ -997,6 +1018,11 @@ export default function ConsolidatedReports() {
             hugo.id
           );
 
+        const userReports =
+          getUserDailyReports(
+            hugo.id
+          );
+
         lines.push("");
 
         lines.push(
@@ -1097,13 +1123,28 @@ export default function ConsolidatedReports() {
             }
           );
         }
+
+        if (userReports.length > 0) {
+          lines.push("");
+          lines.push(
+            `Reportes diarios registrados: ${userReports.length}`
+          );
+
+          userReports.forEach((report) => {
+            lines.push("");
+            lines.push(
+              `📝 ${formatShortDate(report.report_date)}`
+            );
+            lines.push(report.report_content);
+          });
+        }
       }
 
       // -------------------------------------------------
       // EJECUTORES
       // -------------------------------------------------
 
-      executors.forEach(
+      reportUsers.forEach(
         (executor) => {
           const summary =
             generateUserSummary(
@@ -1271,6 +1312,14 @@ export default function ConsolidatedReports() {
             lines.push(
               `Reportes diarios registrados: ${userReports.length}`
             );
+
+            userReports.forEach((report) => {
+              lines.push("");
+              lines.push(
+                `📝 ${formatShortDate(report.report_date)}`
+              );
+              lines.push(report.report_content);
+            });
           }
         }
       );
@@ -1745,6 +1794,11 @@ export default function ConsolidatedReports() {
                 "pending"
             ).length;
 
+          const savedReports =
+            getUserDailyReports(
+              hugo.id
+            );
+
           return (
             <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-200 dark:border-gray-800 p-5">
 
@@ -1882,17 +1936,38 @@ export default function ConsolidatedReports() {
 
               </div>
 
+              {savedReports.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
+                  <p className="text-xs font-semibold text-gray-500">
+                    Reportes diarios guardados
+                  </p>
+                  {savedReports.map((report) => (
+                    <details
+                      key={report.id}
+                      className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3"
+                    >
+                      <summary className="cursor-pointer text-sm font-semibold">
+                        {formatShortDate(report.report_date)}
+                      </summary>
+                      <pre className="mt-3 whitespace-pre-wrap font-sans text-sm text-gray-700 dark:text-gray-200">
+                        {report.report_content}
+                      </pre>
+                    </details>
+                  ))}
+                </div>
+              )}
+
             </div>
           );
         })()}
 
       {/* =================================================
-          EJECUTORES
+          EQUIPO
       ================================================= */}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-        {executors.map(
+        {reportUsers.map(
           (executor) => {
             const userActivities =
               getUserActivities(
@@ -2062,6 +2137,27 @@ export default function ConsolidatedReports() {
                   </div>
 
                 </div>
+
+                {savedReports.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800 space-y-2">
+                    <p className="text-xs font-semibold text-gray-500">
+                      Reportes diarios guardados
+                    </p>
+                    {savedReports.map((report) => (
+                      <details
+                        key={report.id}
+                        className="rounded-lg bg-gray-50 dark:bg-gray-800 p-3"
+                      >
+                        <summary className="cursor-pointer text-sm font-semibold">
+                          {formatShortDate(report.report_date)}
+                        </summary>
+                        <pre className="mt-3 whitespace-pre-wrap font-sans text-sm text-gray-700 dark:text-gray-200">
+                          {report.report_content}
+                        </pre>
+                      </details>
+                    ))}
+                  </div>
+                )}
 
                 {/* SUGERENCIAS */}
 

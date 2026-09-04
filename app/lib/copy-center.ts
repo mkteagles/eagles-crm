@@ -37,6 +37,7 @@ export interface CopyRequest {
   published_at: string | null
   n8n_execution_id: string | null
   generation_error: string | null
+  activity_id: number | null
   created_at: string
   updated_at: string
 }

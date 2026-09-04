@@ -156,3 +156,99 @@ end;
 $$;
 
 select 'Centro de Copys instalado correctamente' as resultado;
+
+-- ============================================================================
+-- SINCRONIZACIÓN COPY -> ACTIVIDAD
+-- Incluida también en Migracion_Reportes_Copys_Actividades.sql para bases que
+-- ya tenían instalado el Centro de Copys.
+-- ============================================================================
+
+create index if not exists copy_requests_activity_id_idx
+  on public.copy_requests(activity_id);
+
+create or replace function public.sync_copy_request_activity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_activity_id bigint;
+  v_activity_status text;
+  v_due_date date;
+  v_assigned_to uuid;
+  v_description text;
+  v_completed_at timestamptz;
+begin
+  if tg_op = 'DELETE' then
+    if old.activity_id is not null then
+      delete from public.activities where id = old.activity_id;
+    end if;
+    return old;
+  end if;
+
+  v_activity_status := case
+    when new.status in ('approved', 'published') then 'completed'
+    when new.status = 'pending' then 'pending'
+    else 'in_progress'
+  end;
+
+  v_due_date := coalesce(
+    new.due_date,
+    (coalesce(new.created_at, now()) at time zone 'America/Mexico_City')::date
+  );
+  v_assigned_to := coalesce(new.assigned_to, new.requested_by);
+  v_description := concat(
+    'Centro de Copys · ', new.product_topic,
+    E'\nObjetivo: ', new.objective,
+    E'\nCanales: ', coalesce(array_to_string(new.channels, ', '), 'Sin canal'),
+    E'\nSolicitud de copy: ', new.id::text
+  );
+  v_completed_at := case
+    when v_activity_status = 'completed'
+      then coalesce(new.published_at, new.reviewed_at, now())
+    else null
+  end;
+  v_activity_id := new.activity_id;
+
+  if v_activity_id is null
+     or not exists (select 1 from public.activities where id = v_activity_id) then
+    insert into public.activities (
+      title, description, assigned_to, created_by, area, due_date, due_time,
+      priority, status, completed_at, recurrence_type, recurrence_days,
+      recurrence_end_date, recurrence_group_id
+    )
+    values (
+      'Copy · ' || new.title, v_description, v_assigned_to, new.requested_by,
+      'marketing', v_due_date, null, 'medium', v_activity_status,
+      v_completed_at, 'none', null, null, null
+    )
+    returning id into v_activity_id;
+
+    update public.copy_requests
+    set activity_id = v_activity_id
+    where id = new.id
+      and activity_id is distinct from v_activity_id;
+
+    return new;
+  end if;
+
+  update public.activities
+  set
+    title = 'Copy · ' || new.title,
+    description = v_description,
+    assigned_to = v_assigned_to,
+    due_date = v_due_date,
+    status = v_activity_status,
+    completed_at = v_completed_at,
+    updated_at = now()
+  where id = v_activity_id;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists copy_requests_sync_activity on public.copy_requests;
+create trigger copy_requests_sync_activity
+after insert or update or delete on public.copy_requests
+for each row execute function public.sync_copy_request_activity();

@@ -89,3 +89,15 @@ Promocionar el curso presencial 6L80 y 6L90 de septiembre; incluir las fechas co
 - **Faltan variables:** revisa Vercel y vuelve a desplegar el CRM.
 
 Si falla la IA, el resto del Centro de Copys sigue funcionando manualmente.
+
+## Reportes y actividades de copys
+
+Si el Centro de Copys ya estaba instalado antes de esta versión, ejecuta una sola vez `Migracion_Reportes_Copys_Actividades.sql` en el Supabase del CRM.
+
+Con este cambio:
+
+- Cada solicitud de copy crea automáticamente una actividad de Marketing.
+- La actividad usa el responsable del copy y, si no hay responsable, al solicitante.
+- El estado de la actividad se sincroniza con el copy: solicitud → pendiente; borrador/revisión → en progreso; aprobado/publicado → completada.
+- Los copys anteriores se convierten también en actividades mediante el backfill de la migración.
+- No se modifica n8n para esta función.

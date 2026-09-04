@@ -170,6 +170,10 @@ export default function DailyReportGenerator() {
     return activities.filter((activity: any) => {
       if (!activity) return false;
 
+      // Los administradores pueden cargar todas las actividades desde useActivities.
+      // El reporte individual debe incluir únicamente el trabajo asignado al usuario actual.
+      if (activity.assigned_to !== user.id) return false;
+
       const dueDate = activity?.due_date
         ? String(activity.due_date).split("T")[0]
         : "";
