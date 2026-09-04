@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import type { CopyRequest } from '@/lib/copy-center'
 
+// Ollama puede tardar más en la primera generación mientras carga el modelo.
+// Vercel mantiene esta función disponible y el fetch conserva un margen menor.
+export const maxDuration = 180
+
 type N8nPayload = {
   copy?: string
   output?: string
@@ -97,7 +101,7 @@ export async function POST(
         ],
       }),
       cache: 'no-store',
-      signal: AbortSignal.timeout(55000),
+      signal: AbortSignal.timeout(150000),
     })
 
     const rawPayload: unknown = await n8nResponse.json().catch(() => null)
@@ -130,7 +134,13 @@ export async function POST(
     if (updateError) throw updateError
     return NextResponse.json({ request: updated })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'No se pudo conectar con n8n.'
+    const isTimeout = error instanceof Error
+      && (error.name === 'TimeoutError' || error.name === 'AbortError')
+    const message = isTimeout
+      ? 'Ollama tardó más de 150 segundos. Intenta generar nuevamente; el modelo normalmente responderá más rápido al quedar cargado.'
+      : error instanceof Error
+        ? error.message
+        : 'No se pudo conectar con n8n.'
     await supabase
       .from('copy_requests')
       .update({ status: 'pending', generation_error: message })
