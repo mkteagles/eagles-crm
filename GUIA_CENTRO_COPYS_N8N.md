@@ -1,98 +1,91 @@
-# Centro de Copys · CRM Eagles
+# Centro de Copys · CRM Eagles + n8n + Ollama
 
-## Qué se agregó
+## Qué incluye
 
-- Nueva ruta: `/app1/marketing/copys`.
-- Solicitudes separadas por Redes Sociales, Transmisiones/Taller y Cursos presenciales.
-- Flujo de trabajo: Solicitud → Borrador → En revisión → Aprobado → Publicado.
-- Úrsula puede recibir y trabajar solicitudes; Victoria puede revisarlas y pedir cambios.
-- Campañas precargadas:
-  - Septiembre 2026: 6L80 y 6L90.
-  - Octubre 2026: CVT JF017.
-  - Noviembre 2026: DQ200, CVT JF016/JF017 y Chevrolet 6L80/6L90.
-- Campo opcional para pedir una imagen y redactar su brief visual.
-- Botón **Generar con IA**, preparado para llamar un webhook privado de n8n.
+- Ruta del CRM: `/app1/marketing/copys`.
+- Captura rápida de una sola frase: qué se necesita anunciar.
+- Tipo, objetivo, Facebook/Instagram, tono, audiencia y responsables se completan automáticamente.
+- Todos los datos adicionales quedan ocultos en **Agregar detalles (opcional)**.
+- Título y brief interno generados automáticamente.
+- El CRM crea la solicitud y llama a Ollama inmediatamente para abrir el borrador.
+- Úrsula redacta y Victoria revisa.
+- Estados: Solicitud → Borrador → En revisión → Aprobado → Publicado.
+- Campañas precargadas de septiembre, octubre y noviembre de 2026.
+- Generación gratuita con el Ollama que ya tienes: `qwen2.5:3b`.
 
 ## 1. Base de datos
 
-Entra al proyecto de Supabase que usa el CRM, abre **SQL Editor** y ejecuta completo:
+Si **ya ejecutaste** `Migracion_Centro_Copys.sql` en el Supabase del CRM, no lo vuelvas a ejecutar.
 
-`Migracion_Centro_Copys.sql`
+Si todavía no lo hiciste, ejecútalo completo en **SQL Editor** del proyecto Supabase del CRM. No lo ejecutes en el Supabase del Campus.
 
-No lo ejecutes en el Supabase del Campus.
+## 2. Importar el workflow
 
-## 2. Prueba manual antes de n8n
+1. Abre n8n.
+2. Selecciona **Import from File**.
+3. Importa `n8n/Eagles_Centro_Copys_Ollama.json`.
+4. Abre el nodo **Validar y preparar copy**.
+5. Busca esta línea:
 
-El Centro de Copys funciona sin IA para crear solicitudes, escribir borradores, revisar y aprobar.
-
-1. Despliega el CRM.
-2. Abre Marketing → Centro de Copys.
-3. Crea una solicitud.
-4. Confirma que se seleccionen Úrsula y Victoria. Si sus nombres en el CRM son distintos, selecciónalas manualmente.
-5. Abre la solicitud, escribe un texto, guarda el borrador y envíalo a revisión.
-6. Inicia sesión como Victoria y prueba Aprobar o Solicitar cambios.
-
-## 3. Workflow de n8n
-
-En n8n crea un workflow con estos nodos:
-
-1. **Webhook**
-   - Method: `POST`
-   - Path: `eagles-copy-generate`
-   - Response: usando el nodo **Respond to Webhook**.
-   - Protege el webhook con Header Auth.
-   - Header: `x-eagles-secret`
-   - Value: un secreto aleatorio de 32 caracteres o más.
-
-2. **OpenAI**
-   - Conecta una credencial de OpenAI API. La suscripción de ChatGPT no incluye por sí sola crédito de API.
-   - Recibe la información en `{{$json.body.copy_request}}`.
-   - Usa también las reglas recibidas en `{{$json.body.rules}}`.
-   - Pide una respuesta JSON con esta forma:
-
-```json
-{
-  "copy": "Texto final o variantes por canal",
-  "image_prompt": "Prompt visual, solamente si needs_image es true"
-}
+```js
+const EXPECTED_SECRET = 'CAMBIA_ESTE_SECRETO_POR_UNO_DE_32_CARACTERES';
 ```
 
-3. **Respond to Webhook**
-   - Status: `200`
-   - Response Body:
+6. Sustituye solamente el texto entre comillas por un secreto aleatorio de 32 caracteres o más. No uses comillas dentro del secreto.
+7. Guarda el nodo y activa el workflow.
+8. Abre el nodo **Webhook - CRM Copys** y copia su **Production URL**. Debe terminar en `/webhook/eagles-copy-generate`.
 
-```json
-{
-  "copy": "{{ $json.copy }}",
-  "image_prompt": "{{ $json.image_prompt }}",
-  "execution_id": "{{ $execution.id }}"
-}
+El workflow llama a:
+
+```text
+http://ollama:11434/api/chat
 ```
 
-Activa el workflow y copia la URL de producción del Webhook.
+con el modelo:
 
-## 4. Variables en Vercel del CRM
+```text
+qwen2.5:3b
+```
 
-Agrega en **Settings → Environment Variables**:
+No requiere llave de OpenAI, crédito ni otra instalación. Esta URL funciona porque tu n8n y Ollama ya se comunican dentro de Docker.
+
+## 3. Variables privadas en Vercel del CRM
+
+En el proyecto de Vercel del **CRM**, abre **Settings → Environment Variables** y agrega:
 
 ```env
 N8N_COPY_WEBHOOK_URL=https://TU-N8N/webhook/eagles-copy-generate
-N8N_COPY_WEBHOOK_SECRET=EL_MISMO_SECRETO_CONFIGURADO_EN_N8N
+N8N_COPY_WEBHOOK_SECRET=EL_MISMO_SECRETO_DEL_NODO_DE_N8N
 ```
 
-Ambas son privadas. No uses el prefijo `NEXT_PUBLIC_`.
+- Usa la Production URL exacta del webhook.
+- El secreto debe ser exactamente el mismo del nodo **Validar y preparar copy**.
+- Activa ambas para Production y Preview.
+- No agregues `NEXT_PUBLIC_`: son variables privadas del servidor.
 
-Después haz un Redeploy del CRM para que Vercel cargue las variables.
+Después haz **Redeploy** del CRM.
 
-## 5. Reglas que ya envía el CRM a n8n
+## 4. Prueba completa
 
-- No inventar precio, fecha, disponibilidad, garantía ni promoción.
-- No diagnosticar definitivamente una transmisión por mensaje.
-- En solicitudes de taller, pedir marca, modelo, año y síntomas y dirigir a inspección/cita.
-- Entregar variantes separadas si se seleccionan varios canales.
+1. Entra al CRM y abre **Marketing → Centro de Copys**.
+2. Pulsa **Nueva solicitud**.
+3. Escribe una sola frase, por ejemplo: `Promocionar el curso 6L80 y 6L90 de septiembre`.
+4. Pulsa **Crear borrador**.
+5. Espera a que el CRM abra automáticamente el borrador editable generado por Ollama.
+6. Revísalo y envíalo a Victoria.
 
-## Respuesta esperada del webhook
+Ejemplo sencillo:
 
-El CRM acepta cualquiera de los campos `copy`, `output` o `text`. Para el brief visual usa `image_prompt`.
+```text
+Promocionar el curso presencial 6L80 y 6L90 de septiembre; incluir las fechas confirmadas.
+```
 
-Si n8n no está configurado, solamente falla el botón **Generar con IA**; el flujo manual continúa funcionando.
+## 5. Si algo falla
+
+- **Solicitud no autorizada:** los dos secretos no coinciden.
+- **n8n respondió 404:** se usó la Test URL o el workflow no está activo.
+- **n8n respondió 405:** confirma que la URL termina en `/webhook/eagles-copy-generate` y que el Webhook acepta `POST`.
+- **ECONNREFUSED o timeout en Ollama:** confirma que n8n y Ollama siguen en la misma red de Docker y que `qwen2.5:3b` está disponible.
+- **Faltan variables:** revisa Vercel y vuelve a desplegar el CRM.
+
+Si falla la IA, el resto del Centro de Copys sigue funcionando manualmente.

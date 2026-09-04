@@ -1,0 +1,100 @@
+{
+  "name": "Eagles · Centro de Copys · Ollama",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eagles-copy-generate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-640, 0],
+      "id": "9f00f623-8707-4a3b-acf5-ac411bbf5410",
+      "name": "Webhook - CRM Copys",
+      "webhookId": "a559a679-43b2-49f6-a58d-18b1b56b3444"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json || {};\nconst headers = input.headers || {};\nconst body = input.body || {};\n\n// IMPORTANTE: reemplaza este texto por el MISMO secreto de Vercel.\nconst EXPECTED_SECRET = 'CAMBIA_ESTE_SECRETO_POR_UNO_DE_32_CARACTERES';\nconst receivedSecret = String(headers['x-eagles-secret'] || headers['X-Eagles-Secret'] || '');\n\nif (!receivedSecret || receivedSecret !== EXPECTED_SECRET) {\n  throw new Error('Solicitud no autorizada');\n}\n\nconst request = body.copy_request || {};\nconst clean = (value) => String(value || '').trim();\nconst channels = Array.isArray(request.channels) && request.channels.length\n  ? request.channels.map(clean).filter(Boolean)\n  : ['Facebook', 'Instagram'];\n\nif (!clean(request.product_topic)) {\n  throw new Error('Falta product_topic');\n}\n\nconst categoryLabels = {\n  social: 'redes sociales',\n  taller: 'servicios del taller de transmisiones',\n  course: 'curso o capacitación de transmisiones'\n};\n\nconst facts = [\n  clean(request.brief),\n  clean(request.call_to_action) ? `CTA solicitado: ${clean(request.call_to_action)}` : '',\n  clean(request.audience) ? `Audiencia: ${clean(request.audience)}` : '',\n  clean(request.image_brief) ? `Brief visual: ${clean(request.image_brief)}` : ''\n].filter(Boolean).join('\\n');\n\nconst systemPrompt = `Eres copywriter de Eagles Gear Solutions y Transmisiones Automáticas Eagles.\n\nEscribe copys breves, claros, directos y listos para publicar en español de México. La audiencia principal son técnicos, transmisionistas y dueños de taller. Usa emojis con moderación y un llamado a la acción sencillo.\n\nREGLAS OBLIGATORIAS:\n- Usa únicamente los datos recibidos.\n- Nunca inventes precios, fechas, horarios, lugares, promociones, garantías, enlaces ni disponibilidad.\n- Si un dato no viene, omítelo sin poner espacios pendientes ni decir que falta.\n- No prometas resultados económicos.\n- En servicios de taller no des un diagnóstico definitivo por mensaje; invita a compartir marca, modelo, año y síntomas o a agendar diagnóstico.\n- Si hay varios canales, entrega una variante corta para cada canal y sepáralas claramente.\n- Para WhatsApp puedes usar un tono cercano; usa la palabra carnalitos solo cuando encaje naturalmente.\n- No expliques tu proceso.\n- Devuelve únicamente JSON válido.\n\nFORMATO:\n{\"copy\":\"texto listo para publicar\",\"image_prompt\":\"prompt visual o cadena vacía\"}`;\n\nconst userPrompt = `Crea un copy con estos datos:\nCategoría: ${categoryLabels[request.category] || clean(request.category) || 'redes sociales'}\nTema: ${clean(request.product_topic)}\nObjetivo: ${clean(request.objective) || 'Venta'}\nCanales: ${channels.join(', ')}\nTono: ${clean(request.tone) || 'Directo y profesional'}\nRequiere imagen: ${request.needs_image === true ? 'sí' : 'no'}\nDatos confirmados:\n${facts || 'No hay datos adicionales; trabaja solamente con el tema y omite detalles no confirmados.'}`;\n\nreturn [{\n  json: {\n    request_id: clean(body.request_id),\n    ollama_request: {\n      model: 'qwen2.5:3b',\n      stream: false,\n      keep_alive: '30m',\n      format: {\n        type: 'object',\n        properties: {\n          copy: { type: 'string' },\n          image_prompt: { type: 'string' }\n        },\n        required: ['copy', 'image_prompt']\n      },\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: userPrompt }\n      ],\n      options: {\n        temperature: 0.35,\n        num_predict: 650,\n        num_ctx: 4096\n      }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-400, 0],
+      "id": "4f9b087b-2e6e-4ab4-9607-a474d8f20e61",
+      "name": "Validar y preparar copy"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.ollama_request) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-128, 0],
+      "id": "0d8316cb-fc2e-4115-83c4-d56754fcc57d",
+      "name": "Ollama qwen2.5:3b"
+    },
+    {
+      "parameters": {
+        "jsCode": "let content = String($json?.message?.content ?? $json?.response ?? '').trim();\ncontent = content.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '').trim();\n\nlet parsed = null;\ntry {\n  parsed = JSON.parse(content);\n} catch {\n  const start = content.indexOf('{');\n  const end = content.lastIndexOf('}');\n  if (start !== -1 && end > start) {\n    try { parsed = JSON.parse(content.slice(start, end + 1)); } catch { parsed = null; }\n  }\n}\n\nconst copy = String(parsed?.copy || content || '').trim();\nif (!copy) throw new Error('Ollama no devolvió un copy');\n\nreturn [{\n  json: {\n    copy,\n    image_prompt: String(parsed?.image_prompt || '').trim(),\n    execution_id: String($execution.id)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [128, 0],
+      "id": "1a9e68ed-6266-4415-9171-56a33ed86472",
+      "name": "Limpiar respuesta"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [384, 0],
+      "id": "7e5fc90d-7550-44f1-97ff-761a9abc1f12",
+      "name": "Responder al CRM"
+    }
+  ],
+  "connections": {
+    "Webhook - CRM Copys": {
+      "main": [[{"node": "Validar y preparar copy", "type": "main", "index": 0}]]
+    },
+    "Validar y preparar copy": {
+      "main": [[{"node": "Ollama qwen2.5:3b", "type": "main", "index": 0}]]
+    },
+    "Ollama qwen2.5:3b": {
+      "main": [[{"node": "Limpiar respuesta", "type": "main", "index": 0}]]
+    },
+    "Limpiar respuesta": {
+      "main": [[{"node": "Responder al CRM", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}

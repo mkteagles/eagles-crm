@@ -5,6 +5,7 @@ import {
   CalendarDays,
   Check,
   CheckCircle2,
+  ChevronDown,
   Clipboard,
   Clock3,
   ImageIcon,
@@ -59,7 +60,7 @@ const EMPTY_FORM: CopyForm = {
   title: '',
   category: 'social',
   product_topic: '',
-  campaign_month: '2026-09',
+  campaign_month: '',
   channels: ['Facebook', 'Instagram'],
   objective: 'Venta',
   tone: 'Directo y profesional',
@@ -113,6 +114,7 @@ export default function CopyCenterDashboard() {
   const [statusFilter, setStatusFilter] = useState<'all' | CopyStatus>('all')
   const [categoryFilter, setCategoryFilter] = useState<'all' | CopyCategory>('all')
   const [showCreate, setShowCreate] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [selected, setSelected] = useState<CopyRequest | null>(null)
   const [form, setForm] = useState<CopyForm>(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -200,6 +202,7 @@ export default function CopyCenterDashboard() {
       assigned_to: ursula?.id || '',
       reviewer_id: victoria?.id || '',
     })
+    setShowAdvanced(false)
     setShowCreate(true)
   }
 
@@ -209,9 +212,8 @@ export default function CopyCenterDashboard() {
     setForm((current) => ({
       ...current,
       campaign_month: campaignMonth,
-      category: 'course',
-      product_topic: firstTopic,
-      title: firstTopic ? `Copys · ${firstTopic}` : current.title,
+      category: campaign ? 'course' : current.category,
+      product_topic: firstTopic || current.product_topic,
     }))
   }
 
@@ -227,8 +229,8 @@ export default function CopyCenterDashboard() {
   const createRequest = async (event: FormEvent) => {
     event.preventDefault()
     if (!user) return
-    if (!form.title.trim() || !form.product_topic.trim() || form.brief.trim().length < 10) {
-      setNotice('Completa el título, el tema y un brief de al menos 10 caracteres.')
+    if (!form.product_topic.trim()) {
+      setNotice('Escribe el producto, curso o tema del copy.')
       return
     }
     if (form.channels.length === 0) {
@@ -238,31 +240,68 @@ export default function CopyCenterDashboard() {
 
     setSaving(true)
     setNotice(null)
-    const { error: createError } = await supabase.from('copy_requests').insert({
-      ...form,
-      title: form.title.trim(),
-      product_topic: form.product_topic.trim(),
-      brief: form.brief.trim(),
-      campaign_month: form.campaign_month || null,
-      audience: form.audience.trim() || null,
-      call_to_action: form.call_to_action.trim() || null,
-      image_brief: form.needs_image ? form.image_brief.trim() || null : null,
-      assigned_to: form.assigned_to || null,
-      reviewer_id: form.reviewer_id || null,
-      due_date: form.due_date || null,
-      requested_by: user.id,
-      status: 'pending',
-    })
+    const productTopic = form.product_topic.trim()
+    const normalizedTopic = normalizeName(productTopic)
+    const inferredCategory: CopyCategory = /curso|capacitacion|workshop|seminario/.test(normalizedTopic)
+      ? 'course'
+      : /taller|diagnostico|reparacion|falla|servicio/.test(normalizedTopic)
+        ? 'taller'
+        : 'social'
+    const category = showAdvanced ? form.category : inferredCategory
+    const automaticTitle = `${form.objective} · ${productTopic}`
+    const automaticBrief = form.brief.trim()
+      || `Crear un copy de ${form.objective.toLowerCase()} para ${productTopic}. Usar solamente información confirmada y omitir cualquier dato faltante.`
+    const { data: created, error: createError } = await supabase
+      .from('copy_requests')
+      .insert({
+        ...form,
+        title: automaticTitle,
+        category,
+        product_topic: productTopic,
+        brief: automaticBrief,
+        campaign_month: form.campaign_month || null,
+        audience: form.audience.trim() || null,
+        call_to_action: form.call_to_action.trim() || null,
+        image_brief: form.needs_image ? form.image_brief.trim() || null : null,
+        assigned_to: form.assigned_to || null,
+        reviewer_id: form.reviewer_id || null,
+        due_date: form.due_date || null,
+        requested_by: user.id,
+        status: 'pending',
+      })
+      .select('*')
+      .single()
 
-    setSaving(false)
     if (createError) {
+      setSaving(false)
       setNotice(createError.message)
       return
     }
 
     setShowCreate(false)
-    setNotice('Solicitud creada. Úrsula y Victoria ya pueden verla.')
-    await loadData()
+    const createdRequest = created as CopyRequest
+    setSelected(createdRequest)
+    setEditorCopy('')
+    setFeedback('')
+
+    try {
+      const response = await fetch(`/app1/api/copy-requests/${createdRequest.id}/generate`, {
+        method: 'POST',
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'No se pudo generar el borrador.')
+      const generatedRequest = payload.request as CopyRequest
+      setSelected(generatedRequest)
+      setEditorCopy(generatedRequest.final_copy || generatedRequest.generated_copy || '')
+      setNotice('Borrador listo. Úrsula solo necesita revisarlo y enviarlo a Victoria.')
+    } catch (generateError) {
+      setNotice(
+        `La solicitud quedó guardada. ${generateError instanceof Error ? generateError.message : 'No se pudo generar el borrador.'}`,
+      )
+    } finally {
+      setSaving(false)
+      await loadData()
+    }
   }
 
   const patchRequest = async (id: string, values: Partial<CopyRequest>) => {
@@ -390,9 +429,7 @@ export default function CopyCenterDashboard() {
             <Sparkles size={16} /> Flujo creativo
           </div>
           <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Centro de Copys</h1>
-          <p className="mt-1 max-w-2xl text-sm text-foreground/60">
-            Úrsula prepara los textos y Victoria los revisa. Cada copy conserva su brief, versión final y estado.
-          </p>
+          <p className="mt-1 max-w-2xl text-sm text-foreground/60">Úrsula pide el copy en una frase · Ollama redacta · Victoria revisa.</p>
         </div>
         <button onClick={() => openCreate()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 font-semibold text-white transition hover:bg-brand-orange-dark">
           <Plus size={19} /> Nueva solicitud
@@ -484,28 +521,33 @@ export default function CopyCenterDashboard() {
 
       {showCreate && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setShowCreate(false) }}>
-          <form onSubmit={createRequest} className="max-h-[94vh] w-full overflow-y-auto rounded-t-2xl border border-border-color bg-surface p-5 shadow-2xl sm:max-w-3xl sm:rounded-2xl sm:p-6">
-            <div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-widest text-brand-orange">Nueva solicitud</p><h2 className="mt-1 text-2xl font-bold">Brief de copy</h2></div><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg p-2 hover:bg-foreground/5"><X /></button></div>
+          <form onSubmit={createRequest} className="max-h-[94vh] w-full overflow-y-auto rounded-t-2xl border border-border-color bg-surface p-5 shadow-2xl sm:max-w-2xl sm:rounded-2xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-widest text-brand-orange">Solicitud rápida</p><h2 className="mt-1 text-2xl font-bold">Escribe una frase</h2><p className="mt-1 text-sm text-foreground/55">Lo demás se completa automáticamente.</p></div><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg p-2 hover:bg-foreground/5"><X /></button></div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Título *</span><input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Ej. Campaña de inscripción 6L80 y 6L90" className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3 outline-none focus:border-brand-orange" /></label>
-              <label><span className="mb-1.5 block text-sm font-semibold">Categoría *</span><select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as CopyCategory })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-              <label><span className="mb-1.5 block text-sm font-semibold">Campaña</span><select value={form.campaign_month} onChange={(event) => applyCampaign(event.target.value)} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin campaña mensual</option>{COPY_CAMPAIGNS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
-              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Producto, curso o tema *</span><input list="copy-campaign-topics" value={form.product_topic} onChange={(event) => setForm({ ...form, product_topic: event.target.value })} placeholder="Ej. Diagnóstico de transmisión o CVT JF017" className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3 outline-none focus:border-brand-orange" /><datalist id="copy-campaign-topics">{COPY_CAMPAIGNS.flatMap((campaign) => campaign.topics).map((topic) => <option key={topic} value={topic} />)}</datalist></label>
-              <fieldset className="sm:col-span-2"><legend className="mb-2 text-sm font-semibold">Canales *</legend><div className="flex flex-wrap gap-2">{COPY_CHANNELS.map((channel) => <button type="button" key={channel} onClick={() => toggleChannel(channel)} className={`rounded-full border px-3 py-2 text-sm ${form.channels.includes(channel) ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-border-color text-foreground/60'}`}>{form.channels.includes(channel) && <Check className="mr-1 inline" size={14} />}{channel}</button>)}</div></fieldset>
-              <label><span className="mb-1.5 block text-sm font-semibold">Objetivo</span><select value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_OBJECTIVES.map((item) => <option key={item}>{item}</option>)}</select></label>
-              <label><span className="mb-1.5 block text-sm font-semibold">Tono</span><select value={form.tone} onChange={(event) => setForm({ ...form, tone: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_TONES.map((item) => <option key={item}>{item}</option>)}</select></label>
-              <label><span className="mb-1.5 block text-sm font-semibold">Responsable</span><select value={form.assigned_to} onChange={(event) => setForm({ ...form, assigned_to: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin asignar</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><small className="text-foreground/45">Úrsula se selecciona automáticamente si existe.</small></label>
-              <label><span className="mb-1.5 block text-sm font-semibold">Revisora</span><select value={form.reviewer_id} onChange={(event) => setForm({ ...form, reviewer_id: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin revisora</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><small className="text-foreground/45">Victoria se selecciona automáticamente si existe.</small></label>
-              <label><span className="mb-1.5 block text-sm font-semibold">Audiencia</span><input value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
-              <label><span className="mb-1.5 block text-sm font-semibold">Fecha de entrega</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
-              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Brief *</span><textarea value={form.brief} onChange={(event) => setForm({ ...form, brief: event.target.value })} rows={4} placeholder="Qué queremos comunicar, datos confirmados, promociones y restricciones. No inventar precio, fecha ni disponibilidad." className="w-full rounded-xl border border-border-color bg-background p-3 outline-none focus:border-brand-orange" /></label>
-              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Llamado a la acción</span><input value={form.call_to_action} onChange={(event) => setForm({ ...form, call_to_action: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
-              <label className="sm:col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-border-color p-3"><input type="checkbox" checked={form.needs_image} onChange={(event) => setForm({ ...form, needs_image: event.target.checked })} className="size-5 accent-orange-500" /><span><strong className="block text-sm">También requiere imagen</strong><small className="text-foreground/50">El brief visual se enviará a n8n junto con el copy.</small></span></label>
-              {form.needs_image && <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Indicaciones visuales</span><textarea value={form.image_brief} onChange={(event) => setForm({ ...form, image_brief: event.target.value })} rows={3} placeholder="Formato, producto visible, colores, texto que debe aparecer..." className="w-full rounded-xl border border-border-color bg-background p-3" /></label>}
+            <div className="space-y-5">
+              <label><span className="mb-1.5 block text-sm font-semibold">¿Qué necesitas anunciar? *</span><textarea autoFocus value={form.product_topic} onChange={(event) => setForm({ ...form, product_topic: event.target.value })} rows={3} placeholder="Ej. Promocionar el curso 6L80 y 6L90 de septiembre" className="w-full rounded-xl border border-border-color bg-background p-3 text-base outline-none focus:border-brand-orange" /></label>
+
+              <div className="rounded-xl border border-border-color">
+                <button type="button" onClick={() => setShowAdvanced((current) => !current)} className="flex min-h-11 w-full items-center justify-between px-4 text-sm font-semibold"><span>Agregar detalles <span className="font-normal text-foreground/45">(opcional)</span></span><ChevronDown size={18} className={`transition ${showAdvanced ? 'rotate-180' : ''}`} /></button>
+                {showAdvanced && <div className="grid gap-4 border-t border-border-color p-4 sm:grid-cols-2">
+                  <fieldset className="sm:col-span-2"><legend className="mb-2 text-sm font-semibold">Tipo</legend><div className="grid grid-cols-3 gap-2">{COPY_CATEGORIES.map((item) => <button type="button" key={item.value} onClick={() => setForm({ ...form, category: item.value })} className={`min-h-11 rounded-xl border px-2 text-sm font-semibold ${form.category === item.value ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-border-color text-foreground/60'}`}>{item.value === 'social' ? 'Redes' : item.value === 'taller' ? 'Taller' : 'Curso'}</button>)}</div></fieldset>
+                  <label><span className="mb-1.5 block text-sm font-semibold">Objetivo</span><select value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_OBJECTIVES.map((item) => <option key={item}>{item}</option>)}</select></label>
+                  <label><span className="mb-1.5 block text-sm font-semibold">Campaña</span><select value={form.campaign_month} onChange={(event) => applyCampaign(event.target.value)} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin campaña</option>{COPY_CAMPAIGNS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+                  <fieldset className="sm:col-span-2"><legend className="mb-2 text-sm font-semibold">Canales</legend><div className="flex flex-wrap gap-2">{COPY_CHANNELS.map((channel) => <button type="button" key={channel} onClick={() => toggleChannel(channel)} className={`rounded-full border px-3 py-2 text-sm ${form.channels.includes(channel) ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-border-color text-foreground/60'}`}>{form.channels.includes(channel) && <Check className="mr-1 inline" size={14} />}{channel}</button>)}</div></fieldset>
+                  <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Dato que no debe faltar</span><textarea value={form.brief} onChange={(event) => setForm({ ...form, brief: event.target.value })} rows={2} placeholder="Fechas, precio o modalidad confirmada" className="w-full rounded-xl border border-border-color bg-background p-3" /></label>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border-color p-3 sm:col-span-2"><input type="checkbox" checked={form.needs_image} onChange={(event) => setForm({ ...form, needs_image: event.target.checked })} className="size-5 accent-orange-500" /><span className="font-semibold">También necesito imagen</span></label>
+                  {form.needs_image && <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Qué debe verse</span><textarea value={form.image_brief} onChange={(event) => setForm({ ...form, image_brief: event.target.value })} rows={2} placeholder="Ej. transmisión 6L80, fondo de taller, formato vertical" className="w-full rounded-xl border border-border-color bg-background p-3" /></label>}
+                  <label><span className="mb-1.5 block text-sm font-semibold">Fecha de entrega</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
+                  <label><span className="mb-1.5 block text-sm font-semibold">Responsable</span><select value={form.assigned_to} onChange={(event) => setForm({ ...form, assigned_to: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin asignar</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label>
+                  <label><span className="mb-1.5 block text-sm font-semibold">Revisora</span><select value={form.reviewer_id} onChange={(event) => setForm({ ...form, reviewer_id: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin revisora</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select></label>
+                  <label><span className="mb-1.5 block text-sm font-semibold">Tono</span><select value={form.tone} onChange={(event) => setForm({ ...form, tone: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_TONES.map((item) => <option key={item}>{item}</option>)}</select></label>
+                  <label><span className="mb-1.5 block text-sm font-semibold">Audiencia</span><input value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
+                  <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Llamado a la acción</span><input value={form.call_to_action} onChange={(event) => setForm({ ...form, call_to_action: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
+                </div>}
+              </div>
             </div>
 
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowCreate(false)} className="min-h-11 rounded-xl border border-border-color px-5 font-semibold">Cancelar</button><button disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 font-semibold text-white disabled:opacity-50">{saving ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} Crear solicitud</button></div>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowCreate(false)} className="min-h-11 rounded-xl border border-border-color px-5 font-semibold">Cancelar</button><button disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 font-semibold text-white disabled:opacity-50">{saving ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />} {saving ? 'Creando borrador...' : 'Crear borrador'}</button></div>
           </form>
         </div>
       )}
