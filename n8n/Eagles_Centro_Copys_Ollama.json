@@ -10,18 +10,24 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [-640, 0],
+      "position": [
+        -640,
+        0
+      ],
       "id": "9f00f623-8707-4a3b-acf5-ac411bbf5410",
       "name": "Webhook - CRM Copys",
       "webhookId": "a559a679-43b2-49f6-a58d-18b1b56b3444"
     },
     {
       "parameters": {
-        "jsCode": "const input = $json || {};\nconst headers = input.headers || {};\nconst body = input.body || {};\n\n// IMPORTANTE: reemplaza este texto por el MISMO secreto de Vercel.\nconst EXPECTED_SECRET = 'CAMBIA_ESTE_SECRETO_POR_UNO_DE_32_CARACTERES';\nconst receivedSecret = String(headers['x-eagles-secret'] || headers['X-Eagles-Secret'] || '');\n\nif (!receivedSecret || receivedSecret !== EXPECTED_SECRET) {\n  throw new Error('Solicitud no autorizada');\n}\n\nconst request = body.copy_request || {};\nconst clean = (value) => String(value || '').trim();\nconst channels = Array.isArray(request.channels) && request.channels.length\n  ? request.channels.map(clean).filter(Boolean)\n  : ['Facebook', 'Instagram'];\n\nif (!clean(request.product_topic)) {\n  throw new Error('Falta product_topic');\n}\n\nconst categoryLabels = {\n  social: 'redes sociales',\n  taller: 'servicios del taller de transmisiones',\n  course: 'curso o capacitación de transmisiones'\n};\n\nconst facts = [\n  clean(request.brief),\n  clean(request.call_to_action) ? `CTA solicitado: ${clean(request.call_to_action)}` : '',\n  clean(request.audience) ? `Audiencia: ${clean(request.audience)}` : '',\n  clean(request.image_brief) ? `Brief visual: ${clean(request.image_brief)}` : ''\n].filter(Boolean).join('\\n');\n\nconst systemPrompt = `Eres copywriter de Eagles Gear Solutions y Transmisiones Automáticas Eagles.\n\nEscribe copys breves, claros, directos y listos para publicar en español de México. La audiencia principal son técnicos, transmisionistas y dueños de taller. Usa emojis con moderación y un llamado a la acción sencillo.\n\nREGLAS OBLIGATORIAS:\n- Usa únicamente los datos recibidos.\n- Nunca inventes precios, fechas, horarios, lugares, promociones, garantías, enlaces ni disponibilidad.\n- Si un dato no viene, omítelo sin poner espacios pendientes ni decir que falta.\n- No prometas resultados económicos.\n- En servicios de taller no des un diagnóstico definitivo por mensaje; invita a compartir marca, modelo, año y síntomas o a agendar diagnóstico.\n- Si hay varios canales, entrega una variante corta para cada canal y sepáralas claramente.\n- Para WhatsApp puedes usar un tono cercano; usa la palabra carnalitos solo cuando encaje naturalmente.\n- No expliques tu proceso.\n- Devuelve únicamente JSON válido.\n\nFORMATO:\n{\"copy\":\"texto listo para publicar\",\"image_prompt\":\"prompt visual o cadena vacía\"}`;\n\nconst userPrompt = `Crea un copy con estos datos:\nCategoría: ${categoryLabels[request.category] || clean(request.category) || 'redes sociales'}\nTema: ${clean(request.product_topic)}\nObjetivo: ${clean(request.objective) || 'Venta'}\nCanales: ${channels.join(', ')}\nTono: ${clean(request.tone) || 'Directo y profesional'}\nRequiere imagen: ${request.needs_image === true ? 'sí' : 'no'}\nDatos confirmados:\n${facts || 'No hay datos adicionales; trabaja solamente con el tema y omite detalles no confirmados.'}`;\n\nreturn [{\n  json: {\n    request_id: clean(body.request_id),\n    ollama_request: {\n      model: 'qwen2.5:3b',\n      stream: false,\n      keep_alive: '30m',\n      format: {\n        type: 'object',\n        properties: {\n          copy: { type: 'string' },\n          image_prompt: { type: 'string' }\n        },\n        required: ['copy', 'image_prompt']\n      },\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: userPrompt }\n      ],\n      options: {\n        temperature: 0.35,\n        num_predict: 650,\n        num_ctx: 4096\n      }\n    }\n  }\n}];"
+        "jsCode": "const input = $json || {};\nconst headers = input.headers || {};\nconst body = input.body || {};\n\n// IMPORTANTE: reemplaza este texto por el MISMO secreto de Vercel.\nconst EXPECTED_SECRET = 'CAMBIA_ESTE_SECRETO_POR_UNO_DE_32_CARACTERES';\nconst receivedSecret = String(headers['x-eagles-secret'] || headers['X-Eagles-Secret'] || '');\n\nif (!receivedSecret || receivedSecret !== EXPECTED_SECRET) {\n  throw new Error('Solicitud no autorizada');\n}\n\nconst request = body.copy_request || {};\nconst clean = (value) => String(value || '').trim();\nconst channels = Array.isArray(request.channels) && request.channels.length\n  ? request.channels.map(clean).filter(Boolean)\n  : ['Facebook', 'Instagram'];\n\nif (!clean(request.product_topic)) {\n  throw new Error('Falta product_topic');\n}\n\nconst categoryLabels = {\n  social: 'redes sociales',\n  taller: 'servicios del taller de transmisiones',\n  course: 'curso o capacitación de transmisiones'\n};\n\nconst facts = [\n  clean(request.brief),\n  clean(request.call_to_action) ? `CTA solicitado: ${clean(request.call_to_action)}` : '',\n  clean(request.audience) ? `Audiencia: ${clean(request.audience)}` : '',\n  clean(request.image_brief) ? `Brief visual: ${clean(request.image_brief)}` : ''\n].filter(Boolean).join('\\n');\n\nconst normalizedTopic = clean(request.product_topic).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\nconst normalizedObjective = clean(request.objective).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\nconst isWorkshopConvencionales = normalizedTopic.includes('workshop') && normalizedTopic.includes('convencional');\nconst isWhatsAppWarmup = channels.length === 1 && channels[0].toLowerCase() === 'whatsapp'\n  && normalizedObjective.includes('calentamiento');\nconst hasSocialChannel = channels.some((channel) => ['facebook', 'instagram', 'tiktok'].includes(channel.toLowerCase()));\n\nconst WORKSHOP_GROUP_URL = 'https://chat.whatsapp.com/Gu955o9muhZ2eJGOaRw0wS?s=cl&p=i&mlu=4&ilr=4';\nconst WORKSHOP_HOTMART_URL = 'https://pay.hotmart.com/U107474945W?bid=1788557927997';\n\nlet structureRules = '';\nif (isWorkshopConvencionales && isWhatsAppWarmup) {\n  structureRules = `\\nESTRUCTURA OBLIGATORIA PARA CALENTAMIENTO EN GRUPO DE WHATSAPP:\\n1. Abre con una línea cercana y energética. Puedes usar “⚙️ ¡CARNALITOS!” o una variante natural, sin repetir exactamente la misma frase siempre.\\n2. Segundo párrafo: explica en 1 o 2 frases qué aprenderán o por qué este tema importa en el taller.\\n3. Después coloca un bloque visual de datos, cada dato en su propia línea:\\n📅 2 y 3 de octubre\\n💻 Online en vivo vía Zoom\\n💲 17 USD\\n4. Cierra con una frase breve de urgencia o invitación, sin exagerar.\\n5. Últimas dos líneas exactamente con CTA de pago:\\n👉 Inscríbete aquí:\\n${WORKSHOP_HOTMART_URL}\\n6. NO uses el link del grupo de WhatsApp en el calentamiento interno.\\n7. Mantén el copy compacto y fácil de leer en WhatsApp.`;\n} else if (isWorkshopConvencionales && hasSocialChannel) {\n  structureRules = `\\nESTRUCTURA OBLIGATORIA PARA COPY DE REDES:\\n1. Primera línea: gancho o pregunta basada en un problema real del técnico/taller. Debe generar identificación inmediata.\\n2. Segundo párrafo: beneficio concreto de la Workshop en 1 o 2 frases, sin prometer resultados económicos.\\n3. Cierre con invitación clara a entrar al grupo para recibir la información.\\n4. Últimas dos líneas exactamente:\\n🔥 Únete al grupo y recibe toda la información para asegurar tu acceso:\\n👉 ${WORKSHOP_GROUP_URL}\\n5. NO pongas el link de Hotmart en el copy de captación para redes.\\n6. No satures con todos los datos del evento; el objetivo es llevarlos al grupo.`;\n}\n\nconst systemPrompt = `Eres copywriter de Eagles Digital Solutions y Transmisiones Automáticas Eagles.\n\nEscribe copys breves, claros, directos y listos para publicar en español de México. La audiencia principal son técnicos, transmisionistas y dueños de taller. Usa emojis con moderación y un llamado a la acción sencillo.\n\nREGLAS OBLIGATORIAS:\n- Usa únicamente los datos recibidos.\n- Nunca inventes precios, fechas, horarios, lugares, promociones, garantías, enlaces ni disponibilidad.\n- Si un dato no viene, omítelo sin poner espacios pendientes ni decir que falta.\n- No prometas resultados económicos.\n- En servicios de taller no des un diagnóstico definitivo por mensaje; invita a compartir marca, modelo, año y síntomas o a agendar diagnóstico.\n- Si hay varios canales, entrega una sola versión que funcione bien en los canales solicitados, salvo que se pida explícitamente más de una variante.\n- Para WhatsApp usa tono cercano; “carnalitos” puede usarse cuando sea un calentamiento para grupo.\n- Mantén párrafos cortos y separaciones visuales. Los datos de fecha, modalidad y precio deben ir en líneas independientes cuando se trate de calentamientos.\n- Respeta los enlaces literalmente; no los acortes, modifiques ni inventes parámetros.\n- No expliques tu proceso.\n- Devuelve únicamente JSON válido.${structureRules}\n\nFORMATO:\n{\"copy\":\"texto listo para publicar\",\"image_prompt\":\"prompt visual o cadena vacía\"}`;\n\nconst userPrompt = `Crea un copy con estos datos:\nCategoría: ${categoryLabels[request.category] || clean(request.category) || 'redes sociales'}\nTema: ${clean(request.product_topic)}\nObjetivo: ${clean(request.objective) || 'Venta'}\nCanales: ${channels.join(', ')}\nTono: ${clean(request.tone) || 'Directo y profesional'}\nRequiere imagen: ${request.needs_image === true ? 'sí' : 'no'}\nDatos confirmados:\n${facts || 'No hay datos adicionales; trabaja solamente con el tema y omite detalles no confirmados.'}`;\n\nreturn [{\n  json: {\n    request_id: clean(body.request_id),\n    ollama_request: {\n      model: 'qwen2.5:3b',\n      stream: false,\n      keep_alive: '30m',\n      format: {\n        type: 'object',\n        properties: {\n          copy: { type: 'string' },\n          image_prompt: { type: 'string' }\n        },\n        required: ['copy', 'image_prompt']\n      },\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: userPrompt }\n      ],\n      options: {\n        temperature: 0.35,\n        num_predict: 650,\n        num_ctx: 4096\n      }\n    }\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [-400, 0],
+      "position": [
+        -400,
+        0
+      ],
       "id": "4f9b087b-2e6e-4ab4-9607-a474d8f20e61",
       "name": "Validar y preparar copy"
     },
@@ -48,7 +54,10 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-128, 0],
+      "position": [
+        -128,
+        0
+      ],
       "id": "0d8316cb-fc2e-4115-83c4-d56754fcc57d",
       "name": "Ollama qwen2.5:3b"
     },
@@ -58,7 +67,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [128, 0],
+      "position": [
+        128,
+        0
+      ],
       "id": "1a9e68ed-6266-4415-9171-56a33ed86472",
       "name": "Limpiar respuesta"
     },
@@ -70,23 +82,58 @@
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [384, 0],
+      "position": [
+        384,
+        0
+      ],
       "id": "7e5fc90d-7550-44f1-97ff-761a9abc1f12",
       "name": "Responder al CRM"
     }
   ],
   "connections": {
     "Webhook - CRM Copys": {
-      "main": [[{"node": "Validar y preparar copy", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Validar y preparar copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Validar y preparar copy": {
-      "main": [[{"node": "Ollama qwen2.5:3b", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Ollama qwen2.5:3b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Ollama qwen2.5:3b": {
-      "main": [[{"node": "Limpiar respuesta", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Limpiar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Limpiar respuesta": {
-      "main": [[{"node": "Responder al CRM", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Responder al CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},

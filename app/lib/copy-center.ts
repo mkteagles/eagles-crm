@@ -93,16 +93,23 @@ export const COPY_CAMPAIGNS = [
   },
 ] as const
 
-// Presets de workshops mensuales. Agregar el siguiente lanzamiento aquí
-// permite que aparezca como acceso rápido sin crear más formularios.
+export const WORKSHOP_WHATSAPP_GROUP_URL = 'https://chat.whatsapp.com/Gu955o9muhZ2eJGOaRw0wS?s=cl&p=i&mlu=4&ilr=4'
+export const WORKSHOP_HOTMART_URL = 'https://pay.hotmart.com/U107474945W?bid=1788557927997'
+
+// Presets de workshops mensuales. El mismo lanzamiento puede generar
+// dos piezas distintas: captación para redes y calentamiento para WhatsApp.
 export const COPY_WORKSHOPS = [
   {
-    id: 'transmisiones-convencionales-2026-09',
-    campaignMonth: '2026-09',
-    label: 'Workshop del mes · Septiembre',
-    topic: 'Workshop Transmisiones Convencionales y Convertidor de Par',
-    brief: 'Finales de septiembre. Fecha por confirmar. Online en vivo vía Zoom.',
+    id: 'transmisiones-convencionales-2026-10',
+    campaignMonth: '2026-10',
+    label: 'Workshop del mes · Octubre',
+    topic: 'Workshop Transmisiones Automáticas Convencionales',
+    brief: 'Workshop online en vivo sobre el sistema completo de transmisiones automáticas convencionales. Fechas: 2 y 3 de octubre de 2026. Modalidad: online en vivo vía Zoom. Inversión: 17 USD.',
     owner: 'marcos',
+    socialCta: `Únete al grupo de WhatsApp para recibir toda la información: ${WORKSHOP_WHATSAPP_GROUP_URL}`,
+    warmupCta: `Inscríbete aquí: ${WORKSHOP_HOTMART_URL}`,
+    referenceFlyer: '/marketing/workshop-convencionales-2026-10/flyer-inicial.png',
+    groupIcon: '/marketing/workshop-convencionales-2026-10/icono-grupo.jpeg',
   },
 ] as const
 

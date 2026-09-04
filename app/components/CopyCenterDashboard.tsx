@@ -224,6 +224,8 @@ export default function CopyCenterDashboard() {
     presetTopic?: string,
     presetBrief?: string,
     preferredOwner?: 'marcos',
+    workshopMode?: 'social' | 'warmup',
+    presetCta?: string,
   ) => {
     const ursula = users.find((item) => normalizeName(item.full_name).includes('ursula'))
     const victoria = users.find((item) => normalizeName(item.full_name).includes('victoria'))
@@ -233,14 +235,26 @@ export default function CopyCenterDashboard() {
     ))
     const campaign = COPY_CAMPAIGNS.find((item) => item.value === campaignMonth)
     const firstTopic = presetTopic || campaign?.topics[0] || ''
+    const isWorkshopPreset = preferredOwner === 'marcos' && Boolean(presetTopic)
+    const isSocialWorkshop = isWorkshopPreset && workshopMode === 'social'
+    const isWarmupWorkshop = isWorkshopPreset && workshopMode === 'warmup'
+
     setForm({
       ...EMPTY_FORM,
       category: campaign ? 'course' : EMPTY_FORM.category,
-      channels: preferredOwner === 'marcos' && presetTopic ? ['WhatsApp'] : EMPTY_FORM.channels,
-      objective: preferredOwner === 'marcos' && presetTopic ? 'Calentamiento' : EMPTY_FORM.objective,
-      needs_image: Boolean(preferredOwner === 'marcos' && presetTopic),
-      image_brief: preferredOwner === 'marcos' && presetTopic
-        ? 'Flyer vertical de calentamiento para WhatsApp, respetando la línea gráfica de Eagles Digital Solutions.'
+      channels: isSocialWorkshop
+        ? ['Facebook', 'Instagram', 'TikTok']
+        : isWarmupWorkshop
+          ? ['WhatsApp']
+          : isWorkshopPreset
+            ? ['WhatsApp']
+            : EMPTY_FORM.channels,
+      objective: isSocialWorkshop ? 'Venta' : isWarmupWorkshop ? 'Calentamiento' : isWorkshopPreset ? 'Calentamiento' : EMPTY_FORM.objective,
+      tone: isWarmupWorkshop ? 'Cercano y educativo' : EMPTY_FORM.tone,
+      call_to_action: presetCta || EMPTY_FORM.call_to_action,
+      needs_image: Boolean(isWorkshopPreset),
+      image_brief: isWorkshopPreset
+        ? 'Usar la línea gráfica de Eagles Digital Solutions para la Workshop: negro, amarillo, blanco y gris metálico; transmisión automática convencional como elemento principal; diseño limpio, técnico y de alto contraste.'
         : '',
       campaign_month: campaign?.value || EMPTY_FORM.campaign_month,
       product_topic: firstTopic,
@@ -596,14 +610,39 @@ export default function CopyCenterDashboard() {
       <section className="rounded-2xl border border-border-color bg-surface p-5">
         <div className="mb-4 flex items-center gap-2"><CalendarDays className="text-brand-orange" size={20} /><h2 className="font-bold">Copys rápidos</h2></div>
         {COPY_WORKSHOPS.map((workshop) => (
-          <button
+          <div
             key={workshop.id}
-            onClick={() => openCreate(workshop.campaignMonth, workshop.topic, workshop.brief, workshop.owner)}
-            className="mb-3 flex w-full flex-col gap-1 rounded-xl border border-brand-orange/50 bg-brand-orange/10 p-4 text-left transition hover:border-brand-orange sm:flex-row sm:items-center sm:justify-between"
+            className="mb-3 rounded-xl border border-brand-orange/50 bg-brand-orange/10 p-4"
           >
-            <span><span className="block text-xs font-bold uppercase tracking-wider text-brand-orange">{workshop.label}</span><span className="mt-1 block font-bold text-foreground">{workshop.topic}</span></span>
-            <span className="text-sm font-semibold text-brand-orange">Crear copy →</span>
-          </button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span>
+                <span className="block text-xs font-bold uppercase tracking-wider text-brand-orange">{workshop.label}</span>
+                <span className="mt-1 block font-bold text-foreground">{workshop.topic}</span>
+                <span className="mt-1 block text-xs text-foreground/55">2 y 3 de octubre · Online vía Zoom · 17 USD</span>
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => openCreate(workshop.campaignMonth, workshop.topic, workshop.brief, workshop.owner, 'social', workshop.socialCta)}
+                  className="rounded-lg border border-brand-orange/40 bg-surface px-3 py-2 text-sm font-semibold text-brand-orange transition hover:border-brand-orange"
+                >
+                  Copy para redes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openCreate(workshop.campaignMonth, workshop.topic, workshop.brief, workshop.owner, 'warmup', workshop.warmupCta)}
+                  className="rounded-lg bg-brand-orange px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-orange-dark"
+                >
+                  Calentamiento WhatsApp
+                </button>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-3 text-xs text-foreground/55">
+              <img src={workshop.groupIcon} alt="Icono del grupo" className="size-10 rounded-lg object-cover" />
+              <img src={workshop.referenceFlyer} alt="Flyer inicial" className="size-10 rounded-lg object-cover" />
+              <span>Referencias visuales guardadas para la línea gráfica de esta Workshop.</span>
+            </div>
+          </div>
         ))}
         <div className="grid gap-3 md:grid-cols-3">
           {COPY_CAMPAIGNS.map((campaign) => (
