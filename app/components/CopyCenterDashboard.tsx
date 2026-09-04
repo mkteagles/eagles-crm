@@ -30,6 +30,7 @@ import {
   COPY_STATUS_LABELS,
   COPY_STATUS_STYLES,
   COPY_TONES,
+  COPY_WORKSHOPS,
   CopyCategory,
   CopyRequest,
   CopyStatus,
@@ -188,18 +189,30 @@ export default function CopyCenterDashboard() {
     })
   }, [categoryFilter, query, requests, statusFilter])
 
-  const openCreate = (campaignMonth?: string) => {
+  const openCreate = (
+    campaignMonth?: string,
+    presetTopic?: string,
+    presetBrief?: string,
+    preferredOwner?: 'marcos',
+  ) => {
     const ursula = users.find((item) => normalizeName(item.full_name).includes('ursula'))
     const victoria = users.find((item) => normalizeName(item.full_name).includes('victoria'))
+    const marcos = users.find((item) => (
+      normalizeName(item.full_name).includes('marcos')
+      || item.email.trim().toLowerCase() === 'marcosc@eagles.com'
+    ))
     const campaign = COPY_CAMPAIGNS.find((item) => item.value === campaignMonth)
-    const firstTopic = campaign?.topics[0] || ''
+    const firstTopic = presetTopic || campaign?.topics[0] || ''
     setForm({
       ...EMPTY_FORM,
       category: campaign ? 'course' : EMPTY_FORM.category,
       campaign_month: campaign?.value || EMPTY_FORM.campaign_month,
       product_topic: firstTopic,
       title: firstTopic ? `Copys · ${firstTopic}` : '',
-      assigned_to: ursula?.id || '',
+      brief: presetBrief || '',
+      assigned_to: preferredOwner === 'marcos'
+        ? marcos?.id || user?.id || ''
+        : ursula?.id || '',
       reviewer_id: victoria?.id || '',
     })
     setShowAdvanced(false)
@@ -429,7 +442,7 @@ export default function CopyCenterDashboard() {
             <Sparkles size={16} /> Flujo creativo
           </div>
           <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Centro de Copys</h1>
-          <p className="mt-1 max-w-2xl text-sm text-foreground/60">Úrsula pide el copy en una frase · Ollama redacta · Victoria revisa.</p>
+          <p className="mt-1 max-w-2xl text-sm text-foreground/60">Marcos y Úrsula piden el copy en una frase · Ollama redacta · Victoria revisa.</p>
         </div>
         <button onClick={() => openCreate()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 font-semibold text-white transition hover:bg-brand-orange-dark">
           <Plus size={19} /> Nueva solicitud
@@ -458,7 +471,17 @@ export default function CopyCenterDashboard() {
       </section>
 
       <section className="rounded-2xl border border-border-color bg-surface p-5">
-        <div className="mb-4 flex items-center gap-2"><CalendarDays className="text-brand-orange" size={20} /><h2 className="font-bold">Campañas presenciales</h2></div>
+        <div className="mb-4 flex items-center gap-2"><CalendarDays className="text-brand-orange" size={20} /><h2 className="font-bold">Copys rápidos</h2></div>
+        {COPY_WORKSHOPS.map((workshop) => (
+          <button
+            key={workshop.id}
+            onClick={() => openCreate(workshop.campaignMonth, workshop.topic, workshop.brief, workshop.owner)}
+            className="mb-3 flex w-full flex-col gap-1 rounded-xl border border-brand-orange/50 bg-brand-orange/10 p-4 text-left transition hover:border-brand-orange sm:flex-row sm:items-center sm:justify-between"
+          >
+            <span><span className="block text-xs font-bold uppercase tracking-wider text-brand-orange">{workshop.label}</span><span className="mt-1 block font-bold text-foreground">{workshop.topic}</span></span>
+            <span className="text-sm font-semibold text-brand-orange">Crear copy →</span>
+          </button>
+        ))}
         <div className="grid gap-3 md:grid-cols-3">
           {COPY_CAMPAIGNS.map((campaign) => (
             <button key={campaign.value} onClick={() => openCreate(campaign.value)} className="rounded-xl border border-border-color p-4 text-left transition hover:border-brand-orange/60 hover:bg-brand-orange/5">

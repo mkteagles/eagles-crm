@@ -92,6 +92,19 @@ export const COPY_CAMPAIGNS = [
   },
 ] as const
 
+// Presets de workshops mensuales. Agregar el siguiente lanzamiento aquí
+// permite que aparezca como acceso rápido sin crear más formularios.
+export const COPY_WORKSHOPS = [
+  {
+    id: 'transmisiones-convencionales-2026-09',
+    campaignMonth: '2026-09',
+    label: 'Workshop del mes · Septiembre',
+    topic: 'Workshop Transmisiones Convencionales y Convertidor de Par',
+    brief: 'Finales de septiembre. Fecha por confirmar. Online en vivo vía Zoom.',
+    owner: 'marcos',
+  },
+] as const
+
 export const COPY_STATUS_LABELS: Record<CopyStatus, string> = {
   pending: 'Solicitud',
   generating: 'Generando',
