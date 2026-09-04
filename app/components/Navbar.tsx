@@ -14,6 +14,7 @@ import {
   CheckSquare,
   Calendar,
   FileText,
+  MessageSquareText,
   Wrench,
   ChevronDown,
 } from 'lucide-react'
@@ -66,6 +67,11 @@ const marketingLinks = [
     href: '/app1/marketing/reports',
     label: 'Reportes',
     icon: FileText,
+  },
+  {
+    href: '/app1/marketing/copys',
+    label: 'Centro de Copys',
+    icon: MessageSquareText,
   },
 ]
 
@@ -466,7 +472,7 @@ export function Navbar() {
 
               <CheckSquare size={16} />
 
-              Actividades
+              Marketing
 
               <ChevronDown
                 size={14}

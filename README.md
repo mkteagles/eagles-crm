@@ -59,3 +59,11 @@ CAMPUS_PROVISIONING_SECRET=EL_MISMO_SECRETO_DEL_CAMPUS
 Ni el secreto ni `SUPABASE_SERVICE_ROLE_KEY` deben llevar el prefijo `NEXT_PUBLIC_`. El CRM llama al Campus desde el servidor; ninguna clave privada se envía al navegador.
 
 El CRM conserva la identidad en `academy_customers`. Cada lead se enlaza mediante `leads.academy_customer_id`, y el Campus guarda el mismo número como `student_profiles.crm_customer_id`. La relación cliente-alumno es idempotente: reintentar o abrir otro lead del mismo cliente devuelve la misma cuenta y no duplica usuarios.
+
+## Centro de Copys
+
+Marketing incluye `/app1/marketing/copys` para coordinar solicitudes, borradores y revisiones entre Úrsula y Victoria. El flujo manual funciona sin servicios externos.
+
+1. Ejecuta `Migracion_Centro_Copys.sql` en Supabase del CRM.
+2. Despliega el proyecto.
+3. Para activar el botón **Generar con IA**, sigue `GUIA_CENTRO_COPYS_N8N.md` y configura las dos variables privadas de n8n en Vercel.

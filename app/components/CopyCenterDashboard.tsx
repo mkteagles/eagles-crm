@@ -1,0 +1,547 @@
+'use client'
+
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Clipboard,
+  Clock3,
+  ImageIcon,
+  Loader2,
+  MessageSquareText,
+  Plus,
+  RefreshCw,
+  Search,
+  Send,
+  Sparkles,
+  UserRoundCheck,
+  X,
+} from 'lucide-react'
+
+import { useCurrentUser } from '@/lib/marketing-hooks'
+import { createClient } from '@/lib/supabase/client'
+import {
+  COPY_CAMPAIGNS,
+  COPY_CATEGORIES,
+  COPY_CHANNELS,
+  COPY_OBJECTIVES,
+  COPY_STATUS_LABELS,
+  COPY_STATUS_STYLES,
+  COPY_TONES,
+  CopyCategory,
+  CopyRequest,
+  CopyStatus,
+  getCampaignLabel,
+  getCategoryLabel,
+} from '@/lib/copy-center'
+import type { UserProfile } from '@/lib/marketing-types'
+
+type CopyForm = {
+  title: string
+  category: CopyCategory
+  product_topic: string
+  campaign_month: string
+  channels: string[]
+  objective: string
+  tone: string
+  audience: string
+  brief: string
+  call_to_action: string
+  needs_image: boolean
+  image_brief: string
+  assigned_to: string
+  reviewer_id: string
+  due_date: string
+}
+
+const EMPTY_FORM: CopyForm = {
+  title: '',
+  category: 'social',
+  product_topic: '',
+  campaign_month: '2026-09',
+  channels: ['Facebook', 'Instagram'],
+  objective: 'Venta',
+  tone: 'Directo y profesional',
+  audience: 'Dueños de taller y técnicos automotrices',
+  brief: '',
+  call_to_action: 'Solicita información para apartar tu lugar.',
+  needs_image: false,
+  image_brief: '',
+  assigned_to: '',
+  reviewer_id: '',
+  due_date: '',
+}
+
+const STATUS_FILTERS: Array<{ value: 'all' | CopyStatus; label: string }> = [
+  { value: 'all', label: 'Todos' },
+  { value: 'pending', label: 'Solicitudes' },
+  { value: 'draft', label: 'Borradores' },
+  { value: 'review', label: 'Por revisar' },
+  { value: 'changes_requested', label: 'Con cambios' },
+  { value: 'approved', label: 'Aprobados' },
+  { value: 'published', label: 'Publicados' },
+]
+
+function normalizeName(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+function userName(users: UserProfile[], id: string | null) {
+  if (!id) return 'Sin asignar'
+  return users.find((item) => item.id === id)?.full_name || 'Usuario'
+}
+
+function displayDate(value: string | null) {
+  if (!value) return 'Sin fecha'
+  return new Intl.DateTimeFormat('es-MX', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${value}T12:00:00Z`))
+}
+
+export default function CopyCenterDashboard() {
+  const supabase = useMemo(() => createClient(), [])
+  const { user, loading: userLoading } = useCurrentUser()
+  const [requests, setRequests] = useState<CopyRequest[]>([])
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | CopyStatus>('all')
+  const [categoryFilter, setCategoryFilter] = useState<'all' | CopyCategory>('all')
+  const [showCreate, setShowCreate] = useState(false)
+  const [selected, setSelected] = useState<CopyRequest | null>(null)
+  const [form, setForm] = useState<CopyForm>(EMPTY_FORM)
+  const [saving, setSaving] = useState(false)
+  const [working, setWorking] = useState(false)
+  const [editorCopy, setEditorCopy] = useState('')
+  const [feedback, setFeedback] = useState('')
+  const [notice, setNotice] = useState<string | null>(null)
+
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+
+    const [requestsResult, usersResult] = await Promise.all([
+      supabase.from('copy_requests').select('*').order('updated_at', { ascending: false }),
+      supabase.from('user_profiles').select('*').order('full_name', { ascending: true }),
+    ])
+
+    if (requestsResult.error) {
+      setError(
+        requestsResult.error.code === '42P01'
+          ? 'Primero ejecuta Migracion_Centro_Copys.sql en Supabase del CRM.'
+          : requestsResult.error.message,
+      )
+    } else {
+      setRequests((requestsResult.data || []) as CopyRequest[])
+    }
+
+    if (!usersResult.error) setUsers((usersResult.data || []) as UserProfile[])
+    setLoading(false)
+  }, [supabase])
+
+  useEffect(() => {
+    if (!user) return
+    const initialLoad = window.setTimeout(() => {
+      void loadData()
+    }, 0)
+
+    const channel = supabase
+      .channel('copy-center-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'copy_requests' }, () => {
+        void loadData()
+      })
+      .subscribe()
+
+    return () => {
+      window.clearTimeout(initialLoad)
+      void supabase.removeChannel(channel)
+    }
+  }, [loadData, supabase, user])
+
+  const openRequest = (item: CopyRequest) => {
+    setEditorCopy(item.final_copy || item.generated_copy || '')
+    setFeedback(item.feedback || '')
+    setSelected(item)
+  }
+
+  const counts = useMemo(() => ({
+    active: requests.filter((item) => !['approved', 'published'].includes(item.status)).length,
+    review: requests.filter((item) => item.status === 'review').length,
+    approved: requests.filter((item) => item.status === 'approved').length,
+    image: requests.filter((item) => item.needs_image && item.status !== 'published').length,
+  }), [requests])
+
+  const filtered = useMemo(() => {
+    const normalizedQuery = normalizeName(query.trim())
+    return requests.filter((item) => {
+      const matchesStatus = statusFilter === 'all' || item.status === statusFilter
+      const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter
+      const searchable = normalizeName(`${item.title} ${item.product_topic} ${item.brief}`)
+      return matchesStatus && matchesCategory && (!normalizedQuery || searchable.includes(normalizedQuery))
+    })
+  }, [categoryFilter, query, requests, statusFilter])
+
+  const openCreate = (campaignMonth?: string) => {
+    const ursula = users.find((item) => normalizeName(item.full_name).includes('ursula'))
+    const victoria = users.find((item) => normalizeName(item.full_name).includes('victoria'))
+    const campaign = COPY_CAMPAIGNS.find((item) => item.value === campaignMonth)
+    const firstTopic = campaign?.topics[0] || ''
+    setForm({
+      ...EMPTY_FORM,
+      category: campaign ? 'course' : EMPTY_FORM.category,
+      campaign_month: campaign?.value || EMPTY_FORM.campaign_month,
+      product_topic: firstTopic,
+      title: firstTopic ? `Copys · ${firstTopic}` : '',
+      assigned_to: ursula?.id || '',
+      reviewer_id: victoria?.id || '',
+    })
+    setShowCreate(true)
+  }
+
+  const applyCampaign = (campaignMonth: string) => {
+    const campaign = COPY_CAMPAIGNS.find((item) => item.value === campaignMonth)
+    const firstTopic = campaign?.topics[0] || ''
+    setForm((current) => ({
+      ...current,
+      campaign_month: campaignMonth,
+      category: 'course',
+      product_topic: firstTopic,
+      title: firstTopic ? `Copys · ${firstTopic}` : current.title,
+    }))
+  }
+
+  const toggleChannel = (channel: string) => {
+    setForm((current) => ({
+      ...current,
+      channels: current.channels.includes(channel)
+        ? current.channels.filter((item) => item !== channel)
+        : [...current.channels, channel],
+    }))
+  }
+
+  const createRequest = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!user) return
+    if (!form.title.trim() || !form.product_topic.trim() || form.brief.trim().length < 10) {
+      setNotice('Completa el título, el tema y un brief de al menos 10 caracteres.')
+      return
+    }
+    if (form.channels.length === 0) {
+      setNotice('Selecciona al menos un canal.')
+      return
+    }
+
+    setSaving(true)
+    setNotice(null)
+    const { error: createError } = await supabase.from('copy_requests').insert({
+      ...form,
+      title: form.title.trim(),
+      product_topic: form.product_topic.trim(),
+      brief: form.brief.trim(),
+      campaign_month: form.campaign_month || null,
+      audience: form.audience.trim() || null,
+      call_to_action: form.call_to_action.trim() || null,
+      image_brief: form.needs_image ? form.image_brief.trim() || null : null,
+      assigned_to: form.assigned_to || null,
+      reviewer_id: form.reviewer_id || null,
+      due_date: form.due_date || null,
+      requested_by: user.id,
+      status: 'pending',
+    })
+
+    setSaving(false)
+    if (createError) {
+      setNotice(createError.message)
+      return
+    }
+
+    setShowCreate(false)
+    setNotice('Solicitud creada. Úrsula y Victoria ya pueden verla.')
+    await loadData()
+  }
+
+  const patchRequest = async (id: string, values: Partial<CopyRequest>) => {
+    const { error: updateError } = await supabase.from('copy_requests').update(values).eq('id', id)
+    if (updateError) throw updateError
+    await loadData()
+    setSelected((current) => current?.id === id ? { ...current, ...values } : current)
+  }
+
+  const generateDraft = async () => {
+    if (!selected) return
+    setWorking(true)
+    setNotice(null)
+    try {
+      const response = await fetch(`/app1/api/copy-requests/${selected.id}/generate`, {
+        method: 'POST',
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'No se pudo generar el borrador.')
+      setSelected(payload.request as CopyRequest)
+      setEditorCopy(payload.request.final_copy || payload.request.generated_copy || '')
+      setNotice('Borrador generado. Revísalo antes de enviarlo a Victoria.')
+      await loadData()
+    } catch (generateError) {
+      setNotice(generateError instanceof Error ? generateError.message : 'No se pudo generar el borrador.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const saveDraft = async () => {
+    if (!selected || !editorCopy.trim()) return
+    setWorking(true)
+    try {
+      await patchRequest(selected.id, {
+        final_copy: editorCopy.trim(),
+        status: 'draft',
+        generation_error: null,
+      })
+      setNotice('Borrador guardado.')
+    } catch (saveError) {
+      setNotice(saveError instanceof Error ? saveError.message : 'No se pudo guardar.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const sendToReview = async () => {
+    if (!selected || !editorCopy.trim()) return
+    setWorking(true)
+    try {
+      await patchRequest(selected.id, {
+        final_copy: editorCopy.trim(),
+        status: 'review',
+        feedback: null,
+      })
+      setNotice('Copy enviado a revisión de Victoria.')
+    } catch (sendError) {
+      setNotice(sendError instanceof Error ? sendError.message : 'No se pudo enviar a revisión.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const reviewRequest = async (status: 'approved' | 'changes_requested') => {
+    if (!selected) return
+    if (status === 'changes_requested' && !feedback.trim()) {
+      setNotice('Escribe los cambios que necesita Úrsula.')
+      return
+    }
+    setWorking(true)
+    try {
+      await patchRequest(selected.id, {
+        final_copy: editorCopy.trim() || selected.final_copy,
+        status,
+        feedback: status === 'changes_requested' ? feedback.trim() : null,
+        reviewed_at: new Date().toISOString(),
+      })
+      setNotice(status === 'approved' ? 'Copy aprobado.' : 'Cambios enviados a Úrsula.')
+    } catch (reviewError) {
+      setNotice(reviewError instanceof Error ? reviewError.message : 'No se pudo actualizar la revisión.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const markPublished = async () => {
+    if (!selected) return
+    setWorking(true)
+    try {
+      await patchRequest(selected.id, {
+        status: 'published',
+        published_at: new Date().toISOString(),
+      })
+      setNotice('Copy marcado como publicado.')
+    } catch (publishError) {
+      setNotice(publishError instanceof Error ? publishError.message : 'No se pudo actualizar.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const copyText = async () => {
+    const text = editorCopy || selected?.final_copy || selected?.generated_copy
+    if (!text) return
+    await navigator.clipboard.writeText(text)
+    setNotice('Copy copiado al portapapeles.')
+  }
+
+  if (userLoading) {
+    return <div className="flex min-h-[45vh] items-center justify-center"><Loader2 className="animate-spin" /></div>
+  }
+
+  if (!user) return <p className="py-12 text-center">No autenticado.</p>
+
+  const isAdmin = user.role === 'admin'
+  const canWorkSelected = Boolean(selected && (isAdmin || selected.assigned_to === user.id || selected.requested_by === user.id))
+  const canReviewSelected = Boolean(selected && (isAdmin || selected.reviewer_id === user.id))
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-4 rounded-2xl border border-border-color bg-surface p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold uppercase tracking-[0.18em] text-brand-orange">
+            <Sparkles size={16} /> Flujo creativo
+          </div>
+          <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Centro de Copys</h1>
+          <p className="mt-1 max-w-2xl text-sm text-foreground/60">
+            Úrsula prepara los textos y Victoria los revisa. Cada copy conserva su brief, versión final y estado.
+          </p>
+        </div>
+        <button onClick={() => openCreate()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 font-semibold text-white transition hover:bg-brand-orange-dark">
+          <Plus size={19} /> Nueva solicitud
+        </button>
+      </header>
+
+      {notice && (
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-brand-orange/30 bg-brand-orange/10 px-4 py-3 text-sm text-foreground">
+          <span>{notice}</span>
+          <button onClick={() => setNotice(null)} aria-label="Cerrar aviso"><X size={17} /></button>
+        </div>
+      )}
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          { label: 'En proceso', value: counts.active, icon: Clock3 },
+          { label: 'Por revisar', value: counts.review, icon: UserRoundCheck },
+          { label: 'Aprobados', value: counts.approved, icon: CheckCircle2 },
+          { label: 'Piezas con imagen', value: counts.image, icon: ImageIcon },
+        ].map(({ label, value, icon: Icon }) => (
+          <div key={label} className="rounded-2xl border border-border-color bg-surface p-4">
+            <div className="flex items-center justify-between text-foreground/55"><span className="text-xs font-semibold uppercase tracking-wider">{label}</span><Icon size={18} /></div>
+            <p className="mt-3 text-3xl font-bold text-foreground">{value}</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="rounded-2xl border border-border-color bg-surface p-5">
+        <div className="mb-4 flex items-center gap-2"><CalendarDays className="text-brand-orange" size={20} /><h2 className="font-bold">Campañas presenciales</h2></div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {COPY_CAMPAIGNS.map((campaign) => (
+            <button key={campaign.value} onClick={() => openCreate(campaign.value)} className="rounded-xl border border-border-color p-4 text-left transition hover:border-brand-orange/60 hover:bg-brand-orange/5">
+              <p className="text-xs font-bold uppercase tracking-wider text-brand-orange">{campaign.label}</p>
+              <ul className="mt-2 space-y-1 text-sm text-foreground/75">
+                {campaign.topics.map((topic) => <li key={topic}>• {topic.replace('Curso presencial ', '')}</li>)}
+              </ul>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-border-color bg-surface">
+        <div className="flex flex-col gap-3 border-b border-border-color p-4 lg:flex-row lg:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" size={18} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por tema, producto o brief" className="min-h-11 w-full rounded-xl border border-border-color bg-background pl-10 pr-3 text-sm outline-none focus:border-brand-orange" />
+          </div>
+          <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as 'all' | CopyCategory)} className="min-h-11 rounded-xl border border-border-color bg-background px-3 text-sm">
+            <option value="all">Todas las categorías</option>
+            {COPY_CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+          <button onClick={() => void loadData()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border-color px-4 text-sm font-medium hover:bg-foreground/5"><RefreshCw size={16} /> Actualizar</button>
+        </div>
+
+        <div className="flex gap-2 overflow-x-auto border-b border-border-color px-4 py-3">
+          {STATUS_FILTERS.map((item) => (
+            <button key={item.value} onClick={() => setStatusFilter(item.value)} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition ${statusFilter === item.value ? 'bg-foreground text-background' : 'bg-foreground/5 text-foreground/65 hover:bg-foreground/10'}`}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-foreground/60"><Loader2 className="animate-spin" size={20} /> Cargando copys...</div>
+        ) : error ? (
+          <div className="p-8 text-center"><p className="font-semibold text-rose-500">{error}</p><p className="mt-2 text-sm text-foreground/55">El ZIP incluye el archivo SQL que debes ejecutar.</p></div>
+        ) : filtered.length === 0 ? (
+          <div className="p-12 text-center"><MessageSquareText className="mx-auto text-foreground/25" size={42} /><h3 className="mt-3 font-bold">No hay solicitudes aquí</h3><p className="mt-1 text-sm text-foreground/55">Crea la primera o cambia los filtros.</p></div>
+        ) : (
+          <div className="divide-y divide-border-color">
+            {filtered.map((item) => (
+              <button key={item.id} onClick={() => openRequest(item)} className="grid w-full gap-3 p-4 text-left transition hover:bg-foreground/[0.03] sm:grid-cols-[1fr_auto] sm:items-center lg:grid-cols-[minmax(0,1.5fr)_minmax(130px,.65fr)_minmax(130px,.65fr)_auto]">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${COPY_STATUS_STYLES[item.status]}`}>{COPY_STATUS_LABELS[item.status]}</span>
+                    {item.needs_image && <span className="inline-flex items-center gap-1 text-xs text-foreground/55"><ImageIcon size={13} /> Imagen</span>}
+                  </div>
+                  <h3 className="mt-2 truncate font-bold text-foreground">{item.title}</h3>
+                  <p className="mt-1 truncate text-sm text-foreground/55">{item.product_topic} · {item.channels.join(', ')}</p>
+                </div>
+                <div className="text-sm"><p className="text-xs text-foreground/45">Responsable</p><p className="mt-1 font-medium">{userName(users, item.assigned_to)}</p></div>
+                <div className="text-sm"><p className="text-xs text-foreground/45">Revisión</p><p className="mt-1 font-medium">{userName(users, item.reviewer_id)}</p></div>
+                <div className="text-sm sm:text-right"><p className="text-xs text-foreground/45">Entrega</p><p className="mt-1 font-medium">{displayDate(item.due_date)}</p></div>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {showCreate && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setShowCreate(false) }}>
+          <form onSubmit={createRequest} className="max-h-[94vh] w-full overflow-y-auto rounded-t-2xl border border-border-color bg-surface p-5 shadow-2xl sm:max-w-3xl sm:rounded-2xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-widest text-brand-orange">Nueva solicitud</p><h2 className="mt-1 text-2xl font-bold">Brief de copy</h2></div><button type="button" onClick={() => setShowCreate(false)} className="rounded-lg p-2 hover:bg-foreground/5"><X /></button></div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Título *</span><input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Ej. Campaña de inscripción 6L80 y 6L90" className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3 outline-none focus:border-brand-orange" /></label>
+              <label><span className="mb-1.5 block text-sm font-semibold">Categoría *</span><select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as CopyCategory })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_CATEGORIES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+              <label><span className="mb-1.5 block text-sm font-semibold">Campaña</span><select value={form.campaign_month} onChange={(event) => applyCampaign(event.target.value)} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin campaña mensual</option>{COPY_CAMPAIGNS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Producto, curso o tema *</span><input list="copy-campaign-topics" value={form.product_topic} onChange={(event) => setForm({ ...form, product_topic: event.target.value })} placeholder="Ej. Diagnóstico de transmisión o CVT JF017" className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3 outline-none focus:border-brand-orange" /><datalist id="copy-campaign-topics">{COPY_CAMPAIGNS.flatMap((campaign) => campaign.topics).map((topic) => <option key={topic} value={topic} />)}</datalist></label>
+              <fieldset className="sm:col-span-2"><legend className="mb-2 text-sm font-semibold">Canales *</legend><div className="flex flex-wrap gap-2">{COPY_CHANNELS.map((channel) => <button type="button" key={channel} onClick={() => toggleChannel(channel)} className={`rounded-full border px-3 py-2 text-sm ${form.channels.includes(channel) ? 'border-brand-orange bg-brand-orange/10 text-brand-orange' : 'border-border-color text-foreground/60'}`}>{form.channels.includes(channel) && <Check className="mr-1 inline" size={14} />}{channel}</button>)}</div></fieldset>
+              <label><span className="mb-1.5 block text-sm font-semibold">Objetivo</span><select value={form.objective} onChange={(event) => setForm({ ...form, objective: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_OBJECTIVES.map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label><span className="mb-1.5 block text-sm font-semibold">Tono</span><select value={form.tone} onChange={(event) => setForm({ ...form, tone: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3">{COPY_TONES.map((item) => <option key={item}>{item}</option>)}</select></label>
+              <label><span className="mb-1.5 block text-sm font-semibold">Responsable</span><select value={form.assigned_to} onChange={(event) => setForm({ ...form, assigned_to: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin asignar</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><small className="text-foreground/45">Úrsula se selecciona automáticamente si existe.</small></label>
+              <label><span className="mb-1.5 block text-sm font-semibold">Revisora</span><select value={form.reviewer_id} onChange={(event) => setForm({ ...form, reviewer_id: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3"><option value="">Sin revisora</option>{users.map((item) => <option key={item.id} value={item.id}>{item.full_name}</option>)}</select><small className="text-foreground/45">Victoria se selecciona automáticamente si existe.</small></label>
+              <label><span className="mb-1.5 block text-sm font-semibold">Audiencia</span><input value={form.audience} onChange={(event) => setForm({ ...form, audience: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
+              <label><span className="mb-1.5 block text-sm font-semibold">Fecha de entrega</span><input type="date" value={form.due_date} onChange={(event) => setForm({ ...form, due_date: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
+              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Brief *</span><textarea value={form.brief} onChange={(event) => setForm({ ...form, brief: event.target.value })} rows={4} placeholder="Qué queremos comunicar, datos confirmados, promociones y restricciones. No inventar precio, fecha ni disponibilidad." className="w-full rounded-xl border border-border-color bg-background p-3 outline-none focus:border-brand-orange" /></label>
+              <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Llamado a la acción</span><input value={form.call_to_action} onChange={(event) => setForm({ ...form, call_to_action: event.target.value })} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3" /></label>
+              <label className="sm:col-span-2 flex cursor-pointer items-center gap-3 rounded-xl border border-border-color p-3"><input type="checkbox" checked={form.needs_image} onChange={(event) => setForm({ ...form, needs_image: event.target.checked })} className="size-5 accent-orange-500" /><span><strong className="block text-sm">También requiere imagen</strong><small className="text-foreground/50">El brief visual se enviará a n8n junto con el copy.</small></span></label>
+              {form.needs_image && <label className="sm:col-span-2"><span className="mb-1.5 block text-sm font-semibold">Indicaciones visuales</span><textarea value={form.image_brief} onChange={(event) => setForm({ ...form, image_brief: event.target.value })} rows={3} placeholder="Formato, producto visible, colores, texto que debe aparecer..." className="w-full rounded-xl border border-border-color bg-background p-3" /></label>}
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setShowCreate(false)} className="min-h-11 rounded-xl border border-border-color px-5 font-semibold">Cancelar</button><button disabled={saving} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 font-semibold text-white disabled:opacity-50">{saving ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />} Crear solicitud</button></div>
+          </form>
+        </div>
+      )}
+
+      {selected && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !working) setSelected(null) }}>
+          <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-2xl border border-border-color bg-surface shadow-2xl sm:max-w-5xl sm:rounded-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border-color bg-surface p-5"><div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${COPY_STATUS_STYLES[selected.status]}`}>{COPY_STATUS_LABELS[selected.status]}</span><span className="text-xs text-foreground/50">{getCategoryLabel(selected.category)} · {getCampaignLabel(selected.campaign_month)}</span></div><h2 className="mt-2 text-xl font-bold sm:text-2xl">{selected.title}</h2></div><button onClick={() => setSelected(null)} className="rounded-lg p-2 hover:bg-foreground/5"><X /></button></div>
+
+            <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+              <div className="space-y-5">
+                <div className="rounded-xl border border-border-color bg-background p-4"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Brief</p><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/75">{selected.brief}</p></div>
+                {selected.generation_error && <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-500">{selected.generation_error}</div>}
+                <label><span className="mb-2 block text-sm font-bold">Copy de trabajo</span><textarea value={editorCopy} onChange={(event) => setEditorCopy(event.target.value)} disabled={!canWorkSelected && !canReviewSelected} rows={13} placeholder="Genera el borrador con n8n o escribe aquí el copy manualmente." className="w-full rounded-xl border border-border-color bg-background p-4 leading-6 outline-none focus:border-brand-orange disabled:opacity-70" /></label>
+                {(selected.status === 'review' || selected.status === 'changes_requested') && <label><span className="mb-2 block text-sm font-bold">Comentarios de revisión</span><textarea value={feedback} onChange={(event) => setFeedback(event.target.value)} disabled={!canReviewSelected && selected.status === 'review'} rows={3} placeholder="Indica qué debe corregirse antes de aprobar." className="w-full rounded-xl border border-border-color bg-background p-3 outline-none focus:border-brand-orange disabled:opacity-70" /></label>}
+              </div>
+
+              <aside className="space-y-4">
+                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisora</dt><dd className="font-semibold">{userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">Entrega</dt><dd className="font-semibold">{displayDate(selected.due_date)}</dd></div></dl></div>
+                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Publicación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Tema</dt><dd className="font-semibold">{selected.product_topic}</dd></div><div><dt className="text-foreground/45">Canales</dt><dd className="font-semibold">{selected.channels.join(', ')}</dd></div><div><dt className="text-foreground/45">Objetivo</dt><dd className="font-semibold">{selected.objective}</dd></div><div><dt className="text-foreground/45">Tono</dt><dd className="font-semibold">{selected.tone}</dd></div></dl></div>
+                {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> Requiere imagen</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
+              </aside>
+            </div>
+
+            <div className="sticky bottom-0 flex flex-wrap items-center justify-end gap-2 border-t border-border-color bg-surface p-4">
+              {(selected.generated_copy || selected.final_copy || editorCopy) && <button onClick={() => void copyText()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border-color px-4 font-semibold"><Clipboard size={17} /> Copiar</button>}
+              {canWorkSelected && ['pending', 'changes_requested'].includes(selected.status) && <button disabled={working} onClick={() => void generateDraft()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 font-semibold text-white disabled:opacity-50">{working ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />} Generar con IA</button>}
+              {canWorkSelected && ['pending', 'draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void saveDraft()} className="min-h-11 rounded-xl border border-brand-orange px-4 font-semibold text-brand-orange disabled:opacity-50">Guardar borrador</button>}
+              {canWorkSelected && ['draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void sendToReview()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-orange px-4 font-semibold text-white disabled:opacity-50"><Send size={17} /> Enviar a Victoria</button>}
+              {canReviewSelected && selected.status === 'review' && <button disabled={working} onClick={() => void reviewRequest('changes_requested')} className="min-h-11 rounded-xl border border-rose-500 px-4 font-semibold text-rose-500 disabled:opacity-50">Solicitar cambios</button>}
+              {canReviewSelected && selected.status === 'review' && <button disabled={working} onClick={() => void reviewRequest('approved')} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar</button>}
+              {(canReviewSelected || canWorkSelected) && selected.status === 'approved' && <button disabled={working} onClick={() => void markPublished()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-600 px-4 font-semibold text-white disabled:opacity-50"><Check size={17} /> Marcar publicado</button>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

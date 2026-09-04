@@ -21,6 +21,7 @@ import {
   Plus,
   Sparkles,
   Lightbulb,
+  MessageSquareText,
 } from 'lucide-react'
 
 import Link from 'next/link'
@@ -298,6 +299,14 @@ export default function MarketingDashboard() {
           gap-3
         "
       >
+
+        <Link
+          href="/app1/marketing/copys"
+          className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-700"
+        >
+          <MessageSquareText size={20} />
+          Centro de Copys
+        </Link>
 
         {/* =================================================
             CREAR ACTIVIDAD
