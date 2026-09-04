@@ -61,10 +61,12 @@ type CopyForm = {
 
 type WhatsAppAsset = {
   id: string
+  asset_type: 'image' | 'video' | string
   public_url: string | null
   storage_path: string
   version: number
   status: string
+  metadata?: { mime_type?: string } | null
 }
 
 type WhatsAppDestination = {
@@ -114,6 +116,12 @@ const STATUS_FILTERS: Array<{ value: 'all' | CopyStatus; label: string }> = [
 
 function normalizeName(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+
+function isOctoberWorkshop(item: Pick<CopyRequest, 'campaign_month' | 'product_topic'> | null | undefined) {
+  if (!item) return false
+  return item.campaign_month === '2026-10' && normalizeName(item.product_topic || '').includes('workshop')
 }
 
 function userName(users: UserProfile[], id: string | null) {
@@ -263,7 +271,7 @@ export default function CopyCenterDashboard() {
       assigned_to: preferredOwner === 'marcos'
         ? marcos?.id || user?.id || ''
         : ursula?.id || '',
-      reviewer_id: victoria?.id || '',
+      reviewer_id: isWorkshopPreset ? (marcos?.id || user?.id || '') : (victoria?.id || ''),
     })
     setShowAdvanced(false)
     setShowCreate(true)
@@ -327,7 +335,9 @@ export default function CopyCenterDashboard() {
         call_to_action: form.call_to_action.trim() || null,
         image_brief: form.needs_image ? form.image_brief.trim() || null : null,
         assigned_to: form.assigned_to || null,
-        reviewer_id: form.reviewer_id || null,
+        reviewer_id: (form.campaign_month === '2026-10' && normalizeName(productTopic).includes('workshop'))
+          ? users.find((item) => item.email.trim().toLowerCase() === 'marcosc@eagles.com')?.id || user.id
+          : form.reviewer_id || null,
         due_date: form.due_date || null,
         requested_by: user.id,
         status: 'pending',
@@ -356,7 +366,7 @@ export default function CopyCenterDashboard() {
       const generatedRequest = payload.request as CopyRequest
       setSelected(generatedRequest)
       setEditorCopy(generatedRequest.final_copy || generatedRequest.generated_copy || '')
-      setNotice('Borrador listo. Úrsula solo necesita revisarlo y enviarlo a Victoria.')
+      setNotice(isOctoberWorkshop(generatedRequest) ? 'Borrador listo. La revisión de esta Workshop queda contigo.' : 'Borrador listo. Úrsula solo necesita revisarlo y enviarlo a Victoria.')
     } catch (generateError) {
       setNotice(
         `La solicitud quedó guardada. ${generateError instanceof Error ? generateError.message : 'No se pudo generar el borrador.'}`,
@@ -386,7 +396,7 @@ export default function CopyCenterDashboard() {
       if (!response.ok) throw new Error(payload.error || 'No se pudo generar el borrador.')
       setSelected(payload.request as CopyRequest)
       setEditorCopy(payload.request.final_copy || payload.request.generated_copy || '')
-      setNotice('Borrador generado. Revísalo antes de enviarlo a Victoria.')
+      setNotice(isOctoberWorkshop(selected) ? 'Borrador generado. Revísalo y envíalo a tu aprobación.' : 'Borrador generado. Revísalo antes de enviarlo a Victoria.')
       await loadData()
     } catch (generateError) {
       setNotice(generateError instanceof Error ? generateError.message : 'No se pudo generar el borrador.')
@@ -421,7 +431,7 @@ export default function CopyCenterDashboard() {
         status: 'review',
         feedback: null,
       })
-      setNotice('Copy enviado a revisión de Victoria.')
+      setNotice(isOctoberWorkshop(selected) ? 'Copy enviado a tu revisión.' : 'Copy enviado a revisión de Victoria.')
     } catch (sendError) {
       setNotice(sendError instanceof Error ? sendError.message : 'No se pudo enviar a revisión.')
     } finally {
@@ -432,7 +442,7 @@ export default function CopyCenterDashboard() {
   const reviewRequest = async (status: 'approved' | 'changes_requested') => {
     if (!selected) return
     if (status === 'changes_requested' && !feedback.trim()) {
-      setNotice('Escribe los cambios que necesita Úrsula.')
+      setNotice('Escribe los cambios necesarios.')
       return
     }
     setWorking(true)
@@ -443,7 +453,7 @@ export default function CopyCenterDashboard() {
         feedback: status === 'changes_requested' ? feedback.trim() : null,
         reviewed_at: new Date().toISOString(),
       })
-      setNotice(status === 'approved' ? 'Copy aprobado.' : 'Cambios enviados a Úrsula.')
+      setNotice(status === 'approved' ? 'Copy aprobado.' : 'Cambios solicitados.')
     } catch (reviewError) {
       setNotice(reviewError instanceof Error ? reviewError.message : 'No se pudo actualizar la revisión.')
     } finally {
@@ -477,29 +487,69 @@ export default function CopyCenterDashboard() {
     void loadWhatsAppPreview(selected.id)
   }, [loadWhatsAppPreview, selected?.id])
 
-  const uploadWhatsAppImage = async (file: File | null) => {
+  const uploadWhatsAppMedia = async (file: File | null) => {
     if (!selected || !file) return
     setImageUploading(true)
     setNotice(null)
-    try {
-      const formData = new FormData()
-      formData.append('action', 'upload-image')
-      formData.append('file', file)
 
-      const response = await fetch(`/app1/api/copy-requests/${selected.id}/whatsapp`, {
+    try {
+      const prepareResponse = await fetch(`/app1/api/copy-requests/${selected.id}/whatsapp`, {
         method: 'POST',
-        body: formData,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'prepare-upload',
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+        }),
       })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'No se pudo subir la imagen.')
+      const preparePayload = await prepareResponse.json()
+      if (!prepareResponse.ok) throw new Error(preparePayload.error || 'No se pudo preparar la carga.')
+
+      const upload = preparePayload.upload as {
+        bucket: string
+        storagePath: string
+        token: string
+        version: number
+        assetType: 'image' | 'video'
+      }
+
+      const { error: storageError } = await supabase.storage
+        .from(upload.bucket)
+        .uploadToSignedUrl(upload.storagePath, upload.token, file, {
+          contentType: file.type,
+          cacheControl: '3600',
+        })
+
+      if (storageError) throw storageError
+
+      const finalizeResponse = await fetch(`/app1/api/copy-requests/${selected.id}/whatsapp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'finalize-upload',
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          storagePath: upload.storagePath,
+          version: upload.version,
+          assetType: upload.assetType,
+        }),
+      })
+      const finalizePayload = await finalizeResponse.json()
+      if (!finalizeResponse.ok) throw new Error(finalizePayload.error || 'No se pudo guardar el contenido.')
+
       await loadWhatsAppPreview(selected.id)
-      setNotice('Imagen guardada. Victoria ya puede verla en la vista previa de WhatsApp.')
+      setNotice(isOctoberWorkshop(selected)
+        ? `${upload.assetType === 'video' ? 'Video' : 'Imagen'} guardado. Ya puedes revisarlo en la vista previa de WhatsApp.`
+        : 'Contenido guardado. La persona revisora ya puede verlo en la vista previa de WhatsApp.')
     } catch (uploadError) {
-      setNotice(uploadError instanceof Error ? uploadError.message : 'No se pudo subir la imagen.')
+      setNotice(uploadError instanceof Error ? uploadError.message : 'No se pudo subir el contenido.')
     } finally {
       setImageUploading(false)
     }
   }
+
 
   const approveAndSendWhatsAppTest = async () => {
     if (!selected) return
@@ -508,7 +558,7 @@ export default function CopyCenterDashboard() {
       return
     }
     if (!whatsAppPreview?.asset?.public_url) {
-      setNotice('Primero sube la imagen que Victoria debe aprobar.')
+      setNotice('Primero sube una imagen o video para aprobar.')
       return
     }
 
@@ -569,7 +619,13 @@ export default function CopyCenterDashboard() {
 
   const isAdmin = user.role === 'admin'
   const canWorkSelected = Boolean(selected && (isAdmin || selected.assigned_to === user.id || selected.requested_by === user.id))
-  const canReviewSelected = Boolean(selected && (isAdmin || selected.reviewer_id === user.id))
+  const selectedIsWorkshop = isOctoberWorkshop(selected)
+  const currentUserEmail = user.email.trim().toLowerCase()
+  const canReviewSelected = Boolean(selected && (
+    selectedIsWorkshop
+      ? currentUserEmail === 'marcosc@eagles.com'
+      : isAdmin || selected.reviewer_id === user.id
+  ))
 
   return (
     <div className="space-y-6">
@@ -579,7 +635,7 @@ export default function CopyCenterDashboard() {
             <Sparkles size={16} /> Flujo creativo
           </div>
           <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Centro de Copys</h1>
-          <p className="mt-1 max-w-2xl text-sm text-foreground/60">Marcos y Úrsula piden el copy en una frase · Ollama redacta · Victoria revisa.</p>
+          <p className="mt-1 max-w-2xl text-sm text-foreground/60">Marcos y Úrsula piden el copy en una frase · Ollama redacta · cada campaña usa su revisor asignado.</p>
         </div>
         <button onClick={() => openCreate()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 font-semibold text-white transition hover:bg-brand-orange-dark">
           <Plus size={19} /> Nueva solicitud
@@ -598,7 +654,7 @@ export default function CopyCenterDashboard() {
           { label: 'En proceso', value: counts.active, icon: Clock3 },
           { label: 'Por revisar', value: counts.review, icon: UserRoundCheck },
           { label: 'Aprobados', value: counts.approved, icon: CheckCircle2 },
-          { label: 'Piezas con imagen', value: counts.image, icon: ImageIcon },
+          { label: 'Piezas multimedia', value: counts.image, icon: ImageIcon },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="rounded-2xl border border-border-color bg-surface p-4">
             <div className="flex items-center justify-between text-foreground/55"><span className="text-xs font-semibold uppercase tracking-wider">{label}</span><Icon size={18} /></div>
@@ -690,7 +746,7 @@ export default function CopyCenterDashboard() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${COPY_STATUS_STYLES[item.status]}`}>{COPY_STATUS_LABELS[item.status]}</span>
-                    {item.needs_image && <span className="inline-flex items-center gap-1 text-xs text-foreground/55"><ImageIcon size={13} /> Imagen</span>}
+                    {item.needs_image && <span className="inline-flex items-center gap-1 text-xs text-foreground/55"><ImageIcon size={13} /> Multimedia</span>}
                   </div>
                   <h3 className="mt-2 truncate font-bold text-foreground">{item.title}</h3>
                   <p className="mt-1 truncate text-sm text-foreground/55">{item.product_topic} · {item.channels.join(', ')}</p>
@@ -753,7 +809,7 @@ export default function CopyCenterDashboard() {
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white/80 px-4 py-3 dark:border-white/10 dark:bg-white/5">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">Vista previa WhatsApp · Prueba</p>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Esto es lo que Victoria aprobará antes del envío.</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{selectedIsWorkshop ? 'Esta Workshop solo la revisas y apruebas tú.' : 'Esto es lo que la persona revisora aprobará antes del envío.'}</p>
                       </div>
                       {whatsAppPreview?.destination && (
                         <span className="rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">
@@ -767,30 +823,41 @@ export default function CopyCenterDashboard() {
                         <div className="flex min-h-56 items-center justify-center gap-2 text-sm text-slate-500"><Loader2 className="animate-spin" size={18} /> Cargando preview...</div>
                       ) : whatsAppPreview?.asset?.public_url ? (
                         <div className="mx-auto max-w-md overflow-hidden rounded-xl bg-white shadow-md dark:bg-[#202c33]">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={whatsAppPreview.asset.public_url} alt="Flyer del calentamiento" className="max-h-[520px] w-full object-contain bg-black" />
+                          {whatsAppPreview.asset.asset_type === 'video' ? (
+                            <video
+                              src={whatsAppPreview.asset.public_url}
+                              controls
+                              playsInline
+                              className="max-h-[520px] w-full bg-black object-contain"
+                            >
+                              Tu navegador no puede reproducir este video.
+                            </video>
+                          ) : (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={whatsAppPreview.asset.public_url} alt="Flyer del calentamiento" className="max-h-[520px] w-full object-contain bg-black" />
+                          )}
                           <p className="whitespace-pre-wrap p-3 text-sm leading-5">{editorCopy || selected.final_copy || selected.generated_copy || 'Sin copy todavía.'}</p>
                         </div>
                       ) : (
                         <div className="mx-auto flex min-h-56 max-w-md flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/70 p-6 text-center dark:border-slate-700 dark:bg-white/5">
                           <ImageIcon size={34} className="text-slate-400" />
-                          <p className="mt-3 font-bold">Falta la imagen del calentamiento</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Por ahora subimos el flyer manualmente. Después aquí conectaremos la generación por IA/layers.</p>
+                          <p className="mt-3 font-bold">Falta el contenido del calentamiento</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Puedes subir un flyer o un video corto. Después conectaremos aquí la generación visual por IA/layers.</p>
                         </div>
                       )}
 
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                         <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-white/5 dark:text-slate-100">
                           {imageUploading ? <Loader2 className="animate-spin" size={17} /> : <UploadCloud size={17} />}
-                          {whatsAppPreview?.asset ? 'Cambiar imagen' : 'Subir imagen'}
+                          {whatsAppPreview?.asset ? 'Cambiar contenido' : 'Subir imagen o video'}
                           <input
                             type="file"
-                            accept="image/jpeg,image/png,image/webp"
+                            accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
                             className="hidden"
                             disabled={imageUploading || (!canWorkSelected && !canReviewSelected)}
                             onChange={(event) => {
                               const file = event.target.files?.[0] || null
-                              void uploadWhatsAppImage(file)
+                              void uploadWhatsAppMedia(file)
                               event.currentTarget.value = ''
                             }}
                           />
@@ -799,6 +866,7 @@ export default function CopyCenterDashboard() {
                         <div className="text-right text-xs text-slate-500 dark:text-slate-400">
                           <p><strong>Instancia:</strong> {whatsAppPreview?.destination?.instanceName || 'WORKSHOP'}</p>
                           <p><strong>Grupo:</strong> {whatsAppPreview?.destination?.groupName || 'PRUEBA_VICTORIA'}</p>
+                          {whatsAppPreview?.asset && <p><strong>Contenido:</strong> {whatsAppPreview.asset.asset_type === 'video' ? 'Video' : 'Imagen'}</p>}
                         </div>
                       </div>
                     </div>
@@ -809,9 +877,9 @@ export default function CopyCenterDashboard() {
               </div>
 
               <aside className="space-y-4">
-                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisora</dt><dd className="font-semibold">{userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">Entrega</dt><dd className="font-semibold">{displayDate(selected.due_date)}</dd></div></dl></div>
+                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">Entrega</dt><dd className="font-semibold">{displayDate(selected.due_date)}</dd></div></dl></div>
                 <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Publicación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Tema</dt><dd className="font-semibold">{selected.product_topic}</dd></div><div><dt className="text-foreground/45">Canales</dt><dd className="font-semibold">{selected.channels.join(', ')}</dd></div><div><dt className="text-foreground/45">Objetivo</dt><dd className="font-semibold">{selected.objective}</dd></div><div><dt className="text-foreground/45">Tono</dt><dd className="font-semibold">{selected.tone}</dd></div></dl></div>
-                {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> Requiere imagen</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
+                {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> Requiere contenido visual</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
               </aside>
             </div>
 
@@ -819,7 +887,7 @@ export default function CopyCenterDashboard() {
               {(selected.generated_copy || selected.final_copy || editorCopy) && <button onClick={() => void copyText()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border-color px-4 font-semibold"><Clipboard size={17} /> Copiar</button>}
               {canWorkSelected && ['pending', 'changes_requested'].includes(selected.status) && <button disabled={working} onClick={() => void generateDraft()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 font-semibold text-white disabled:opacity-50">{working ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />} Generar con IA</button>}
               {canWorkSelected && ['pending', 'draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void saveDraft()} className="min-h-11 rounded-xl border border-brand-orange px-4 font-semibold text-brand-orange disabled:opacity-50">Guardar borrador</button>}
-              {canWorkSelected && ['draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void sendToReview()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-orange px-4 font-semibold text-white disabled:opacity-50"><Send size={17} /> Enviar a Victoria</button>}
+              {canWorkSelected && ['draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void sendToReview()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-orange px-4 font-semibold text-white disabled:opacity-50"><Send size={17} /> {selectedIsWorkshop ? 'Enviar a mi revisión' : 'Enviar a Victoria'}</button>}
               {canReviewSelected && selected.status === 'review' && <button disabled={working} onClick={() => void reviewRequest('changes_requested')} className="min-h-11 rounded-xl border border-rose-500 px-4 font-semibold text-rose-500 disabled:opacity-50">Solicitar cambios</button>}
               {canReviewSelected && selected.status === 'review' && (selected.channels.includes('WhatsApp') || normalizeName(selected.product_topic).includes('workshop')) && <button disabled={working || !whatsAppPreview?.asset?.public_url} onClick={() => void approveAndSendWhatsAppTest()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar y enviar prueba</button>}
               {canReviewSelected && selected.status === 'review' && !(selected.channels.includes('WhatsApp') || normalizeName(selected.product_topic).includes('workshop')) && <button disabled={working} onClick={() => void reviewRequest('approved')} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar</button>}

@@ -8,7 +8,10 @@ export const maxDuration = 60
 
 const TEST_GROUP_CODE = 'PRUEBA_VICTORIA'
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
+const MAX_VIDEO_SIZE = 16 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const ALLOWED_VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime'])
+const WORKSHOP_APPROVER_EMAIL = 'marcosc@eagles.com'
 
 type AssetRecord = {
   id: string
@@ -19,6 +22,7 @@ type AssetRecord = {
   public_url: string | null
   version: number
   status: string
+  metadata: Record<string, unknown> | null
   created_at: string
 }
 
@@ -49,7 +53,17 @@ function safeFileName(name: string) {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
 
-  return base || 'imagen.jpg'
+  return base || 'archivo'
+}
+
+
+function normalizeText(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+function isWorkshopOctober(item: CopyRequest) {
+  const topic = normalizeText(item.product_topic || '')
+  return item.campaign_month === '2026-10' && topic.includes('workshop')
 }
 
 async function getSessionContext(id: string) {
@@ -62,7 +76,7 @@ async function getSessionContext(id: string) {
 
   const [{ data: copyRequest, error: requestError }, { data: profile }] = await Promise.all([
     supabase.from('copy_requests').select('*').eq('id', id).maybeSingle(),
-    supabase.from('user_profiles').select('role').eq('id', authData.user.id).maybeSingle(),
+    supabase.from('user_profiles').select('role,email').eq('id', authData.user.id).maybeSingle(),
   ])
 
   if (requestError || !copyRequest) {
@@ -71,8 +85,12 @@ async function getSessionContext(id: string) {
 
   const item = copyRequest as CopyRequest
   const isAdmin = profile?.role === 'admin'
+  const userEmail = String(profile?.email || authData.user.email || '').trim().toLowerCase()
+  const workshopOnlyMarcos = isWorkshopOctober(item)
   const canWork = isAdmin || item.assigned_to === authData.user.id || item.requested_by === authData.user.id
-  const canReview = isAdmin || item.reviewer_id === authData.user.id
+  const canReview = workshopOnlyMarcos
+    ? userEmail === WORKSHOP_APPROVER_EMAIL
+    : isAdmin || item.reviewer_id === authData.user.id
 
   return {
     supabase,
@@ -80,6 +98,8 @@ async function getSessionContext(id: string) {
     item,
     canWork,
     canReview,
+    workshopOnlyMarcos,
+    userEmail,
   }
 }
 
@@ -117,7 +137,7 @@ async function getSelectedAsset(admin: ReturnType<typeof createAdminClient>, cop
     .from('marketing_copy_assets')
     .select('*')
     .eq('copy_request_ref', copyId)
-    .eq('asset_type', 'image')
+    .in('asset_type', ['image', 'video'])
     .eq('status', 'selected')
     .order('version', { ascending: false })
     .limit(1)
@@ -178,31 +198,35 @@ export async function POST(
   const session = await getSessionContext(id)
   if ('error' in session) return session.error
 
-  const contentType = request.headers.get('content-type') || ''
+  const payload = await request.json().catch(() => ({})) as {
+    action?: string
+    caption?: string
+    fileName?: string
+    fileType?: string
+    fileSize?: number
+    storagePath?: string
+    version?: number
+    assetType?: 'image' | 'video'
+  }
 
-  if (contentType.includes('multipart/form-data')) {
+  if (payload.action === 'prepare-upload') {
     if (!session.canWork && !session.canReview) {
-      return NextResponse.json({ error: 'No tienes permiso para subir una imagen a este copy.' }, { status: 403 })
+      return NextResponse.json({ error: 'No tienes permiso para subir contenido a este copy.' }, { status: 403 })
     }
 
-    const formData = await request.formData()
-    const action = String(formData.get('action') || '')
-    const file = formData.get('file')
+    const fileName = String(payload.fileName || '').trim()
+    const fileType = String(payload.fileType || '').trim().toLowerCase()
+    const fileSize = Number(payload.fileSize || 0)
+    const isImage = ALLOWED_IMAGE_TYPES.has(fileType)
+    const isVideo = ALLOWED_VIDEO_TYPES.has(fileType)
 
-    if (action !== 'upload-image') {
-      return NextResponse.json({ error: 'Acción de archivo no válida.' }, { status: 400 })
+    if (!fileName || !fileSize || (!isImage && !isVideo)) {
+      return NextResponse.json({ error: 'Selecciona un archivo JPG, PNG, WEBP, MP4 o MOV válido.' }, { status: 400 })
     }
 
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: 'Selecciona una imagen.' }, { status: 400 })
-    }
-
-    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-      return NextResponse.json({ error: 'Usa una imagen JPG, PNG o WEBP.' }, { status: 400 })
-    }
-
-    if (file.size > MAX_IMAGE_SIZE) {
-      return NextResponse.json({ error: 'La imagen no puede pesar más de 10 MB.' }, { status: 400 })
+    const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE
+    if (fileSize > maxSize) {
+      return NextResponse.json({ error: isVideo ? 'El video no puede pesar más de 16 MB.' : 'La imagen no puede pesar más de 10 MB.' }, { status: 400 })
     }
 
     try {
@@ -212,40 +236,71 @@ export async function POST(
         .from('marketing_copy_assets')
         .select('version')
         .eq('copy_request_ref', id)
-        .eq('asset_type', 'image')
+        .in('asset_type', ['image', 'video'])
         .order('version', { ascending: false })
         .limit(1)
 
       if (versionError) throw versionError
       const version = Number(versionRows?.[0]?.version || 0) + 1
-      const fileName = safeFileName(file.name)
-      const storagePath = `copy-requests/${id}/v${version}-${Date.now()}-${fileName}`
-      const bytes = Buffer.from(await file.arrayBuffer())
-
-      const { error: uploadError } = await admin.storage
+      const storagePath = `copy-requests/${id}/v${version}-${Date.now()}-${safeFileName(fileName)}`
+      const { data: signedData, error: signedError } = await admin.storage
         .from(bucket)
-        .upload(storagePath, bytes, {
-          contentType: file.type,
-          cacheControl: '3600',
-          upsert: false,
-        })
+        .createSignedUploadUrl(storagePath)
 
-      if (uploadError) throw uploadError
+      if (signedError || !signedData?.token) throw signedError || new Error('No se pudo crear la carga segura.')
 
+      return NextResponse.json({
+        upload: {
+          bucket,
+          storagePath,
+          token: signedData.token,
+          version,
+          assetType: isVideo ? 'video' : 'image',
+        },
+      })
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'No se pudo preparar la carga.' },
+        { status: 500 },
+      )
+    }
+  }
+
+  if (payload.action === 'finalize-upload') {
+    if (!session.canWork && !session.canReview) {
+      return NextResponse.json({ error: 'No tienes permiso para guardar contenido en este copy.' }, { status: 403 })
+    }
+
+    const fileName = String(payload.fileName || '').trim()
+    const fileType = String(payload.fileType || '').trim().toLowerCase()
+    const fileSize = Number(payload.fileSize || 0)
+    const storagePath = String(payload.storagePath || '').trim()
+    const version = Number(payload.version || 0)
+    const assetType = payload.assetType
+    const isImage = assetType === 'image' && ALLOWED_IMAGE_TYPES.has(fileType)
+    const isVideo = assetType === 'video' && ALLOWED_VIDEO_TYPES.has(fileType)
+
+    if (!storagePath.startsWith(`copy-requests/${id}/`) || !version || (!isImage && !isVideo)) {
+      return NextResponse.json({ error: 'Los datos del archivo no son válidos.' }, { status: 400 })
+    }
+
+    try {
+      const admin = createAdminClient()
+      const bucket = 'marketing-assets'
       const { data: publicData } = admin.storage.from(bucket).getPublicUrl(storagePath)
 
       await admin
         .from('marketing_copy_assets')
         .update({ status: 'ready' })
         .eq('copy_request_ref', id)
-        .eq('asset_type', 'image')
+        .in('asset_type', ['image', 'video'])
         .eq('status', 'selected')
 
       const { data: asset, error: assetError } = await admin
         .from('marketing_copy_assets')
         .insert({
           copy_request_ref: id,
-          asset_type: 'image',
+          asset_type: assetType,
           storage_bucket: bucket,
           storage_path: storagePath,
           public_url: publicData.publicUrl,
@@ -253,10 +308,11 @@ export async function POST(
           status: 'selected',
           created_by: session.userId,
           metadata: {
-            original_name: file.name,
-            mime_type: file.type,
-            size: file.size,
-            source: 'crm_upload',
+            original_name: fileName,
+            mime_type: fileType,
+            size: fileSize,
+            source: 'crm_signed_upload',
+            media_type: assetType,
           },
         })
         .select('*')
@@ -266,23 +322,24 @@ export async function POST(
       return NextResponse.json({ asset })
     } catch (error) {
       return NextResponse.json(
-        { error: error instanceof Error ? error.message : 'No se pudo guardar la imagen.' },
+        { error: error instanceof Error ? error.message : 'No se pudo guardar el contenido.' },
         { status: 500 },
       )
     }
   }
 
-  const payload = await request.json().catch(() => ({})) as {
-    action?: string
-    caption?: string
-  }
+
 
   if (payload.action !== 'approve-send-test') {
     return NextResponse.json({ error: 'Acción no válida.' }, { status: 400 })
   }
 
   if (!session.canReview) {
-    return NextResponse.json({ error: 'Solo Victoria o un administrador puede aprobar y enviar la prueba.' }, { status: 403 })
+    return NextResponse.json({
+      error: session.workshopOnlyMarcos
+        ? 'Esta Workshop solo puede ser revisada y aprobada por marcosc@eagles.com.'
+        : 'No tienes permiso para aprobar y enviar esta prueba.',
+    }, { status: 403 })
   }
 
   const caption = String(payload.caption || session.item.final_copy || session.item.generated_copy || '').trim()
@@ -298,7 +355,7 @@ export async function POST(
     ])
 
     if (!asset?.public_url) {
-      return NextResponse.json({ error: 'Falta subir y seleccionar la imagen que Victoria debe aprobar.' }, { status: 400 })
+      return NextResponse.json({ error: 'Falta subir y seleccionar una imagen o video para aprobar.' }, { status: 400 })
     }
 
     if (!group?.whatsapp_instances) {
@@ -342,8 +399,16 @@ export async function POST(
         },
         body: JSON.stringify({
           number: group.group_jid,
-          mediatype: 'image',
-          mimetype: asset.public_url.toLowerCase().includes('.png') ? 'image/png' : 'image/jpeg',
+          mediatype: asset.asset_type === 'video' ? 'video' : 'image',
+          mimetype: String(asset.metadata?.mime_type || (
+            asset.asset_type === 'video'
+              ? 'video/mp4'
+              : asset.public_url.toLowerCase().includes('.png')
+                ? 'image/png'
+                : asset.public_url.toLowerCase().includes('.webp')
+                  ? 'image/webp'
+                  : 'image/jpeg'
+          )),
           media: asset.public_url,
           caption,
         }),
