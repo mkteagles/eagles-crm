@@ -7,6 +7,7 @@ import type { CopyRequest } from '@/lib/copy-center'
 export const maxDuration = 60
 
 const WORKSHOP_CAMPAIGN_CODE = 'WORKSHOP_OCTUBRE'
+const JF017_CAMPAIGN_CODE = 'CURSO_JF017_OCTUBRE'
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const MAX_VIDEO_SIZE = 16 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -66,6 +67,23 @@ function isWorkshopOctober(item: CopyRequest) {
   return item.campaign_month === '2026-10' && topic.includes('workshop')
 }
 
+function isJF017OctoberWarmup(item: CopyRequest) {
+  const topic = normalizeText(item.product_topic || '')
+  return item.campaign_month === '2026-10'
+    && topic.includes('jf017')
+    && !topic.includes('workshop')
+    && item.channels.includes('WhatsApp')
+    && item.objective === 'Calentamiento'
+}
+
+function getWhatsAppCampaignCode(item: CopyRequest) {
+  if (isWorkshopOctober(item) && item.channels.includes('WhatsApp') && item.objective === 'Calentamiento') {
+    return WORKSHOP_CAMPAIGN_CODE
+  }
+  if (isJF017OctoberWarmup(item)) return JF017_CAMPAIGN_CODE
+  return null
+}
+
 async function getSessionContext(id: string) {
   const supabase = await createClient()
   const { data: authData, error: authError } = await supabase.auth.getUser()
@@ -114,11 +132,14 @@ type CampaignSettingRecord = {
   is_active: boolean
 }
 
-async function getWorkshopSetting(admin: ReturnType<typeof createAdminClient>) {
+async function getCampaignSetting(
+  admin: ReturnType<typeof createAdminClient>,
+  campaignCode: string,
+) {
   const { data, error } = await admin
     .from('whatsapp_campaign_settings')
     .select('*')
-    .eq('code', WORKSHOP_CAMPAIGN_CODE)
+    .eq('code', campaignCode)
     .eq('is_active', true)
     .maybeSingle()
 
@@ -201,7 +222,8 @@ export async function GET(
 
   try {
     const admin = createAdminClient()
-    const setting = session.workshopOnlyMarcos ? await getWorkshopSetting(admin) : null
+    const campaignCode = getWhatsAppCampaignCode(session.item)
+    const setting = campaignCode ? await getCampaignSetting(admin, campaignCode) : null
     const destinationCode = setting?.target_group_code || 'PRUEBA_VICTORIA'
     const [asset, group, nextSlotResult] = await Promise.all([
       getSelectedAsset(admin, id),
@@ -398,8 +420,9 @@ export async function POST(
     }, { status: 403 })
   }
 
-  if (!session.workshopOnlyMarcos) {
-    return NextResponse.json({ error: 'La programación automática solo está activa para la Workshop de octubre.' }, { status: 400 })
+  const campaignCode = getWhatsAppCampaignCode(session.item)
+  if (!campaignCode) {
+    return NextResponse.json({ error: 'La programación automática no está configurada para este copy.' }, { status: 400 })
   }
 
   const caption = String(payload.caption || session.item.final_copy || session.item.generated_copy || '').trim()
@@ -415,9 +438,9 @@ export async function POST(
       return NextResponse.json({ error: 'Falta subir y seleccionar una imagen o video para programar.' }, { status: 400 })
     }
 
-    const setting = await getWorkshopSetting(admin)
+    const setting = await getCampaignSetting(admin, campaignCode)
     if (!setting) {
-      return NextResponse.json({ error: 'No existe la configuración WORKSHOP_OCTUBRE.' }, { status: 500 })
+      return NextResponse.json({ error: `No existe la configuración ${campaignCode}.` }, { status: 500 })
     }
 
     const { data: delivery, error: scheduleError } = await admin.rpc(

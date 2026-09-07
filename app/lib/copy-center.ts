@@ -45,7 +45,7 @@ export interface CopyRequest {
 export const COPY_CATEGORIES = [
   { value: 'social', label: 'Redes sociales' },
   { value: 'taller', label: 'Transmisiones / Taller' },
-  { value: 'course', label: 'Cursos presenciales' },
+  { value: 'course', label: 'Cursos / capacitaciones' },
 ] as const
 
 export const COPY_CHANNELS = [
@@ -71,16 +71,19 @@ export const COPY_TONES = [
   'Técnico y confiable',
 ] as const
 
+// Septiembre se conserva para etiquetar historial, pero ya no aparece como acceso rápido.
 export const COPY_CAMPAIGNS = [
   {
     value: '2026-09',
     label: 'Septiembre 2026',
     topics: ['Curso presencial 6L80 y 6L90'],
+    showQuick: false,
   },
   {
     value: '2026-10',
     label: 'Octubre 2026',
-    topics: ['Curso presencial CVT JF017'],
+    topics: ['Curso Online CVT JF017'],
+    showQuick: true,
   },
   {
     value: '2026-11',
@@ -90,14 +93,15 @@ export const COPY_CAMPAIGNS = [
       'Curso presencial CVT JF016 y JF017',
       'Curso presencial Chevrolet 6L80 y 6L90',
     ],
+    showQuick: true,
   },
 ] as const
 
 export const WORKSHOP_WHATSAPP_GROUP_URL = 'https://chat.whatsapp.com/Gu955o9muhZ2eJGOaRw0wS?s=cl&p=i&mlu=4&ilr=4'
 export const WORKSHOP_HOTMART_URL = 'https://pay.hotmart.com/U107474945W?bid=1788557927997'
+export const JF017_OCTOBER_CONTACT = '449 110 7766'
 
-// Presets de workshops mensuales. El mismo lanzamiento puede generar
-// dos piezas distintas: captación para redes y calentamiento para WhatsApp.
+// Workshop: flujo exclusivo de Marcos y grupo real ya en producción.
 export const COPY_WORKSHOPS = [
   {
     id: 'transmisiones-convencionales-2026-10',
@@ -110,6 +114,33 @@ export const COPY_WORKSHOPS = [
     warmupCta: `Inscríbete aquí: ${WORKSHOP_HOTMART_URL}`,
     referenceFlyer: '/marketing/workshop-convencionales-2026-10/flyer-inicial.png',
     groupIcon: '/marketing/workshop-convencionales-2026-10/icono-grupo.jpeg',
+  },
+] as const
+
+// Curso CVT JF017 de octubre: Úrsula trabaja, Victoria revisa.
+// Los primeros calentamientos se programan al grupo PRUEBA_VICTORIA hasta cambiar la campaña a producción.
+export const COPY_FEATURED_COURSES = [
+  {
+    id: 'cvt-jf017-online-2026-10',
+    campaignMonth: '2026-10',
+    label: 'Curso del mes · Octubre',
+    topic: 'Curso Online CVT JF017',
+    brief: [
+      'Curso profesional 100% online CVT JF017.',
+      'Fechas: 16 y 17 de octubre de 2026.',
+      'Viernes: 11:00 AM a 5:00 PM hora México. Sábado: 11:00 AM a 3:00 PM hora México.',
+      'Precio: $2,997 MXN. Aparta con $1,500 MXN. Cupos limitados.',
+      'Incluye grabaciones, manuales de apoyo y calibraciones de regalo.',
+      `Más información: ${JF017_OCTOBER_CONTACT}.`,
+      'Banco técnico confirmado para variar contenidos: funcionamiento de la JF017/JF017E, sistema de poleas y cadena, fallas comunes, cuerpo de válvulas, TCM, actualización de software, códigos P17F0, P17F1, P0841, P0744, P0776, P0965, P0715 y P0720, además de deterioro térmico del aceite.',
+      'Usar estos temas como ganchos educativos sin inventar información adicional ni diagnosticar definitivamente por mensaje.',
+    ].join(' '),
+    owner: 'ursula',
+    reviewer: 'victoria',
+    socialCta: `📲 Más información y reserva: ${JF017_OCTOBER_CONTACT}`,
+    warmupCta: `📲 Reserva tu lugar: ${JF017_OCTOBER_CONTACT}`,
+    referenceFlyer: '/marketing/curso-jf017-online-2026-10/flyer-inicial.png',
+    imageBrief: 'Respetar la línea gráfica del flyer CVT JF017: fondo negro/azul oscuro, blanco y magenta, transmisión JF017 como protagonista, estética técnica y profesional. Puede variar entre flyer, detalle técnico o video, sin saturar de texto.',
   },
 ] as const
 
