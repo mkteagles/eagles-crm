@@ -68,3 +68,6 @@ Marketing incluye `/app1/marketing/copys` con flujos separados por responsable: 
 2. Ejecuta `Migracion_Roles_Copys_Marcos_Victoria_Ursula.sql` para aplicar los responsables exclusivos.
 3. Despliega el proyecto.
 4. Para activar el botón **Generar con IA**, sigue `GUIA_CENTRO_COPYS_N8N.md` y configura las dos variables privadas de n8n en Vercel.
+
+## Lives: flyer automático (2026-09)
+El flujo de Úrsula genera automáticamente el flyer con tema + fecha a partir de las 5 plantillas históricas incluidas en `public/live-templates`. El render se hace en el backend con `sharp`, se guarda en Supabase Storage y queda seleccionado para los envíos multigrupo. No usa modelos de imagen de pago. Ver `CAMBIOS_LIVES_FLYER_AUTOMATICO.md`.

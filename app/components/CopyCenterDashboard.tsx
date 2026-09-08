@@ -34,7 +34,6 @@ import {
   COPY_WORKSHOPS,
   COPY_FEATURED_COURSES,
   COPY_FRAMEWORK_AIDA,
-  LIVE_STREAM_TEMPLATES,
   CopyCategory,
   CopyRequest,
   CopyStatus,
@@ -477,7 +476,7 @@ export default function CopyCenterDashboard() {
       topic: '',
       liveDate: nextWednesdayDate(),
       extraordinary,
-      templateId: '1',
+      templateId: 'auto',
       selectedGroupCodes: [],
     })
     setShowLiveCreate(true)
@@ -523,7 +522,7 @@ export default function CopyCenterDashboard() {
           brief: `Live de Eagles Gear Solutions. Fecha: ${liveForm.liveDate}. Tema: Transmisión ${topic}. El copy es fijo; solo cambian tema y fecha.`,
           call_to_action: 'Conéctate al Live desde las redes oficiales de Eagles.',
           needs_image: true,
-          image_brief: `Usar como referencia la plantilla Live ${liveForm.templateId}. Los PNG son referencias planas; el flyer final se sube al CRM.`,
+          image_brief: 'Flyer automático generado por el CRM a partir del tema y la fecha. Usa las plantillas históricas de Lives como base visual; no requiere modelo de imagen ni carga manual.',
           assigned_to: user.id,
           reviewer_id: user.id,
           due_date: liveForm.liveDate,
@@ -559,7 +558,7 @@ export default function CopyCenterDashboard() {
       setEditorCopy(generatedRequest.final_copy || generatedRequest.generated_copy || '')
       setFeedback('')
       setShowLiveCreate(false)
-      setNotice('Live listo. Úrsula genera, revisa, aprueba y programa. Sube el flyer final antes de aprobar.')
+      setNotice('Live listo. El flyer se generó automáticamente con tema y fecha. Úrsula solo revisa, aprueba y programa.')
       await loadData()
     } catch (liveError) {
       setNotice(liveError instanceof Error ? liveError.message : 'No se pudo crear el Live.')
@@ -583,7 +582,7 @@ export default function CopyCenterDashboard() {
   const approveAndScheduleLive = async () => {
     if (!selected) return
     if (!whatsAppPreview?.asset?.public_url) {
-      setNotice('Primero sube el flyer final del Live.')
+      setNotice('No se encontró el flyer automático. Regénéralo antes de programar.')
       return
     }
 
@@ -605,6 +604,27 @@ export default function CopyCenterDashboard() {
       await Promise.all([loadData(), loadWhatsAppPreview(selected.id), loadLivePreview(selected.id)])
     } catch (liveError) {
       setNotice(liveError instanceof Error ? liveError.message : 'No se pudo programar el Live.')
+    } finally {
+      setWorking(false)
+    }
+  }
+
+  const regenerateLiveFlyer = async () => {
+    if (!selected || !isLiveCopy(selected)) return
+    setWorking(true)
+    setNotice(null)
+    try {
+      const response = await fetch(`/app1/api/copy-requests/${selected.id}/live`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'regenerate-flyer', templateId: 'next' }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'No se pudo regenerar el flyer.')
+      await Promise.all([loadWhatsAppPreview(selected.id), loadLivePreview(selected.id)])
+      setNotice(`Flyer actualizado automáticamente · Plantilla ${payload.settings?.template_id || ''}.`)
+    } catch (flyerError) {
+      setNotice(flyerError instanceof Error ? flyerError.message : 'No se pudo regenerar el flyer.')
     } finally {
       setWorking(false)
     }
@@ -1238,7 +1258,7 @@ export default function CopyCenterDashboard() {
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-sky-500">Lives · Úrsula</p>
                 <h2 className="mt-1 text-2xl font-bold">{liveForm.extraordinary ? 'Fecha extraordinaria' : 'Nuevo Live del miércoles'}</h2>
-                <p className="mt-1 text-sm text-foreground/55">Solo define tema, fecha, plantilla de referencia y grupos. El copy queda fijo.</p>
+                <p className="mt-1 text-sm text-foreground/55">Solo define tema, fecha y grupos. El CRM genera automáticamente el flyer y el copy fijo.</p>
               </div>
               <button type="button" onClick={() => setShowLiveCreate(false)} className="rounded-lg p-2 hover:bg-foreground/5"><X /></button>
             </div>
@@ -1262,19 +1282,9 @@ export default function CopyCenterDashboard() {
                 </div>
               </div>
 
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold">Plantilla visual de referencia *</span>
-                  <span className="text-xs text-foreground/45">PNG plano · sin capas editables</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-                  {LIVE_STREAM_TEMPLATES.map((template) => (
-                    <button key={template.id} type="button" onClick={() => setLiveForm((current) => ({ ...current, templateId: template.id }))} className={`rounded-xl border p-2 text-left transition ${liveForm.templateId === template.id ? 'border-sky-500 bg-sky-500/10' : 'border-border-color hover:border-sky-500/40'}`}>
-                      <img src={template.src} alt={template.label} className="mx-auto h-44 w-full rounded-lg object-cover" />
-                      <p className="mt-2 text-xs font-semibold">Plantilla {template.id}</p>
-                    </button>
-                  ))}
-                </div>
+              <div className="rounded-xl border border-sky-500/25 bg-sky-500/[0.06] p-4 text-sm">
+                <p className="font-bold text-sky-600 dark:text-sky-400">Flyer automático · $0 en modelos de imagen</p>
+                <p className="mt-1 text-foreground/60">Úrsula solo captura tema y fecha. El CRM toma una de las 5 plantillas históricas, cubre el texto anterior y coloca automáticamente transmisión, fecha y 11 AM. No usa OpenAI, Midjourney ni APIs de imagen de pago.</p>
               </div>
 
               <div className="rounded-xl border border-border-color p-4">
@@ -1434,21 +1444,29 @@ export default function CopyCenterDashboard() {
                       )}
 
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                        <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-white/5 dark:text-slate-100">
-                          {imageUploading ? <Loader2 className="animate-spin" size={17} /> : <UploadCloud size={17} />}
-                          {whatsAppPreview?.asset ? 'Cambiar contenido' : 'Subir imagen o video'}
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
-                            className="hidden"
-                            disabled={imageUploading || (!canWorkSelected && !canReviewSelected)}
-                            onChange={(event) => {
-                              const file = event.target.files?.[0] || null
-                              void uploadWhatsAppMedia(file)
-                              event.currentTarget.value = ''
-                            }}
-                          />
-                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedIsLive && (
+                            <button type="button" disabled={working} onClick={() => void regenerateLiveFlyer()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-sky-500 bg-white px-4 text-sm font-bold text-sky-700 transition hover:bg-sky-50 disabled:opacity-50 dark:bg-white/5 dark:text-sky-300">
+                              {working ? <Loader2 className="animate-spin" size={17} /> : <RefreshCw size={17} />}
+                              Cambiar estilo del flyer
+                            </button>
+                          )}
+                          <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-white/5 dark:text-slate-100">
+                            {imageUploading ? <Loader2 className="animate-spin" size={17} /> : <UploadCloud size={17} />}
+                            {selectedIsLive ? 'Reemplazar manualmente' : whatsAppPreview?.asset ? 'Cambiar contenido' : 'Subir imagen o video'}
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"
+                              className="hidden"
+                              disabled={imageUploading || (!canWorkSelected && !canReviewSelected)}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0] || null
+                                void uploadWhatsAppMedia(file)
+                                event.currentTarget.value = ''
+                              }}
+                            />
+                          </label>
+                        </div>
 
                         <div className="text-right text-xs text-slate-500 dark:text-slate-400">
                           {selectedIsLive ? (
@@ -1456,6 +1474,7 @@ export default function CopyCenterDashboard() {
                               <p><strong>Instancia:</strong> GRUPOS</p>
                               <p><strong>Grupos:</strong> {livePreview?.groups?.length || 0}</p>
                               <p><strong>Fecha:</strong> {displayDate(livePreview?.settings?.live_date || selected.due_date)}</p>
+                              <p><strong>Flyer:</strong> Automático · Plantilla {livePreview?.settings?.template_id || '—'}</p>
                               <p><strong>Día anterior:</strong> 8:30–10:30 AM</p>
                               <p><strong>Día del Live:</strong> 8:00–10:00 AM</p>
                             </>
@@ -1491,7 +1510,7 @@ export default function CopyCenterDashboard() {
                   </div>
                 </div>}
                 <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Publicación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Tema</dt><dd className="font-semibold">{selected.product_topic}</dd></div><div><dt className="text-foreground/45">Canales</dt><dd className="font-semibold">{selected.channels.join(', ')}</dd></div><div><dt className="text-foreground/45">Objetivo</dt><dd className="font-semibold">{selected.objective}</dd></div><div><dt className="text-foreground/45">Tono</dt><dd className="font-semibold">{selected.tone}</dd></div></dl></div>
-                {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> Requiere contenido visual</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
+                {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> {selectedIsLive ? 'Flyer automático' : 'Requiere contenido visual'}</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
               </aside>
             </div>
 
