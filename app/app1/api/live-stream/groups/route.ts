@@ -45,6 +45,7 @@ export async function GET() {
         )
       `)
       .eq('is_active', true)
+      .eq('purpose', 'live')
       .eq('whatsapp_instances.code', 'GRUPOS')
       .eq('whatsapp_instances.is_active', true)
       .order('name', { ascending: true })

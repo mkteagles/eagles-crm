@@ -1285,7 +1285,7 @@ export default function CopyCenterDashboard() {
                 {liveGroupsLoading ? (
                   <div className="mt-4 flex items-center gap-2 text-sm text-foreground/55"><Loader2 className="animate-spin" size={16} /> Cargando grupos...</div>
                 ) : liveGroups.length === 0 ? (
-                  <p className="mt-4 text-sm text-rose-500">No hay grupos activos disponibles en la instancia GRUPOS.</p>
+                  <p className="mt-4 text-sm text-rose-500">No hay grupos de Lives activos disponibles en la instancia GRUPOS.</p>
                 ) : (
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
                     {liveGroups.map((group) => {
