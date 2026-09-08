@@ -168,6 +168,59 @@ export const COPY_FEATURED_COURSES = [
   },
 ] as const
 
+export const LIVE_STREAM_TIME = '11:00 AM'
+export const LIVE_STREAM_TIMEZONE_LABEL = 'Hora México 🇲🇽'
+export const LIVE_STREAM_LINKS = {
+  tiktokTransmisiones: 'https://bit.ly/tiktok-transmisiones',
+  tiktokEagles: 'https://bit.ly/Tiktok-EAGLES',
+  facebookEagles: 'https://www.facebook.com/profile.php?id=61559218779680&mibextid=wwXIfr',
+  facebookTaller: 'https://www.facebook.com/TallerEagles?mibextid=wwXIfr',
+} as const
+
+export const LIVE_STREAM_TEMPLATES = [
+  { id: '1', label: 'Plantilla 1 · Live Stream CVT', src: '/live-templates/1.png' },
+  { id: '2', label: 'Plantilla 2 · Miércoles Live', src: '/live-templates/2.png' },
+  { id: '3', label: 'Plantilla 3 · Live Stream vertical', src: '/live-templates/3.png' },
+  { id: '4', label: 'Plantilla 4 · Live Streaming invitado', src: '/live-templates/4.png' },
+  { id: '5', label: 'Plantilla 5 · Live programación', src: '/live-templates/5.png' },
+] as const
+
+export const LIVE_STREAM_COPY_TUESDAY = (topic: string) => `🚨 ¡RECUERDEN, CARNALITOS! 🚨
+
+🔥 MAÑANA tenemos LIVE sobre Transmisión ${topic}
+
+⏰ ${LIVE_STREAM_TIME} | ${LIVE_STREAM_TIMEZONE_LABEL}
+
+📲 Conéctense desde nuestras redes y acompáñennos en vivo.
+
+🎵 TikTok Transmisiones: ${LIVE_STREAM_LINKS.tiktokTransmisiones}
+
+🎵 TikTok EAGLES: ${LIVE_STREAM_LINKS.tiktokEagles}
+
+🔵 Facebook EAGLES: ${LIVE_STREAM_LINKS.facebookEagles}
+
+🔵 Facebook Taller Eagles: ${LIVE_STREAM_LINKS.facebookTaller}
+
+🔥 ¡Nos vemos mañana a las 11, carnalitos!`
+
+export const LIVE_STREAM_COPY_WEDNESDAY = (topic: string) => `🚨 ¡RECUERDEN, CARNALITOS! 🚨
+
+🔥 HOY tenemos LIVE sobre Transmisión ${topic}
+
+⏰ ${LIVE_STREAM_TIME} | ${LIVE_STREAM_TIMEZONE_LABEL}
+
+📲 Conéctense desde nuestras redes y acompáñennos en vivo.
+
+🎵 TikTok Transmisiones: ${LIVE_STREAM_LINKS.tiktokTransmisiones}
+
+🎵 TikTok EAGLES: ${LIVE_STREAM_LINKS.tiktokEagles}
+
+🔵 Facebook EAGLES: ${LIVE_STREAM_LINKS.facebookEagles}
+
+🔵 Facebook Taller Eagles: ${LIVE_STREAM_LINKS.facebookTaller}
+
+🔥 ¡Nos vemos hoy a las 11, carnalitos!`
+
 export const COPY_STATUS_LABELS: Record<CopyStatus, string> = {
   pending: 'Solicitud',
   generating: 'Generando',

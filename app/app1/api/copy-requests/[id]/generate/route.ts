@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { createClient } from '@/lib/supabase/server'
-import { COPY_FRAMEWORK_AIDA, type CopyRequest } from '@/lib/copy-center'
+import { COPY_FRAMEWORK_AIDA, LIVE_STREAM_COPY_TUESDAY, type CopyRequest } from '@/lib/copy-center'
 
 // Ollama puede tardar más en la primera generación mientras carga el modelo.
 // Vercel mantiene esta función disponible y el fetch conserva un margen menor.
@@ -31,6 +31,19 @@ function isWorkshopCopy(item: CopyRequest) {
 
 function isCourseCopy(item: CopyRequest) {
   return item.category === 'course' && !isWorkshopCopy(item)
+}
+
+function isLiveCopy(item: CopyRequest) {
+  return item.objective === 'Invitación a live'
+    || normalizeText(item.product_topic || '').includes('live')
+    || normalizeText(item.title || '').includes('live')
+}
+
+function cleanLiveTopic(value: string) {
+  return value
+    .replace(/^live\s*[·:\-–—]?\s*/i, '')
+    .replace(/^transmisi[oó]n\s+/i, '')
+    .trim()
 }
 
 function getCampaignCode(item: CopyRequest) {
@@ -66,15 +79,48 @@ export async function POST(
   const normalizedUserName = normalizeText(String(profile?.full_name || ''))
   const workshopOnlyMarcos = isWorkshopCopy(item)
   const courseOnlyVictoria = isCourseCopy(item)
-  const canGenerate = profile?.role === 'admin'
-    || (workshopOnlyMarcos
-      ? userEmail === 'marcosc@eagles.com'
-      : courseOnlyVictoria
-        ? normalizedUserName.includes('victoria')
-        : item.assigned_to === authData.user.id || item.requested_by === authData.user.id)
+  const liveOnlyUrsula = isLiveCopy(item)
+  const isMarcos = userEmail === 'marcosc@eagles.com' || normalizedUserName.includes('marcos')
+  const isVictoria = normalizedUserName.includes('victoria')
+  const isUrsula = userEmail === 'ursula@eagles.com' || normalizedUserName.includes('ursula')
+  const isGenericAdmin = profile?.role === 'admin' && !isMarcos && !isVictoria && !isUrsula
+  const canGenerate = liveOnlyUrsula
+    ? isUrsula
+    : isGenericAdmin
+      || (workshopOnlyMarcos
+        ? isMarcos
+        : courseOnlyVictoria
+          ? isVictoria
+          : item.assigned_to === authData.user.id || item.requested_by === authData.user.id)
 
   if (!canGenerate) {
     return NextResponse.json({ error: 'No tienes permiso para generar este copy.' }, { status: 403 })
+  }
+
+  if (liveOnlyUrsula) {
+    const topic = cleanLiveTopic(item.product_topic)
+    const generatedCopy = LIVE_STREAM_COPY_TUESDAY(topic)
+
+    const { data: updated, error: updateError } = await supabase
+      .from('copy_requests')
+      .update({
+        status: 'draft',
+        generated_copy: generatedCopy,
+        final_copy: generatedCopy,
+        image_prompt: null,
+        n8n_execution_id: null,
+        generation_error: null,
+        generated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ request: updated, deterministic: true })
   }
 
   const webhookUrl = process.env.N8N_COPY_WEBHOOK_URL?.trim()

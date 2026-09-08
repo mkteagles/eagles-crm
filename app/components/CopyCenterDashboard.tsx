@@ -34,6 +34,7 @@ import {
   COPY_WORKSHOPS,
   COPY_FEATURED_COURSES,
   COPY_FRAMEWORK_AIDA,
+  LIVE_STREAM_TEMPLATES,
   CopyCategory,
   CopyRequest,
   CopyStatus,
@@ -97,6 +98,35 @@ type WhatsAppPreview = {
   schedule: WhatsAppSchedule | null
 }
 
+type LiveGroupOption = {
+  code: string
+  name: string
+  groupJid: string
+  purpose?: string | null
+}
+
+type LiveSettingsPreview = {
+  live_date: string
+  is_extraordinary: boolean
+  template_id: string
+  selected_group_codes: string[]
+  timezone: string
+}
+
+type LivePreview = {
+  settings: LiveSettingsPreview | null
+  groups: LiveGroupOption[]
+  asset: WhatsAppAsset | null
+}
+
+type LiveForm = {
+  topic: string
+  liveDate: string
+  extraordinary: boolean
+  templateId: string
+  selectedGroupCodes: string[]
+}
+
 const EMPTY_FORM: CopyForm = {
   title: '',
   category: 'social',
@@ -135,6 +165,30 @@ function isWorkshopCopy(item: Pick<CopyRequest, 'product_topic'> | null | undefi
 
 function isCourseCopy(item: Pick<CopyRequest, 'category' | 'product_topic'> | null | undefined) {
   return Boolean(item && item.category === 'course' && !isWorkshopCopy(item))
+}
+
+function isLiveCopy(item: Pick<CopyRequest, 'objective' | 'product_topic' | 'title'> | null | undefined) {
+  if (!item) return false
+  return item.objective === 'Invitación a live'
+    || normalizeName(item.product_topic || '').includes('live')
+    || normalizeName(item.title || '').includes('live')
+}
+
+function nextWednesdayDate() {
+  const now = new Date()
+  const day = now.getDay()
+  let delta = (3 - day + 7) % 7
+  if (delta === 0 && now.getHours() >= 10) delta = 7
+  const target = new Date(now.getFullYear(), now.getMonth(), now.getDate() + delta)
+  const y = target.getFullYear()
+  const m = String(target.getMonth() + 1).padStart(2, '0')
+  const d = String(target.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function isWednesdayDate(value: string) {
+  if (!value) return false
+  return new Date(`${value}T12:00:00Z`).getUTCDay() === 3
 }
 
 function isOctoberWorkshop(item: Pick<CopyRequest, 'campaign_month' | 'product_topic'> | null | undefined) {
@@ -216,6 +270,17 @@ export default function CopyCenterDashboard() {
   const [whatsAppPreview, setWhatsAppPreview] = useState<WhatsAppPreview | null>(null)
   const [whatsAppLoading, setWhatsAppLoading] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
+  const [showLiveCreate, setShowLiveCreate] = useState(false)
+  const [liveGroups, setLiveGroups] = useState<LiveGroupOption[]>([])
+  const [liveGroupsLoading, setLiveGroupsLoading] = useState(false)
+  const [livePreview, setLivePreview] = useState<LivePreview | null>(null)
+  const [liveForm, setLiveForm] = useState<LiveForm>({
+    topic: '',
+    liveDate: nextWednesdayDate(),
+    extraordinary: false,
+    templateId: '1',
+    selectedGroupCodes: [],
+  })
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -274,7 +339,7 @@ export default function CopyCenterDashboard() {
   const visibleRequests = useMemo(() => {
     if (!user) return []
     // Las reglas personales tienen prioridad aunque el perfil tenga role=admin.
-    if (currentIsUrsula) return []
+    if (currentIsUrsula) return requests.filter((item) => isLiveCopy(item))
     if (currentIsMarcos) return requests.filter((item) => isWorkshopCopy(item))
     if (currentIsVictoria) return requests.filter((item) => isCourseCopy(item))
     if (user.role === 'admin') return requests
@@ -384,6 +449,159 @@ export default function CopyCenterDashboard() {
     })
     setShowAdvanced(false)
     setShowCreate(true)
+  }
+
+  const loadLiveGroups = useCallback(async () => {
+    setLiveGroupsLoading(true)
+    try {
+      const response = await fetch('/app1/api/live-stream/groups', { cache: 'no-store' })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'No se pudieron cargar los grupos.')
+      setLiveGroups((payload.groups || []) as LiveGroupOption[])
+    } catch (groupsError) {
+      setNotice(groupsError instanceof Error ? groupsError.message : 'No se pudieron cargar los grupos de Lives.')
+      setLiveGroups([])
+    } finally {
+      setLiveGroupsLoading(false)
+    }
+  }, [])
+
+  const openLiveCreate = async (extraordinary = false) => {
+    setLiveForm({
+      topic: '',
+      liveDate: nextWednesdayDate(),
+      extraordinary,
+      templateId: '1',
+      selectedGroupCodes: [],
+    })
+    setShowLiveCreate(true)
+    if (!liveGroups.length) await loadLiveGroups()
+  }
+
+  const createLiveRequest = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!user) return
+    const topic = liveForm.topic.trim().replace(/^transmisi[oó]n\s+/i, '')
+    if (!topic) {
+      setNotice('Escribe el tema de la transmisión para el Live.')
+      return
+    }
+    if (!liveForm.liveDate) {
+      setNotice('Selecciona la fecha del Live.')
+      return
+    }
+    if (!liveForm.extraordinary && !isWednesdayDate(liveForm.liveDate)) {
+      setNotice('El Live normal debe ser miércoles. Usa “Fecha extraordinaria” si será otro día.')
+      return
+    }
+    if (!liveForm.selectedGroupCodes.length) {
+      setNotice('Selecciona al menos un grupo de la instancia GRUPOS.')
+      return
+    }
+
+    setSaving(true)
+    setNotice(null)
+    try {
+      const month = liveForm.liveDate.slice(0, 7)
+      const { data: created, error: createError } = await supabase
+        .from('copy_requests')
+        .insert({
+          title: `Live · ${topic}`,
+          category: 'social',
+          product_topic: `Live · ${topic}`,
+          campaign_month: month,
+          channels: ['WhatsApp'],
+          objective: 'Invitación a live',
+          tone: 'Cercano y directo',
+          audience: 'Carnalitos, técnicos, transmisionistas y dueños de taller',
+          brief: `Live de Eagles Gear Solutions. Fecha: ${liveForm.liveDate}. Tema: Transmisión ${topic}. El copy es fijo; solo cambian tema y fecha.`,
+          call_to_action: 'Conéctate al Live desde las redes oficiales de Eagles.',
+          needs_image: true,
+          image_brief: `Usar como referencia la plantilla Live ${liveForm.templateId}. Los PNG son referencias planas; el flyer final se sube al CRM.`,
+          assigned_to: user.id,
+          reviewer_id: user.id,
+          due_date: liveForm.liveDate,
+          requested_by: user.id,
+          status: 'pending',
+        })
+        .select('*')
+        .single()
+
+      if (createError || !created) throw createError || new Error('No se pudo crear el Live.')
+      const createdRequest = created as CopyRequest
+
+      const configResponse = await fetch(`/app1/api/copy-requests/${createdRequest.id}/live`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'configure',
+          liveDate: liveForm.liveDate,
+          isExtraordinary: liveForm.extraordinary,
+          templateId: liveForm.templateId,
+          selectedGroupCodes: liveForm.selectedGroupCodes,
+        }),
+      })
+      const configPayload = await configResponse.json()
+      if (!configResponse.ok) throw new Error(configPayload.error || 'No se pudo guardar la configuración del Live.')
+
+      const generateResponse = await fetch(`/app1/api/copy-requests/${createdRequest.id}/generate`, { method: 'POST' })
+      const generatePayload = await generateResponse.json()
+      if (!generateResponse.ok) throw new Error(generatePayload.error || 'No se pudo crear el copy del Live.')
+
+      const generatedRequest = generatePayload.request as CopyRequest
+      setSelected(generatedRequest)
+      setEditorCopy(generatedRequest.final_copy || generatedRequest.generated_copy || '')
+      setFeedback('')
+      setShowLiveCreate(false)
+      setNotice('Live listo. Úrsula genera, revisa, aprueba y programa. Sube el flyer final antes de aprobar.')
+      await loadData()
+    } catch (liveError) {
+      setNotice(liveError instanceof Error ? liveError.message : 'No se pudo crear el Live.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const loadLivePreview = useCallback(async (copyId: string) => {
+    try {
+      const response = await fetch(`/app1/api/copy-requests/${copyId}/live`, { cache: 'no-store' })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'No se pudo cargar la programación del Live.')
+      setLivePreview(payload as LivePreview)
+    } catch (previewError) {
+      setLivePreview(null)
+      setNotice(previewError instanceof Error ? previewError.message : 'No se pudo cargar la programación del Live.')
+    }
+  }, [])
+
+  const approveAndScheduleLive = async () => {
+    if (!selected) return
+    if (!whatsAppPreview?.asset?.public_url) {
+      setNotice('Primero sube el flyer final del Live.')
+      return
+    }
+
+    setWorking(true)
+    setNotice(null)
+    try {
+      const response = await fetch(`/app1/api/copy-requests/${selected.id}/live`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'approve-schedule' }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error || 'No se pudo programar el Live.')
+
+      const updated = payload.request as CopyRequest
+      setSelected(updated)
+      setEditorCopy(updated.final_copy || updated.generated_copy || '')
+      setNotice(`Live aprobado: ${payload.summary?.groups || 0} grupos · ${payload.summary?.deliveries || 0} envíos programados en GRUPOS.`)
+      await Promise.all([loadData(), loadWhatsAppPreview(selected.id), loadLivePreview(selected.id)])
+    } catch (liveError) {
+      setNotice(liveError instanceof Error ? liveError.message : 'No se pudo programar el Live.')
+    } finally {
+      setWorking(false)
+    }
   }
 
   const applyCampaign = (campaignMonth: string) => {
@@ -528,7 +746,7 @@ export default function CopyCenterDashboard() {
       if (!response.ok) throw new Error(payload.error || 'No se pudo generar el borrador.')
       setSelected(payload.request as CopyRequest)
       setEditorCopy(payload.request.final_copy || payload.request.generated_copy || '')
-      setNotice(isOctoberWorkshop(selected) || isCourseCopy(selected) ? 'Borrador generado. Revísalo y envíalo a tu propia revisión.' : 'Borrador generado. Revísalo antes de enviarlo a aprobación.')
+      setNotice(isLiveCopy(selected) || isOctoberWorkshop(selected) || isCourseCopy(selected) ? 'Borrador generado. Revísalo y envíalo a tu propia revisión.' : 'Borrador generado. Revísalo antes de enviarlo a aprobación.')
       await loadData()
     } catch (generateError) {
       setNotice(generateError instanceof Error ? generateError.message : 'No se pudo generar el borrador.')
@@ -563,7 +781,7 @@ export default function CopyCenterDashboard() {
         status: 'review',
         feedback: null,
       })
-      setNotice(isOctoberWorkshop(selected) || isCourseCopy(selected) ? 'Copy enviado a tu revisión.' : 'Copy enviado a revisión.')
+      setNotice(isLiveCopy(selected) || isOctoberWorkshop(selected) || isCourseCopy(selected) ? 'Copy enviado a tu revisión.' : 'Copy enviado a revisión.')
     } catch (sendError) {
       setNotice(sendError instanceof Error ? sendError.message : 'No se pudo enviar a revisión.')
     } finally {
@@ -618,6 +836,14 @@ export default function CopyCenterDashboard() {
     }
     void loadWhatsAppPreview(selected.id)
   }, [loadWhatsAppPreview, selected?.id])
+
+  useEffect(() => {
+    if (!selected?.id || !isLiveCopy(selected)) {
+      setLivePreview(null)
+      return
+    }
+    void loadLivePreview(selected.id)
+  }, [loadLivePreview, selected?.id])
 
   const uploadWhatsAppMedia = async (file: File | null) => {
     if (!selected || !file) return
@@ -754,24 +980,29 @@ export default function CopyCenterDashboard() {
   const isUnrestrictedAdmin = isAdmin && !currentIsMarcos && !currentIsVictoria && !currentIsUrsula
   const selectedIsWorkshop = isWorkshopCopy(selected)
   const selectedIsCourse = isCourseCopy(selected)
+  const selectedIsLive = isLiveCopy(selected)
   const selectedIsWorkshopWarmup = isOctoberWorkshopWarmup(selected)
   const selectedIsJF017Warmup = isOctoberJF017Warmup(selected)
   const selectedIsScheduledWarmup = isScheduledWhatsAppWarmup(selected)
   const canWorkSelected = Boolean(selected && (
-    isUnrestrictedAdmin
-    || (selectedIsWorkshop
-      ? currentIsMarcos
-      : selectedIsCourse
-        ? currentIsVictoria
-        : selected.assigned_to === user.id || selected.requested_by === user.id)
+    selectedIsLive
+      ? currentIsUrsula
+      : isUnrestrictedAdmin
+        || (selectedIsWorkshop
+          ? currentIsMarcos
+          : selectedIsCourse
+            ? currentIsVictoria
+            : selected.assigned_to === user.id || selected.requested_by === user.id)
   ))
   const canReviewSelected = Boolean(selected && (
-    isUnrestrictedAdmin
-    || (selectedIsWorkshop
-      ? currentIsMarcos
-      : selectedIsCourse
-        ? currentIsVictoria
-        : selected.reviewer_id === user.id)
+    selectedIsLive
+      ? currentIsUrsula
+      : isUnrestrictedAdmin
+        || (selectedIsWorkshop
+          ? currentIsMarcos
+          : selectedIsCourse
+            ? currentIsVictoria
+            : selected.reviewer_id === user.id)
   ))
   const normalizedFormTopic = normalizeName(form.product_topic || '')
   const formIsScheduledWarmup = form.campaign_month === '2026-10'
@@ -787,7 +1018,7 @@ export default function CopyCenterDashboard() {
             <Sparkles size={16} /> Flujo creativo
           </div>
           <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Centro de Copys</h1>
-          <p className="mt-1 max-w-2xl text-sm text-foreground/60">{currentIsMarcos ? 'Workshop: tú generas, revisas, apruebas y programas.' : currentIsVictoria ? 'Cursos: tú generas, revisas, apruebas y programas los calentamientos.' : currentIsUrsula ? 'Por ahora tu espacio queda reservado para copys de Lives.' : 'Ollama redacta y cada campaña usa su responsable asignado.'}</p>
+          <p className="mt-1 max-w-2xl text-sm text-foreground/60">{currentIsMarcos ? 'Workshop: tú generas, revisas, apruebas y programas.' : currentIsVictoria ? 'Cursos: tú generas, revisas, apruebas y programas los calentamientos.' : currentIsUrsula ? 'Lives: tú generas, revisas, apruebas y programas los envíos multigrupo.' : 'Ollama redacta y cada campaña usa su responsable asignado.'}</p>
         </div>
         {(isUnrestrictedAdmin || (!currentIsMarcos && !currentIsVictoria && !currentIsUrsula)) && <button onClick={() => openCreate()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 font-semibold text-white transition hover:bg-brand-orange-dark">
           <Plus size={19} /> Nueva solicitud
@@ -907,10 +1138,31 @@ export default function CopyCenterDashboard() {
           </div>
         ))}
         {currentIsUrsula && (
-          <div className="rounded-xl border border-dashed border-sky-500/40 bg-sky-500/5 p-5">
-            <span className="block text-xs font-bold uppercase tracking-wider text-sky-500">Copys de Lives</span>
-            <span className="mt-1 block font-bold text-foreground">Próximamente</span>
-            <p className="mt-2 text-sm text-foreground/55">Este espacio queda reservado para que más adelante trabajes únicamente los copys de Lives. Workshop y cursos ya no aparecen en tu Centro de Copys.</p>
+          <div className="rounded-xl border border-sky-500/40 bg-sky-500/5 p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <span className="block text-xs font-bold uppercase tracking-wider text-sky-500">Lives · Úrsula</span>
+                <span className="mt-1 block font-bold text-foreground">Live de los miércoles</span>
+                <p className="mt-2 max-w-2xl text-sm text-foreground/55">Copy fijo: solo cambian tema y fecha. Tú generas, revisas, apruebas y programas. Martes se distribuye 8:30–10:30 AM y el día del Live 8:00–10:00 AM en los grupos seleccionados de la instancia GRUPOS.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => void openLiveCreate(false)} className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700">
+                  <Plus size={16} className="mr-1 inline" /> Nuevo Live miércoles
+                </button>
+                <button type="button" onClick={() => void openLiveCreate(true)} className="rounded-lg border border-sky-500/50 bg-surface px-4 py-2.5 text-sm font-semibold text-sky-500 transition hover:border-sky-500">
+                  <CalendarDays size={16} className="mr-1 inline" /> Fecha extraordinaria
+                </button>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+              {LIVE_STREAM_TEMPLATES.map((template) => (
+                <div key={template.id} className="min-w-24 rounded-lg border border-sky-500/20 bg-surface p-2">
+                  <img src={template.src} alt={template.label} className="h-28 w-20 rounded object-cover" />
+                  <p className="mt-1 text-[10px] text-foreground/50">{template.id}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-foreground/45">Las 5 plantillas que enviaste son PNG planos: se integran como referencias visuales, pero no contienen capas editables recuperables. Para edición automática exacta necesitamos el Canva/PSD editable.</p>
           </div>
         )}
         {isUnrestrictedAdmin && <div className="grid gap-3 md:grid-cols-3">
@@ -966,12 +1218,105 @@ export default function CopyCenterDashboard() {
                 </div>
                 <div className="text-sm"><p className="text-xs text-foreground/45">Responsable</p><p className="mt-1 font-medium">{userName(users, item.assigned_to)}</p></div>
                 <div className="text-sm"><p className="text-xs text-foreground/45">Revisión</p><p className="mt-1 font-medium">{userName(users, item.reviewer_id)}</p></div>
-                <div className="text-sm sm:text-right"><p className="text-xs text-foreground/45">{isScheduledWhatsAppWarmup(item) ? 'Programación' : 'Entrega'}</p><p className="mt-1 font-medium">{isScheduledWhatsAppWarmup(item) && !item.due_date ? 'Al aprobar · 10 AM / 5 PM' : displayDate(item.due_date)}</p></div>
+                <div className="text-sm sm:text-right"><p className="text-xs text-foreground/45">{isLiveCopy(item) || isScheduledWhatsAppWarmup(item) ? 'Programación' : 'Entrega'}</p><p className="mt-1 font-medium">{isLiveCopy(item) ? `${displayDate(item.due_date)} · multigrupo` : isScheduledWhatsAppWarmup(item) && !item.due_date ? 'Al aprobar · 10 AM / 5 PM' : displayDate(item.due_date)}</p></div>
               </button>
             ))}
           </div>
         )}
       </section>
+
+      {showLiveCreate && (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center bg-black/70 p-0 sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setShowLiveCreate(false) }}>
+          <form onSubmit={createLiveRequest} className="max-h-[94vh] w-full overflow-y-auto rounded-t-2xl border border-border-color bg-surface p-5 shadow-2xl sm:max-w-3xl sm:rounded-2xl sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-sky-500">Lives · Úrsula</p>
+                <h2 className="mt-1 text-2xl font-bold">{liveForm.extraordinary ? 'Fecha extraordinaria' : 'Nuevo Live del miércoles'}</h2>
+                <p className="mt-1 text-sm text-foreground/55">Solo define tema, fecha, plantilla de referencia y grupos. El copy queda fijo.</p>
+              </div>
+              <button type="button" onClick={() => setShowLiveCreate(false)} className="rounded-lg p-2 hover:bg-foreground/5"><X /></button>
+            </div>
+
+            <div className="space-y-5">
+              <label>
+                <span className="mb-1.5 block text-sm font-semibold">Tema de la transmisión *</span>
+                <input autoFocus value={liveForm.topic} onChange={(event) => setLiveForm((current) => ({ ...current, topic: event.target.value }))} placeholder="Ej. DQ250 -02E -0D9" className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3 outline-none focus:border-sky-500" />
+                <span className="mt-1 block text-xs text-foreground/45">El CRM agregará “Transmisión” automáticamente al copy.</span>
+              </label>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label>
+                  <span className="mb-1.5 block text-sm font-semibold">Fecha del Live *</span>
+                  <input type="date" value={liveForm.liveDate} onChange={(event) => setLiveForm((current) => ({ ...current, liveDate: event.target.value }))} className="min-h-11 w-full rounded-xl border border-border-color bg-background px-3 outline-none focus:border-sky-500" />
+                </label>
+                <div className="rounded-xl border border-border-color p-3 text-sm">
+                  <p className="font-semibold">Tipo de fecha</p>
+                  <p className="mt-1 text-foreground/55">{liveForm.extraordinary ? 'Extraordinaria · puede ser cualquier día.' : 'Normal · solamente miércoles.'}</p>
+                  {!liveForm.extraordinary && liveForm.liveDate && !isWednesdayDate(liveForm.liveDate) && <p className="mt-2 text-xs font-semibold text-rose-500">Selecciona un miércoles o usa Fecha extraordinaria.</p>}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold">Plantilla visual de referencia *</span>
+                  <span className="text-xs text-foreground/45">PNG plano · sin capas editables</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+                  {LIVE_STREAM_TEMPLATES.map((template) => (
+                    <button key={template.id} type="button" onClick={() => setLiveForm((current) => ({ ...current, templateId: template.id }))} className={`rounded-xl border p-2 text-left transition ${liveForm.templateId === template.id ? 'border-sky-500 bg-sky-500/10' : 'border-border-color hover:border-sky-500/40'}`}>
+                      <img src={template.src} alt={template.label} className="mx-auto h-44 w-full rounded-lg object-cover" />
+                      <p className="mt-2 text-xs font-semibold">Plantilla {template.id}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border-color p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold">Grupos de WhatsApp · instancia GRUPOS *</p>
+                    <p className="mt-1 text-xs text-foreground/45">Selecciona los grupos que recibirán el recordatorio del día anterior y el aviso del día del Live.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setLiveForm((current) => ({ ...current, selectedGroupCodes: liveGroups.map((group) => group.code) }))} className="rounded-lg border border-border-color px-3 py-1.5 text-xs font-semibold">Todos</button>
+                    <button type="button" onClick={() => setLiveForm((current) => ({ ...current, selectedGroupCodes: [] }))} className="rounded-lg border border-border-color px-3 py-1.5 text-xs font-semibold">Ninguno</button>
+                  </div>
+                </div>
+                {liveGroupsLoading ? (
+                  <div className="mt-4 flex items-center gap-2 text-sm text-foreground/55"><Loader2 className="animate-spin" size={16} /> Cargando grupos...</div>
+                ) : liveGroups.length === 0 ? (
+                  <p className="mt-4 text-sm text-rose-500">No hay grupos activos disponibles en la instancia GRUPOS.</p>
+                ) : (
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    {liveGroups.map((group) => {
+                      const checked = liveForm.selectedGroupCodes.includes(group.code)
+                      return (
+                        <label key={group.code} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${checked ? 'border-sky-500/50 bg-sky-500/5' : 'border-border-color'}`}>
+                          <input type="checkbox" checked={checked} onChange={() => setLiveForm((current) => ({ ...current, selectedGroupCodes: checked ? current.selectedGroupCodes.filter((code) => code !== group.code) : [...current.selectedGroupCodes, group.code] }))} className="mt-1" />
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-semibold">{group.name}</span>
+                            <span className="block truncate text-xs text-foreground/45">{group.groupJid}</span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 text-sm">
+                <p className="font-bold text-emerald-600 dark:text-emerald-400">Programación automática multigrupo</p>
+                <p className="mt-1 text-foreground/60">Día anterior: 8:30–10:30 AM · Día del Live: 8:00–10:00 AM · Hora México. Los grupos se distribuyen durante la ventana para evitar ráfagas.</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setShowLiveCreate(false)} className="min-h-11 rounded-xl border border-border-color px-4 font-semibold">Cancelar</button>
+              <button type="submit" disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-sky-600 px-5 font-semibold text-white disabled:opacity-50">{saving ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />} Crear Live</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {showCreate && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) setShowCreate(false) }}>
@@ -1043,7 +1388,11 @@ export default function CopyCenterDashboard() {
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">Vista previa WhatsApp · Programación</p>
                         <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{selectedIsWorkshop ? 'Solo tú apruebas esta Workshop. El envío queda en cola para 10:00 AM o 5:00 PM.' : selectedIsJF017Warmup ? 'Victoria prepara, revisa y aprueba. El destino y horario se toman de la campaña configurada.' : 'Esto es lo que la persona revisora aprobará antes del envío.'}</p>
                       </div>
-                      {whatsAppPreview?.destination && (
+                      {selectedIsLive ? (
+                        <span className="rounded-full bg-sky-600/10 px-2.5 py-1 text-xs font-bold text-sky-700 dark:text-sky-400">
+                          GRUPOS · {livePreview?.groups?.length || 0} grupos
+                        </span>
+                      ) : whatsAppPreview?.destination && (
                         <span className="rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">
                           {whatsAppPreview.destination.groupName}
                         </span>
@@ -1073,8 +1422,8 @@ export default function CopyCenterDashboard() {
                       ) : (
                         <div className="mx-auto flex min-h-56 max-w-md flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/70 p-6 text-center dark:border-slate-700 dark:bg-white/5">
                           <ImageIcon size={34} className="text-slate-400" />
-                          <p className="mt-3 font-bold">Falta el contenido del calentamiento</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Puedes subir un flyer o un video corto. Después conectaremos aquí la generación visual por IA/layers.</p>
+                          <p className="mt-3 font-bold">{selectedIsLive ? 'Falta el flyer final del Live' : 'Falta el contenido del calentamiento'}</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedIsLive ? 'Selecciona una de las plantillas como referencia y sube aquí el flyer final. Los PNG recibidos no tienen capas editables.' : 'Puedes subir un flyer o un video corto.'}</p>
                         </div>
                       )}
 
@@ -1096,10 +1445,22 @@ export default function CopyCenterDashboard() {
                         </label>
 
                         <div className="text-right text-xs text-slate-500 dark:text-slate-400">
-                          <p><strong>Instancia:</strong> {whatsAppPreview?.destination?.instanceName || 'WORKSHOP'}</p>
-                          <p><strong>Grupo:</strong> {whatsAppPreview?.destination?.groupName || 'PRUEBA_VICTORIA'}</p>
-                          {selectedIsScheduledWarmup && <p><strong>Próximo espacio:</strong> {displayScheduledDateTime(whatsAppPreview?.schedule?.nextSlot || null, whatsAppPreview?.schedule?.timezone || 'America/Mexico_City')}</p>}
-                          {selectedIsScheduledWarmup && <p><strong>Horarios:</strong> 10:00 AM · 5:00 PM</p>}
+                          {selectedIsLive ? (
+                            <>
+                              <p><strong>Instancia:</strong> GRUPOS</p>
+                              <p><strong>Grupos:</strong> {livePreview?.groups?.length || 0}</p>
+                              <p><strong>Fecha:</strong> {displayDate(livePreview?.settings?.live_date || selected.due_date)}</p>
+                              <p><strong>Día anterior:</strong> 8:30–10:30 AM</p>
+                              <p><strong>Día del Live:</strong> 8:00–10:00 AM</p>
+                            </>
+                          ) : (
+                            <>
+                              <p><strong>Instancia:</strong> {whatsAppPreview?.destination?.instanceName || 'WORKSHOP'}</p>
+                              <p><strong>Grupo:</strong> {whatsAppPreview?.destination?.groupName || 'PRUEBA_VICTORIA'}</p>
+                              {selectedIsScheduledWarmup && <p><strong>Próximo espacio:</strong> {displayScheduledDateTime(whatsAppPreview?.schedule?.nextSlot || null, whatsAppPreview?.schedule?.timezone || 'America/Mexico_City')}</p>}
+                              {selectedIsScheduledWarmup && <p><strong>Horarios:</strong> 10:00 AM · 5:00 PM</p>}
+                            </>
+                          )}
                           {whatsAppPreview?.asset && <p><strong>Contenido:</strong> {whatsAppPreview.asset.asset_type === 'video' ? 'Video' : 'Imagen'}</p>}
                         </div>
                       </div>
@@ -1111,8 +1472,8 @@ export default function CopyCenterDashboard() {
               </div>
 
               <aside className="space-y-4">
-                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : selectedIsCourse ? 'Victoria · exclusiva Cursos' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">{selectedIsScheduledWarmup ? 'Programación' : 'Entrega'}</dt><dd className="font-semibold">{selectedIsScheduledWarmup && !selected.due_date ? 'Se asigna al aprobar · 10 AM / 5 PM' : displayDate(selected.due_date)}</dd></div></dl></div>
-                <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.06] p-4 text-sm">
+                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsLive ? 'Úrsula · exclusiva Lives' : selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : selectedIsCourse ? 'Victoria · exclusiva Cursos' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">{selectedIsLive || selectedIsScheduledWarmup ? 'Programación' : 'Entrega'}</dt><dd className="font-semibold">{selectedIsLive ? 'Día anterior 8:30–10:30 · Día del Live 8:00–10:00' : selectedIsScheduledWarmup && !selected.due_date ? 'Se asigna al aprobar · 10 AM / 5 PM' : displayDate(selected.due_date)}</dd></div></dl></div>
+                {!selectedIsLive && <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.06] p-4 text-sm">
                   <p className="text-xs font-bold uppercase tracking-wider text-violet-500">Checklist AIDA</p>
                   <div className="mt-3 space-y-2">
                     {COPY_FRAMEWORK_AIDA.map((stage, index) => (
@@ -1122,7 +1483,7 @@ export default function CopyCenterDashboard() {
                       </div>
                     ))}
                   </div>
-                </div>
+                </div>}
                 <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Publicación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Tema</dt><dd className="font-semibold">{selected.product_topic}</dd></div><div><dt className="text-foreground/45">Canales</dt><dd className="font-semibold">{selected.channels.join(', ')}</dd></div><div><dt className="text-foreground/45">Objetivo</dt><dd className="font-semibold">{selected.objective}</dd></div><div><dt className="text-foreground/45">Tono</dt><dd className="font-semibold">{selected.tone}</dd></div></dl></div>
                 {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> Requiere contenido visual</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
               </aside>
@@ -1132,10 +1493,11 @@ export default function CopyCenterDashboard() {
               {(selected.generated_copy || selected.final_copy || editorCopy) && <button onClick={() => void copyText()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border-color px-4 font-semibold"><Clipboard size={17} /> Copiar</button>}
               {canWorkSelected && ['pending', 'changes_requested'].includes(selected.status) && <button disabled={working} onClick={() => void generateDraft()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 font-semibold text-white disabled:opacity-50">{working ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />} Generar con IA</button>}
               {canWorkSelected && ['pending', 'draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void saveDraft()} className="min-h-11 rounded-xl border border-brand-orange px-4 font-semibold text-brand-orange disabled:opacity-50">Guardar borrador</button>}
-              {canWorkSelected && ['draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void sendToReview()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-orange px-4 font-semibold text-white disabled:opacity-50"><Send size={17} /> {selectedIsWorkshop || selectedIsCourse ? 'Enviar a mi revisión' : 'Enviar a revisión'}</button>}
+              {canWorkSelected && ['draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void sendToReview()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-orange px-4 font-semibold text-white disabled:opacity-50"><Send size={17} /> {selectedIsLive || selectedIsWorkshop || selectedIsCourse ? 'Enviar a mi revisión' : 'Enviar a revisión'}</button>}
               {canReviewSelected && selected.status === 'review' && <button disabled={working} onClick={() => void reviewRequest('changes_requested')} className="min-h-11 rounded-xl border border-rose-500 px-4 font-semibold text-rose-500 disabled:opacity-50">Solicitar cambios</button>}
-              {canReviewSelected && selected.status === 'review' && selectedIsScheduledWarmup && <button disabled={working || !whatsAppPreview?.asset?.public_url} onClick={() => void approveAndScheduleWhatsApp()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar y programar</button>}
-              {canReviewSelected && selected.status === 'review' && !selectedIsScheduledWarmup && <button disabled={working} onClick={() => void reviewRequest('approved')} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar</button>}
+              {canReviewSelected && selected.status === 'review' && selectedIsLive && <button disabled={working || !whatsAppPreview?.asset?.public_url || !livePreview?.groups?.length} onClick={() => void approveAndScheduleLive()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-sky-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar y programar Live</button>}
+              {canReviewSelected && selected.status === 'review' && !selectedIsLive && selectedIsScheduledWarmup && <button disabled={working || !whatsAppPreview?.asset?.public_url} onClick={() => void approveAndScheduleWhatsApp()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar y programar</button>}
+              {canReviewSelected && selected.status === 'review' && !selectedIsLive && !selectedIsScheduledWarmup && <button disabled={working} onClick={() => void reviewRequest('approved')} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar</button>}
               {(canReviewSelected || canWorkSelected) && selected.status === 'approved' && <button disabled={working} onClick={() => void markPublished()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-cyan-600 px-4 font-semibold text-white disabled:opacity-50"><Check size={17} /> Marcar publicado</button>}
             </div>
           </div>

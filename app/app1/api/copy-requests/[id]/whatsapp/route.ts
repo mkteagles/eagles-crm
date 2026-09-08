@@ -73,6 +73,12 @@ function isCourseCopy(item: CopyRequest) {
   return item.category === 'course' && !topic.includes('workshop')
 }
 
+function isLiveCopy(item: CopyRequest) {
+  return item.objective === 'Invitación a live'
+    || normalizeText(item.product_topic || '').includes('live')
+    || normalizeText(item.title || '').includes('live')
+}
+
 function isJF017OctoberWarmup(item: CopyRequest) {
   const topic = normalizeText(item.product_topic || '')
   return item.campaign_month === '2026-10'
@@ -108,20 +114,27 @@ async function getSessionContext(id: string) {
   }
 
   const item = copyRequest as CopyRequest
-  const isAdmin = profile?.role === 'admin'
   const userEmail = String(profile?.email || authData.user.email || '').trim().toLowerCase()
   const workshopOnlyMarcos = isWorkshopOctober(item)
   const courseOnlyVictoria = isCourseCopy(item)
+  const liveOnlyUrsula = isLiveCopy(item)
   const normalizedUserName = normalizeText(String(profile?.full_name || ''))
+  const isMarcos = userEmail === WORKSHOP_APPROVER_EMAIL || normalizedUserName.includes('marcos')
   const isVictoria = normalizedUserName.includes(COURSE_APPROVER_NAME)
-  const canWork = isAdmin
-    || (workshopOnlyMarcos ? userEmail === WORKSHOP_APPROVER_EMAIL
-      : courseOnlyVictoria ? isVictoria
-        : item.assigned_to === authData.user.id || item.requested_by === authData.user.id)
-  const canReview = isAdmin
-    || (workshopOnlyMarcos ? userEmail === WORKSHOP_APPROVER_EMAIL
-      : courseOnlyVictoria ? isVictoria
-        : item.reviewer_id === authData.user.id)
+  const isUrsula = userEmail === 'ursula@eagles.com' || normalizedUserName.includes('ursula')
+  const isGenericAdmin = profile?.role === 'admin' && !isMarcos && !isVictoria && !isUrsula
+  const canWork = liveOnlyUrsula
+    ? isUrsula
+    : isGenericAdmin
+      || (workshopOnlyMarcos ? isMarcos
+        : courseOnlyVictoria ? isVictoria
+          : item.assigned_to === authData.user.id || item.requested_by === authData.user.id)
+  const canReview = liveOnlyUrsula
+    ? isUrsula
+    : isGenericAdmin
+      || (workshopOnlyMarcos ? isMarcos
+        : courseOnlyVictoria ? isVictoria
+          : item.reviewer_id === authData.user.id)
 
   return {
     supabase,
@@ -131,6 +144,7 @@ async function getSessionContext(id: string) {
     canReview,
     workshopOnlyMarcos,
     courseOnlyVictoria,
+    liveOnlyUrsula,
     userEmail,
   }
 }
@@ -236,12 +250,13 @@ export async function GET(
 
   try {
     const admin = createAdminClient()
-    const campaignCode = getWhatsAppCampaignCode(session.item)
+    const liveMode = isLiveCopy(session.item)
+    const campaignCode = liveMode ? null : getWhatsAppCampaignCode(session.item)
     const setting = campaignCode ? await getCampaignSetting(admin, campaignCode) : null
-    const destinationCode = setting?.target_group_code || 'PRUEBA_VICTORIA'
+    const destinationCode = liveMode ? null : (setting?.target_group_code || 'PRUEBA_VICTORIA')
     const [asset, group, nextSlotResult] = await Promise.all([
       getSelectedAsset(admin, id),
-      getConfiguredGroup(admin, destinationCode),
+      destinationCode ? getConfiguredGroup(admin, destinationCode) : Promise.resolve(null),
       setting
         ? admin.rpc('next_whatsapp_campaign_slot', { p_campaign_code: setting.code })
         : Promise.resolve({ data: null, error: null }),
