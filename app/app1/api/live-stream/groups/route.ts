@@ -37,7 +37,8 @@ export async function GET() {
         name,
         group_jid,
         purpose,
-        whatsapp_instances!inner (
+        is_active,
+        whatsapp_instances (
           code,
           instance_name,
           name,
@@ -45,16 +46,33 @@ export async function GET() {
         )
       `)
       .eq('is_active', true)
-      .eq('purpose', 'live')
-      .eq('whatsapp_instances.code', 'GRUPOS')
-      .eq('whatsapp_instances.is_active', true)
       .order('name', { ascending: true })
 
     if (error) throw error
 
+    // Evitamos depender de filtros PostgREST sobre la relación, porque según
+    // cómo quedó registrada la instancia/grupo pueden devolver 0 filas aunque
+    // el grupo exista. Filtramos aquí de forma robusta.
+    const TEST_GROUP_JID = '120363409439960903@g.us'
+    const groups = (data || []).filter((row) => {
+      const relation = Array.isArray(row.whatsapp_instances)
+        ? row.whatsapp_instances[0]
+        : row.whatsapp_instances
+
+      const instanceCode = normalizeText(String(relation?.code || ''))
+      const instanceName = normalizeText(String(relation?.instance_name || ''))
+      const isGroupsInstance = (instanceCode === 'grupos' || instanceName === 'grupos') && relation?.is_active !== false
+
+      const purpose = normalizeText(String(row.purpose || ''))
+      const code = normalizeText(String(row.code || ''))
+      const isLiveGroup = purpose === 'live' || code.startsWith('live_') || row.group_jid === TEST_GROUP_JID
+
+      return isGroupsInstance && isLiveGroup
+    })
+
     return NextResponse.json({
       instance: 'GRUPOS',
-      groups: (data || []).map((row) => ({
+      groups: groups.map((row) => ({
         code: row.code,
         name: row.name,
         groupJid: row.group_jid,
