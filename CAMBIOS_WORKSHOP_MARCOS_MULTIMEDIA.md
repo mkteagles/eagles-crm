@@ -4,7 +4,7 @@ Cambios incluidos:
 
 - La Workshop de octubre se asigna para revisión a `marcosc@eagles.com`.
 - La aprobación del endpoint de WhatsApp para esta Workshop queda bloqueada exclusivamente a ese correo, incluso si otro usuario tiene rol admin.
-- Los demás copys conservan su revisor configurado (flujo Úrsula + Victoria).
+- Los Cursos quedan en flujo exclusivo de Victoria; Úrsula no ve Workshop ni Cursos.
 - La vista previa de WhatsApp acepta imagen o video.
 - Formatos: JPG, PNG, WEBP, MP4 y MOV.
 - Imágenes: máximo 10 MB. Videos: máximo 16 MB.

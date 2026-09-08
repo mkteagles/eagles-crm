@@ -1,0 +1,147 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eagles-copy-generate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        1360
+      ],
+      "id": "cc1f70f8-3044-46ca-adc6-54feafeae1e3",
+      "name": "Webhook - CRM Copys",
+      "webhookId": "a559a679-43b2-49f6-a58d-18b1b56b3444"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json || {};\nconst headers = input.headers || {};\nconst body = input.body || {};\n\n// Conserva el mismo secreto que ya usa el CRM/Vercel.\nconst EXPECTED_SECRET = 'eagles2026';\nconst receivedSecret = String(headers['x-eagles-secret'] || headers['X-Eagles-Secret'] || '');\n\nif (!receivedSecret || receivedSecret !== EXPECTED_SECRET) {\n  throw new Error('Solicitud no autorizada');\n}\n\nconst request = body.copy_request || {};\nconst clean = (value) => String(value || '').trim();\nconst normalize = (value) =>\n  clean(value).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n\nconst channels = Array.isArray(request.channels) && request.channels.length\n  ? request.channels.map(clean).filter(Boolean)\n  : ['Facebook', 'Instagram'];\n\nif (!clean(request.product_topic)) {\n  throw new Error('Falta product_topic');\n}\n\nconst categoryLabels = {\n  social: 'redes sociales',\n  taller: 'servicios del taller de transmisiones',\n  course: 'curso o capacitación de transmisiones'\n};\n\nconst facts = [\n  clean(request.brief),\n  clean(request.call_to_action) ? `CTA solicitado: ${clean(request.call_to_action)}` : '',\n  clean(request.audience) ? `Audiencia: ${clean(request.audience)}` : '',\n  clean(request.image_brief) ? `Brief visual: ${clean(request.image_brief)}` : ''\n].filter(Boolean).join('\\n');\n\nconst normalizedTopic = normalize(request.product_topic);\nconst normalizedObjective = normalize(request.objective);\nconst normalizedCampaign = normalize(\n  request.campaign_code || body.campaign_code || body.copy_request?.campaign_code\n);\n\nconst isWorkshopConvencionales =\n  normalizedCampaign.includes('workshop_octubre') ||\n  (normalizedTopic.includes('workshop') && normalizedTopic.includes('convencional'));\n\nconst isJF017 =\n  normalizedCampaign.includes('jf017') ||\n  normalizedTopic.includes('jf017') ||\n  (normalizedTopic.includes('cvt') && normalizedTopic.includes('017'));\n\nconst isWhatsAppWarmup =\n  channels.length === 1 &&\n  channels[0].toLowerCase() === 'whatsapp' &&\n  normalizedObjective.includes('calentamiento');\n\nconst hasSocialChannel = channels.some((channel) =>\n  ['facebook', 'instagram', 'tiktok'].includes(channel.toLowerCase())\n);\n\n// ============================================================\n// WORKSHOP OCTUBRE · NO CAMBIAR\n// ============================================================\nconst WORKSHOP_GROUP_URL =\n  'https://chat.whatsapp.com/Gu955o9muhZ2eJGOaRw0wS?s=cl&p=i&mlu=4&ilr=4';\nconst WORKSHOP_HOTMART_URL =\n  'https://pay.hotmart.com/U107474945W?bid=1788557927997';\n\n// ============================================================\n// CURSO CVT JF017 · OCTUBRE\n// ============================================================\nconst JF017_DEFAULT_CTA = '📲 Más información: 449 110 7766';\nconst jf017CTA = clean(request.call_to_action) || JF017_DEFAULT_CTA;\n\nlet structureRules = '';\n\n// ---------- WORKSHOP ----------\nif (isWorkshopConvencionales && isWhatsAppWarmup) {\n  structureRules = `\nESTRUCTURA OBLIGATORIA PARA CALENTAMIENTO DE WORKSHOP EN WHATSAPP:\n1. Abre con UNA sola línea cercana y energética. Puedes usar “⚙️ ¡CARNALITOS!” o una variante natural.\n2. Da valor en UNA sola frase corta sobre un problema, aprendizaje o punto técnico de transmisiones convencionales.\n3. Coloca inmediatamente este bloque, cada dato en su propia línea:\n📅 2 y 3 de octubre\n💻 Online en vivo vía Zoom\n💲 17 USD\n4. Cierra directamente con:\n👉 Inscríbete aquí:\n${WORKSHOP_HOTMART_URL}\n5. NO uses el link del grupo de WhatsApp dentro del calentamiento.\n6. Máximo aproximado: 70 palabras antes del enlace. Evita introducciones largas, repeticiones y relleno.`;\n} else if (isWorkshopConvencionales && hasSocialChannel) {\n  structureRules = `\nESTRUCTURA OBLIGATORIA PARA COPY DE REDES DE LA WORKSHOP:\n1. Primera línea: gancho o pregunta basada en un problema real del técnico/taller.\n2. Segundo párrafo: beneficio concreto de la Workshop en 1 o 2 frases.\n3. Cierre con invitación clara a entrar al grupo.\n4. Últimas dos líneas exactamente:\n🔥 Únete al grupo y recibe toda la información para asegurar tu acceso:\n👉 ${WORKSHOP_GROUP_URL}\n5. NO pongas el link de Hotmart en el copy de captación para redes.\n6. No satures con todos los datos del evento; el objetivo es llevarlos al grupo.`;\n}\n\n// ---------- CURSO CVT JF017 ----------\nelse if (isJF017 && isWhatsAppWarmup) {\n  structureRules = `\nESTRUCTURA OBLIGATORIA PARA CALENTAMIENTO DEL CURSO CVT JF017 EN WHATSAPP:\n1. Abre con UNA sola línea breve y llamativa. Puede ser una pregunta técnica, “⚙️ ¡CARNALITOS!” o una frase de identificación con el taller.\n2. Habla de UN SOLO punto técnico por mensaje. Mantén la explicación en 1 o 2 frases cortas.\n3. Si el brief no propone un tema técnico concreto, puedes usar SOLO uno de estos temas confirmados:\n   - funcionamiento de la CVT JF017/JF017E;\n   - poleas primaria/secundaria y uso de cadena;\n   - cuerpo de válvulas y control de presión;\n   - códigos P17F0 o P17F1;\n   - códigos P0841, P0744, P0776, P0965, P0715 o P0720;\n   - temperatura y deterioro del aceite;\n   - TCM, actualización de software o revisión de componentes antes de condenar la transmisión.\n4. Después del valor técnico coloca este bloque compacto:\n📅 16 y 17 de octubre\n💻 100% online\n🕚 Vie 11:00 a.m.–5:00 p.m. | Sáb 11:00 a.m.–3:00 p.m. MX\n💲 $2,997 MXN · Aparta con $1,500\n5. Si encaja naturalmente, puedes mencionar en UNA sola línea: incluye grabaciones, manuales de apoyo y calibraciones de regalo.\n6. Cierra con este CTA, respetándolo literalmente:\n${jf017CTA}\n7. Máximo aproximado: 85 palabras antes del CTA.\n8. NO inventes link de pago ni link de grupo si no viene en CTA solicitado.`;\n} else if (isJF017 && hasSocialChannel) {\n  structureRules = `\nESTRUCTURA OBLIGATORIA PARA COPY DE REDES DEL CURSO CVT JF017:\n1. Primera línea: gancho o pregunta sobre un dolor técnico real relacionado con CVT/JF017.\n2. Segundo párrafo: beneficio concreto del curso en 1 o 2 frases.\n3. Puedes mencionar máximo 2 datos del evento dentro del cuerpo; evita saturar.\n4. Cierra con el CTA recibido. Si no se recibió CTA, usa exactamente:\n${JF017_DEFAULT_CTA}\n5. No inventes enlaces.\n6. Mantén el copy corto, directo y listo para Facebook, Instagram o TikTok.`;\n}\n\nconst systemPrompt = `Eres copywriter de Eagles Digital Solutions y Eagles Gear Solutions.\n\nEscribe copys breves, claros, directos y listos para publicar en español de México. La audiencia principal son técnicos, transmisionistas y dueños de taller. Usa emojis con moderación y un llamado a la acción sencillo.\n\nREGLAS OBLIGATORIAS:\n- Usa únicamente los datos recibidos y las reglas específicas de campaña incluidas abajo.\n- Nunca inventes precios, fechas, horarios, lugares, promociones, garantías, enlaces ni disponibilidad.\n- Si un dato no viene y tampoco está confirmado en las reglas de campaña, omítelo.\n- No prometas resultados económicos.\n- En servicios de taller no des un diagnóstico definitivo por mensaje.\n- Si hay varios canales, entrega una sola versión que funcione bien en los canales solicitados, salvo que se pida explícitamente otra cosa.\n- Para WhatsApp usa tono cercano; “carnalitos” puede usarse cuando sea un calentamiento para grupo.\n- Mantén párrafos cortos y separaciones visuales.\n- Respeta los enlaces y números literalmente.\n- No expliques tu proceso.\n- Devuelve únicamente JSON válido.${structureRules}\n\nFORMATO:\n{\"copy\":\"texto listo para publicar\",\"image_prompt\":\"prompt visual o cadena vacía\"}`;\n\nconst userPrompt = `Crea un copy con estos datos:\nCategoría: ${categoryLabels[request.category] || clean(request.category) || 'redes sociales'}\nCampaña: ${clean(request.campaign_code || body.campaign_code)}\nTema: ${clean(request.product_topic)}\nObjetivo: ${clean(request.objective) || 'Venta'}\nCanales: ${channels.join(', ')}\nTono: ${clean(request.tone) || 'Directo y profesional'}\nRequiere imagen: ${request.needs_image === true ? 'sí' : 'no'}\nDatos confirmados:\n${facts || 'No hay datos adicionales; trabaja solamente con el tema y las reglas confirmadas de campaña.'}`;\n\nreturn [{\n  json: {\n    request_id: clean(body.request_id),\n    campaign_detected: isWorkshopConvencionales\n      ? 'WORKSHOP_OCTUBRE'\n      : isJF017\n        ? 'CURSO_JF017_OCTUBRE'\n        : 'GENERAL',\n    ollama_request: {\n      model: 'qwen2.5:3b',\n      stream: false,\n      keep_alive: '30m',\n      format: {\n        type: 'object',\n        properties: {\n          copy: { type: 'string' },\n          image_prompt: { type: 'string' }\n        },\n        required: ['copy', 'image_prompt']\n      },\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: userPrompt }\n      ],\n      options: {\n        temperature: 0.35,\n        num_predict: 650,\n        num_ctx: 4096\n      }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        1360
+      ],
+      "id": "cd9b9142-23ab-409e-8c4f-8553914c13bd",
+      "name": "Validar y preparar copy"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.ollama_request) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2736,
+        1360
+      ],
+      "id": "4b165e15-c6c7-4c86-afda-fab2957ecd35",
+      "name": "Ollama qwen2.5:3b"
+    },
+    {
+      "parameters": {
+        "jsCode": "let content = String($json?.message?.content ?? $json?.response ?? '').trim();\ncontent = content.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '').trim();\n\nlet parsed = null;\ntry {\n  parsed = JSON.parse(content);\n} catch {\n  const start = content.indexOf('{');\n  const end = content.lastIndexOf('}');\n  if (start !== -1 && end > start) {\n    try { parsed = JSON.parse(content.slice(start, end + 1)); } catch { parsed = null; }\n  }\n}\n\nconst copy = String(parsed?.copy || content || '').trim();\nif (!copy) throw new Error('Ollama no devolvió un copy');\n\nreturn [{\n  json: {\n    copy,\n    image_prompt: String(parsed?.image_prompt || '').trim(),\n    execution_id: String($execution.id)\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2992,
+        1360
+      ],
+      "id": "ecdc59cf-4d83-490a-a647-f8d76d45ac07",
+      "name": "Limpiar respuesta"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        3248,
+        1360
+      ],
+      "id": "1add1670-a40d-4b4b-a7d1-14c8e79d36d0",
+      "name": "Responder al CRM"
+    }
+  ],
+  "connections": {
+    "Webhook - CRM Copys": {
+      "main": [
+        [
+          {
+            "node": "Validar y preparar copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y preparar copy": {
+      "main": [
+        [
+          {
+            "node": "Ollama qwen2.5:3b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama qwen2.5:3b": {
+      "main": [
+        [
+          {
+            "node": "Limpiar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpiar respuesta": {
+      "main": [
+        [
+          {
+            "node": "Responder al CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "a6400dc370b5da48354b6b00dfe1cde88e60c37bd4fd182d3cc7c29da7f28053"
+  },
+  "name": "Eagles · Centro de Copys · Ollama · Consolidado",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -128,6 +128,13 @@ function normalizeName(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 }
 
+function isWorkshopCopy(item: Pick<CopyRequest, 'product_topic'> | null | undefined) {
+  return Boolean(item && normalizeName(item.product_topic || '').includes('workshop'))
+}
+
+function isCourseCopy(item: Pick<CopyRequest, 'category' | 'product_topic'> | null | undefined) {
+  return Boolean(item && item.category === 'course' && !isWorkshopCopy(item))
+}
 
 function isOctoberWorkshop(item: Pick<CopyRequest, 'campaign_month' | 'product_topic'> | null | undefined) {
   if (!item) return false
@@ -257,22 +264,38 @@ export default function CopyCenterDashboard() {
     setSelected(item)
   }
 
+  const currentUserEmail = user?.email?.trim().toLowerCase() || ''
+  const currentUserName = normalizeName(user?.full_name || '')
+  const currentIsMarcos = currentUserEmail === 'marcosc@eagles.com' || currentUserName.includes('marcos')
+  const currentIsVictoria = currentUserName.includes('victoria')
+  const currentIsUrsula = currentUserName.includes('ursula') || currentUserEmail === 'ursula@eagles.com'
+
+  const visibleRequests = useMemo(() => {
+    if (!user) return []
+    // Las reglas personales tienen prioridad aunque el perfil tenga role=admin.
+    if (currentIsUrsula) return []
+    if (currentIsMarcos) return requests.filter((item) => isWorkshopCopy(item))
+    if (currentIsVictoria) return requests.filter((item) => isCourseCopy(item))
+    if (user.role === 'admin') return requests
+    return requests
+  }, [currentIsMarcos, currentIsUrsula, currentIsVictoria, requests, user])
+
   const counts = useMemo(() => ({
-    active: requests.filter((item) => !['approved', 'published'].includes(item.status)).length,
-    review: requests.filter((item) => item.status === 'review').length,
-    approved: requests.filter((item) => item.status === 'approved').length,
-    image: requests.filter((item) => item.needs_image && item.status !== 'published').length,
-  }), [requests])
+    active: visibleRequests.filter((item) => !['approved', 'published'].includes(item.status)).length,
+    review: visibleRequests.filter((item) => item.status === 'review').length,
+    approved: visibleRequests.filter((item) => item.status === 'approved').length,
+    image: visibleRequests.filter((item) => item.needs_image && item.status !== 'published').length,
+  }), [visibleRequests])
 
   const filtered = useMemo(() => {
     const normalizedQuery = normalizeName(query.trim())
-    return requests.filter((item) => {
+    return visibleRequests.filter((item) => {
       const matchesStatus = statusFilter === 'all' || item.status === statusFilter
       const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter
       const searchable = normalizeName(`${item.title} ${item.product_topic} ${item.brief}`)
       return matchesStatus && matchesCategory && (!normalizedQuery || searchable.includes(normalizedQuery))
     })
-  }, [categoryFilter, query, requests, statusFilter])
+  }, [categoryFilter, query, statusFilter, visibleRequests])
 
   const openCreate = (
     campaignMonth?: string,
@@ -282,7 +305,6 @@ export default function CopyCenterDashboard() {
     workshopMode?: 'social' | 'warmup',
     presetCta?: string,
   ) => {
-    const ursula = users.find((item) => normalizeName(item.full_name).includes('ursula'))
     const victoria = users.find((item) => normalizeName(item.full_name).includes('victoria'))
     const marcos = users.find((item) => (
       normalizeName(item.full_name).includes('marcos')
@@ -291,6 +313,10 @@ export default function CopyCenterDashboard() {
     const campaign = COPY_CAMPAIGNS.find((item) => item.value === campaignMonth)
     const firstTopic = presetTopic || campaign?.topics[0] || ''
     const isWorkshopPreset = preferredOwner === 'marcos' && Boolean(presetTopic)
+    const normalizedFirstTopic = normalizeName(firstTopic)
+    const isCoursePreset = Boolean(firstTopic)
+      && !isWorkshopPreset
+      && (Boolean(campaign) || normalizedFirstTopic.includes('curso') || normalizedFirstTopic.includes('jf017'))
     const isSocialWorkshop = isWorkshopPreset && workshopMode === 'social'
     const isWarmupWorkshop = isWorkshopPreset && workshopMode === 'warmup'
 
@@ -315,10 +341,16 @@ export default function CopyCenterDashboard() {
       product_topic: firstTopic,
       title: firstTopic ? `Copys · ${firstTopic}` : '',
       brief: presetBrief || '',
-      assigned_to: preferredOwner === 'marcos'
+      assigned_to: isWorkshopPreset
         ? marcos?.id || user?.id || ''
-        : ursula?.id || '',
-      reviewer_id: isWorkshopPreset ? (marcos?.id || user?.id || '') : (victoria?.id || ''),
+        : isCoursePreset
+          ? victoria?.id || ''
+          : '',
+      reviewer_id: isWorkshopPreset
+        ? marcos?.id || user?.id || ''
+        : isCoursePreset
+          ? victoria?.id || ''
+          : '',
     })
     setShowAdvanced(false)
     setShowCreate(true)
@@ -328,7 +360,6 @@ export default function CopyCenterDashboard() {
     course: (typeof COPY_FEATURED_COURSES)[number],
     mode: 'social' | 'warmup',
   ) => {
-    const ursula = users.find((item) => normalizeName(item.full_name).includes('ursula'))
     const victoria = users.find((item) => normalizeName(item.full_name).includes('victoria'))
     const isWarmup = mode === 'warmup'
 
@@ -346,7 +377,7 @@ export default function CopyCenterDashboard() {
       call_to_action: isWarmup ? course.warmupCta : course.socialCta,
       needs_image: true,
       image_brief: course.imageBrief,
-      assigned_to: ursula?.id || '',
+      assigned_to: victoria?.id || '',
       reviewer_id: victoria?.id || '',
       due_date: '',
     })
@@ -396,6 +427,23 @@ export default function CopyCenterDashboard() {
         ? 'taller'
         : 'social'
     const category = showAdvanced ? form.category : inferredCategory
+    const isWorkshopRequest = normalizeName(productTopic).includes('workshop')
+    const isCourseRequest = category === 'course' && !isWorkshopRequest
+    const marcosProfile = users.find((item) => (
+      normalizeName(item.full_name).includes('marcos')
+      || item.email.trim().toLowerCase() === 'marcosc@eagles.com'
+    ))
+    const victoriaProfile = users.find((item) => normalizeName(item.full_name).includes('victoria'))
+    const effectiveAssignedTo = isWorkshopRequest
+      ? marcosProfile?.id || user.id
+      : isCourseRequest
+        ? victoriaProfile?.id || form.assigned_to || null
+        : form.assigned_to || null
+    const effectiveReviewerId = isWorkshopRequest
+      ? marcosProfile?.id || user.id
+      : isCourseRequest
+        ? victoriaProfile?.id || form.reviewer_id || null
+        : form.reviewer_id || null
     const automaticTitle = `${form.objective} · ${productTopic}`
     const automaticBrief = form.brief.trim()
       || `Crear un copy de ${form.objective.toLowerCase()} para ${productTopic}. Usar solamente información confirmada y omitir cualquier dato faltante.`
@@ -411,10 +459,8 @@ export default function CopyCenterDashboard() {
         audience: form.audience.trim() || null,
         call_to_action: form.call_to_action.trim() || null,
         image_brief: form.needs_image ? form.image_brief.trim() || null : null,
-        assigned_to: form.assigned_to || null,
-        reviewer_id: (form.campaign_month === '2026-10' && normalizeName(productTopic).includes('workshop'))
-          ? users.find((item) => item.email.trim().toLowerCase() === 'marcosc@eagles.com')?.id || user.id
-          : form.reviewer_id || null,
+        assigned_to: effectiveAssignedTo,
+        reviewer_id: effectiveReviewerId,
         due_date: (
           form.campaign_month === '2026-10'
           && form.channels.includes('WhatsApp')
@@ -451,7 +497,7 @@ export default function CopyCenterDashboard() {
       const generatedRequest = payload.request as CopyRequest
       setSelected(generatedRequest)
       setEditorCopy(generatedRequest.final_copy || generatedRequest.generated_copy || '')
-      setNotice(isOctoberWorkshop(generatedRequest) ? 'Borrador listo. La revisión de esta Workshop queda contigo.' : 'Borrador listo. Úrsula solo necesita revisarlo y enviarlo a Victoria.')
+      setNotice(isOctoberWorkshop(generatedRequest) ? 'Borrador listo. La revisión de esta Workshop queda contigo.' : isCourseCopy(generatedRequest) ? 'Borrador listo. Victoria lleva este curso de inicio a fin.' : 'Borrador listo.')
     } catch (generateError) {
       setNotice(
         `La solicitud quedó guardada. ${generateError instanceof Error ? generateError.message : 'No se pudo generar el borrador.'}`,
@@ -481,7 +527,7 @@ export default function CopyCenterDashboard() {
       if (!response.ok) throw new Error(payload.error || 'No se pudo generar el borrador.')
       setSelected(payload.request as CopyRequest)
       setEditorCopy(payload.request.final_copy || payload.request.generated_copy || '')
-      setNotice(isOctoberWorkshop(selected) ? 'Borrador generado. Revísalo y envíalo a tu aprobación.' : 'Borrador generado. Revísalo antes de enviarlo a Victoria.')
+      setNotice(isOctoberWorkshop(selected) || isCourseCopy(selected) ? 'Borrador generado. Revísalo y envíalo a tu propia revisión.' : 'Borrador generado. Revísalo antes de enviarlo a aprobación.')
       await loadData()
     } catch (generateError) {
       setNotice(generateError instanceof Error ? generateError.message : 'No se pudo generar el borrador.')
@@ -516,7 +562,7 @@ export default function CopyCenterDashboard() {
         status: 'review',
         feedback: null,
       })
-      setNotice(isOctoberWorkshop(selected) ? 'Copy enviado a tu revisión.' : 'Copy enviado a revisión de Victoria.')
+      setNotice(isOctoberWorkshop(selected) || isCourseCopy(selected) ? 'Copy enviado a tu revisión.' : 'Copy enviado a revisión.')
     } catch (sendError) {
       setNotice(sendError instanceof Error ? sendError.message : 'No se pudo enviar a revisión.')
     } finally {
@@ -625,7 +671,7 @@ export default function CopyCenterDashboard() {
       if (!finalizeResponse.ok) throw new Error(finalizePayload.error || 'No se pudo guardar el contenido.')
 
       await loadWhatsAppPreview(selected.id)
-      setNotice(isOctoberWorkshop(selected)
+      setNotice(isOctoberWorkshop(selected) || isCourseCopy(selected)
         ? `${upload.assetType === 'video' ? 'Video' : 'Imagen'} guardado. Ya puedes revisarlo en la vista previa de WhatsApp.`
         : 'Contenido guardado. La persona revisora ya puede verlo en la vista previa de WhatsApp.')
     } catch (uploadError) {
@@ -703,16 +749,28 @@ export default function CopyCenterDashboard() {
   if (!user) return <p className="py-12 text-center">No autenticado.</p>
 
   const isAdmin = user.role === 'admin'
-  const canWorkSelected = Boolean(selected && (isAdmin || selected.assigned_to === user.id || selected.requested_by === user.id))
-  const selectedIsWorkshop = isOctoberWorkshop(selected)
+  // Un admin genérico ve todo; Marcos, Victoria y Úrsula conservan su alcance personal aunque su rol técnico sea admin.
+  const isUnrestrictedAdmin = isAdmin && !currentIsMarcos && !currentIsVictoria && !currentIsUrsula
+  const selectedIsWorkshop = isWorkshopCopy(selected)
+  const selectedIsCourse = isCourseCopy(selected)
   const selectedIsWorkshopWarmup = isOctoberWorkshopWarmup(selected)
   const selectedIsJF017Warmup = isOctoberJF017Warmup(selected)
   const selectedIsScheduledWarmup = isScheduledWhatsAppWarmup(selected)
-  const currentUserEmail = user.email.trim().toLowerCase()
+  const canWorkSelected = Boolean(selected && (
+    isUnrestrictedAdmin
+    || (selectedIsWorkshop
+      ? currentIsMarcos
+      : selectedIsCourse
+        ? currentIsVictoria
+        : selected.assigned_to === user.id || selected.requested_by === user.id)
+  ))
   const canReviewSelected = Boolean(selected && (
-    selectedIsWorkshop
-      ? currentUserEmail === 'marcosc@eagles.com'
-      : isAdmin || selected.reviewer_id === user.id
+    isUnrestrictedAdmin
+    || (selectedIsWorkshop
+      ? currentIsMarcos
+      : selectedIsCourse
+        ? currentIsVictoria
+        : selected.reviewer_id === user.id)
   ))
   const normalizedFormTopic = normalizeName(form.product_topic || '')
   const formIsScheduledWarmup = form.campaign_month === '2026-10'
@@ -728,11 +786,11 @@ export default function CopyCenterDashboard() {
             <Sparkles size={16} /> Flujo creativo
           </div>
           <h1 className="text-2xl font-bold text-foreground sm:text-3xl">Centro de Copys</h1>
-          <p className="mt-1 max-w-2xl text-sm text-foreground/60">Marcos y Úrsula piden el copy en una frase · Ollama redacta · cada campaña usa su revisor asignado.</p>
+          <p className="mt-1 max-w-2xl text-sm text-foreground/60">{currentIsMarcos ? 'Workshop: tú generas, revisas, apruebas y programas.' : currentIsVictoria ? 'Cursos: tú generas, revisas, apruebas y programas los calentamientos.' : currentIsUrsula ? 'Por ahora tu espacio queda reservado para copys de Lives.' : 'Ollama redacta y cada campaña usa su responsable asignado.'}</p>
         </div>
-        <button onClick={() => openCreate()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 font-semibold text-white transition hover:bg-brand-orange-dark">
+        {(isUnrestrictedAdmin || (!currentIsMarcos && !currentIsVictoria && !currentIsUrsula)) && <button onClick={() => openCreate()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-orange px-5 py-2.5 font-semibold text-white transition hover:bg-brand-orange-dark">
           <Plus size={19} /> Nueva solicitud
-        </button>
+        </button>}
       </header>
 
       {notice && (
@@ -758,7 +816,7 @@ export default function CopyCenterDashboard() {
 
       <section className="rounded-2xl border border-border-color bg-surface p-5">
         <div className="mb-4 flex items-center gap-2"><CalendarDays className="text-brand-orange" size={20} /><h2 className="font-bold">Copys rápidos</h2></div>
-        {currentUserEmail === 'marcosc@eagles.com' && COPY_WORKSHOPS.map((workshop) => (
+        {(isUnrestrictedAdmin || currentIsMarcos) && COPY_WORKSHOPS.map((workshop) => (
           <div
             key={workshop.id}
             className="mb-3 rounded-xl border border-brand-orange/50 bg-brand-orange/10 p-4"
@@ -793,7 +851,7 @@ export default function CopyCenterDashboard() {
             </div>
           </div>
         ))}
-        {COPY_FEATURED_COURSES.map((course) => (
+        {(isUnrestrictedAdmin || currentIsVictoria) && COPY_FEATURED_COURSES.map((course) => (
           <div
             key={course.id}
             className="mb-3 rounded-xl border border-fuchsia-500/40 bg-fuchsia-500/5 p-4"
@@ -823,11 +881,18 @@ export default function CopyCenterDashboard() {
             </div>
             <div className="mt-3 flex items-center gap-3 text-xs text-foreground/55">
               <img src={course.referenceFlyer} alt="Flyer Curso CVT JF017" className="size-12 rounded-lg object-cover" />
-              <span>Úrsula prepara · Victoria revisa · prueba de WhatsApp en PRUEBA_VICTORIA · admite imagen o video.</span>
+              <span>Victoria lleva el flujo completo · prueba de WhatsApp en PRUEBA_VICTORIA · admite imagen o video.</span>
             </div>
           </div>
         ))}
-        <div className="grid gap-3 md:grid-cols-3">
+        {currentIsUrsula && (
+          <div className="rounded-xl border border-dashed border-sky-500/40 bg-sky-500/5 p-5">
+            <span className="block text-xs font-bold uppercase tracking-wider text-sky-500">Copys de Lives</span>
+            <span className="mt-1 block font-bold text-foreground">Próximamente</span>
+            <p className="mt-2 text-sm text-foreground/55">Este espacio queda reservado para que más adelante trabajes únicamente los copys de Lives. Workshop y cursos ya no aparecen en tu Centro de Copys.</p>
+          </div>
+        )}
+        {isUnrestrictedAdmin && <div className="grid gap-3 md:grid-cols-3">
           {COPY_CAMPAIGNS.filter((campaign) => campaign.showQuick !== false).map((campaign) => (
             <button key={campaign.value} onClick={() => openCreate(campaign.value)} className="rounded-xl border border-border-color p-4 text-left transition hover:border-brand-orange/60 hover:bg-brand-orange/5">
               <p className="text-xs font-bold uppercase tracking-wider text-brand-orange">{campaign.label}</p>
@@ -836,7 +901,7 @@ export default function CopyCenterDashboard() {
               </ul>
             </button>
           ))}
-        </div>
+        </div>}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-border-color bg-surface">
@@ -880,7 +945,7 @@ export default function CopyCenterDashboard() {
                 </div>
                 <div className="text-sm"><p className="text-xs text-foreground/45">Responsable</p><p className="mt-1 font-medium">{userName(users, item.assigned_to)}</p></div>
                 <div className="text-sm"><p className="text-xs text-foreground/45">Revisión</p><p className="mt-1 font-medium">{userName(users, item.reviewer_id)}</p></div>
-                <div className="text-sm sm:text-right"><p className="text-xs text-foreground/45">{isOctoberWorkshopWarmup(item) ? 'Programación' : 'Entrega'}</p><p className="mt-1 font-medium">{isOctoberWorkshopWarmup(item) && !item.due_date ? 'Al aprobar · 10 AM / 5 PM' : displayDate(item.due_date)}</p></div>
+                <div className="text-sm sm:text-right"><p className="text-xs text-foreground/45">{isScheduledWhatsAppWarmup(item) ? 'Programación' : 'Entrega'}</p><p className="mt-1 font-medium">{isScheduledWhatsAppWarmup(item) && !item.due_date ? 'Al aprobar · 10 AM / 5 PM' : displayDate(item.due_date)}</p></div>
               </button>
             ))}
           </div>
@@ -943,7 +1008,7 @@ export default function CopyCenterDashboard() {
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white/80 px-4 py-3 dark:border-white/10 dark:bg-white/5">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">Vista previa WhatsApp · Programación</p>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{selectedIsWorkshop ? 'Solo tú apruebas esta Workshop. El envío queda en cola para 10:00 AM o 5:00 PM.' : selectedIsJF017Warmup ? 'Úrsula prepara y Victoria aprueba. Durante pruebas se programa a PRUEBA_VICTORIA.' : 'Esto es lo que la persona revisora aprobará antes del envío.'}</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{selectedIsWorkshop ? 'Solo tú apruebas esta Workshop. El envío queda en cola para 10:00 AM o 5:00 PM.' : selectedIsJF017Warmup ? 'Victoria prepara, revisa y aprueba. Durante pruebas se programa a PRUEBA_VICTORIA.' : 'Esto es lo que la persona revisora aprobará antes del envío.'}</p>
                       </div>
                       {whatsAppPreview?.destination && (
                         <span className="rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">
@@ -1013,7 +1078,7 @@ export default function CopyCenterDashboard() {
               </div>
 
               <aside className="space-y-4">
-                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">{selectedIsScheduledWarmup ? 'Programación' : 'Entrega'}</dt><dd className="font-semibold">{selectedIsScheduledWarmup && !selected.due_date ? 'Se asigna al aprobar · 10 AM / 5 PM' : displayDate(selected.due_date)}</dd></div></dl></div>
+                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : selectedIsCourse ? 'Victoria · exclusiva Cursos' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">{selectedIsScheduledWarmup ? 'Programación' : 'Entrega'}</dt><dd className="font-semibold">{selectedIsScheduledWarmup && !selected.due_date ? 'Se asigna al aprobar · 10 AM / 5 PM' : displayDate(selected.due_date)}</dd></div></dl></div>
                 <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Publicación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Tema</dt><dd className="font-semibold">{selected.product_topic}</dd></div><div><dt className="text-foreground/45">Canales</dt><dd className="font-semibold">{selected.channels.join(', ')}</dd></div><div><dt className="text-foreground/45">Objetivo</dt><dd className="font-semibold">{selected.objective}</dd></div><div><dt className="text-foreground/45">Tono</dt><dd className="font-semibold">{selected.tone}</dd></div></dl></div>
                 {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> Requiere contenido visual</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
               </aside>
@@ -1023,7 +1088,7 @@ export default function CopyCenterDashboard() {
               {(selected.generated_copy || selected.final_copy || editorCopy) && <button onClick={() => void copyText()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-border-color px-4 font-semibold"><Clipboard size={17} /> Copiar</button>}
               {canWorkSelected && ['pending', 'changes_requested'].includes(selected.status) && <button disabled={working} onClick={() => void generateDraft()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-violet-600 px-4 font-semibold text-white disabled:opacity-50">{working ? <Loader2 className="animate-spin" size={17} /> : <Sparkles size={17} />} Generar con IA</button>}
               {canWorkSelected && ['pending', 'draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void saveDraft()} className="min-h-11 rounded-xl border border-brand-orange px-4 font-semibold text-brand-orange disabled:opacity-50">Guardar borrador</button>}
-              {canWorkSelected && ['draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void sendToReview()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-orange px-4 font-semibold text-white disabled:opacity-50"><Send size={17} /> {selectedIsWorkshop ? 'Enviar a mi revisión' : 'Enviar a Victoria'}</button>}
+              {canWorkSelected && ['draft', 'changes_requested'].includes(selected.status) && <button disabled={working || !editorCopy.trim()} onClick={() => void sendToReview()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-orange px-4 font-semibold text-white disabled:opacity-50"><Send size={17} /> {selectedIsWorkshop || selectedIsCourse ? 'Enviar a mi revisión' : 'Enviar a revisión'}</button>}
               {canReviewSelected && selected.status === 'review' && <button disabled={working} onClick={() => void reviewRequest('changes_requested')} className="min-h-11 rounded-xl border border-rose-500 px-4 font-semibold text-rose-500 disabled:opacity-50">Solicitar cambios</button>}
               {canReviewSelected && selected.status === 'review' && selectedIsScheduledWarmup && <button disabled={working || !whatsAppPreview?.asset?.public_url} onClick={() => void approveAndScheduleWhatsApp()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar y programar</button>}
               {canReviewSelected && selected.status === 'review' && !selectedIsScheduledWarmup && <button disabled={working} onClick={() => void reviewRequest('approved')} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50"><CheckCircle2 size={17} /> Aprobar</button>}

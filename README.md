@@ -62,8 +62,9 @@ El CRM conserva la identidad en `academy_customers`. Cada lead se enlaza mediant
 
 ## Centro de Copys
 
-Marketing incluye `/app1/marketing/copys` para coordinar solicitudes, borradores y revisiones entre Úrsula y Victoria. El flujo manual funciona sin servicios externos.
+Marketing incluye `/app1/marketing/copys` con flujos separados por responsable: Marcos lleva Workshop, Victoria lleva Cursos y Úrsula queda temporalmente con un placeholder para futuros copys de Lives. El flujo manual funciona sin servicios externos.
 
-1. Ejecuta `Migracion_Centro_Copys.sql` en Supabase del CRM.
-2. Despliega el proyecto.
-3. Para activar el botón **Generar con IA**, sigue `GUIA_CENTRO_COPYS_N8N.md` y configura las dos variables privadas de n8n en Vercel.
+1. Ejecuta `Migracion_Centro_Copys.sql` en Supabase del CRM si aún no existe el módulo.
+2. Ejecuta `Migracion_Roles_Copys_Marcos_Victoria_Ursula.sql` para aplicar los responsables exclusivos.
+3. Despliega el proyecto.
+4. Para activar el botón **Generar con IA**, sigue `GUIA_CENTRO_COPYS_N8N.md` y configura las dos variables privadas de n8n en Vercel.

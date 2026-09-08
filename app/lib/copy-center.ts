@@ -117,7 +117,7 @@ export const COPY_WORKSHOPS = [
   },
 ] as const
 
-// Curso CVT JF017 de octubre: Úrsula trabaja, Victoria revisa.
+// Curso CVT JF017 de octubre: Victoria lleva el flujo completo de cursos.
 // Los primeros calentamientos se programan al grupo PRUEBA_VICTORIA hasta cambiar la campaña a producción.
 export const COPY_FEATURED_COURSES = [
   {
@@ -135,7 +135,7 @@ export const COPY_FEATURED_COURSES = [
       'Banco técnico confirmado para variar contenidos: funcionamiento de la JF017/JF017E, sistema de poleas y cadena, fallas comunes, cuerpo de válvulas, TCM, actualización de software, códigos P17F0, P17F1, P0841, P0744, P0776, P0965, P0715 y P0720, además de deterioro térmico del aceite.',
       'Usar estos temas como ganchos educativos sin inventar información adicional ni diagnosticar definitivamente por mensaje.',
     ].join(' '),
-    owner: 'ursula',
+    owner: 'victoria',
     reviewer: 'victoria',
     socialCta: `📲 Más información y reserva: ${JF017_OCTOBER_CONTACT}`,
     warmupCta: `📲 Reserva tu lugar: ${JF017_OCTOBER_CONTACT}`,

@@ -8,7 +8,7 @@
 - Todos los datos adicionales quedan ocultos en **Agregar detalles (opcional)**.
 - Título y brief interno generados automáticamente.
 - El CRM crea la solicitud y llama a Ollama inmediatamente para abrir el borrador.
-- Úrsula redacta y Victoria revisa.
+- Marcos lleva Workshop; Victoria lleva Cursos; Úrsula queda temporalmente reservada para copys de Lives.
 - Estados: Solicitud → Borrador → En revisión → Aprobado → Publicado.
 - Campañas precargadas de septiembre, octubre y noviembre de 2026.
 - Generación gratuita con el Ollama que ya tienes: `qwen2.5:3b`.

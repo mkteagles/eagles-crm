@@ -6,7 +6,7 @@ Esta versión agrega una prueba controlada al Centro de Copys.
 
 - Los presets de **Workshop del mes** se crean como calentamientos de WhatsApp y requieren imagen.
 - Dentro del detalle del copy aparece una **Vista previa WhatsApp · Prueba**.
-- Marcos/Úrsula/Victoria pueden subir o reemplazar el flyer desde el CRM.
+- El contenido solo puede ser trabajado por el responsable exclusivo de la campaña: Marcos para Workshop y Victoria para Cursos.
 - La imagen se guarda en el bucket público `marketing-assets` de Supabase Storage y se registra en `marketing_copy_assets`.
 - Victoria ve **imagen + copy + instancia + grupo** antes de aprobar.
 - Cuando Victoria pulsa **Aprobar y enviar prueba**, el backend del CRM envía imagen + caption mediante Evolution API a `PRUEBA_VICTORIA`.

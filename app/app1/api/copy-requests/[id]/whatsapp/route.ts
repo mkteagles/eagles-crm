@@ -13,6 +13,7 @@ const MAX_VIDEO_SIZE = 16 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 const ALLOWED_VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime'])
 const WORKSHOP_APPROVER_EMAIL = 'marcosc@eagles.com'
+const COURSE_APPROVER_NAME = 'victoria'
 
 type AssetRecord = {
   id: string
@@ -67,6 +68,11 @@ function isWorkshopOctober(item: CopyRequest) {
   return item.campaign_month === '2026-10' && topic.includes('workshop')
 }
 
+function isCourseCopy(item: CopyRequest) {
+  const topic = normalizeText(item.product_topic || '')
+  return item.category === 'course' && !topic.includes('workshop')
+}
+
 function isJF017OctoberWarmup(item: CopyRequest) {
   const topic = normalizeText(item.product_topic || '')
   return item.campaign_month === '2026-10'
@@ -94,7 +100,7 @@ async function getSessionContext(id: string) {
 
   const [{ data: copyRequest, error: requestError }, { data: profile }] = await Promise.all([
     supabase.from('copy_requests').select('*').eq('id', id).maybeSingle(),
-    supabase.from('user_profiles').select('role,email').eq('id', authData.user.id).maybeSingle(),
+    supabase.from('user_profiles').select('role,email,full_name').eq('id', authData.user.id).maybeSingle(),
   ])
 
   if (requestError || !copyRequest) {
@@ -105,10 +111,17 @@ async function getSessionContext(id: string) {
   const isAdmin = profile?.role === 'admin'
   const userEmail = String(profile?.email || authData.user.email || '').trim().toLowerCase()
   const workshopOnlyMarcos = isWorkshopOctober(item)
-  const canWork = isAdmin || item.assigned_to === authData.user.id || item.requested_by === authData.user.id
-  const canReview = workshopOnlyMarcos
-    ? userEmail === WORKSHOP_APPROVER_EMAIL
-    : isAdmin || item.reviewer_id === authData.user.id
+  const courseOnlyVictoria = isCourseCopy(item)
+  const normalizedUserName = normalizeText(String(profile?.full_name || ''))
+  const isVictoria = normalizedUserName.includes(COURSE_APPROVER_NAME)
+  const canWork = isAdmin
+    || (workshopOnlyMarcos ? userEmail === WORKSHOP_APPROVER_EMAIL
+      : courseOnlyVictoria ? isVictoria
+        : item.assigned_to === authData.user.id || item.requested_by === authData.user.id)
+  const canReview = isAdmin
+    || (workshopOnlyMarcos ? userEmail === WORKSHOP_APPROVER_EMAIL
+      : courseOnlyVictoria ? isVictoria
+        : item.reviewer_id === authData.user.id)
 
   return {
     supabase,
@@ -117,6 +130,7 @@ async function getSessionContext(id: string) {
     canWork,
     canReview,
     workshopOnlyMarcos,
+    courseOnlyVictoria,
     userEmail,
   }
 }
@@ -415,8 +429,10 @@ export async function POST(
   if (!session.canReview) {
     return NextResponse.json({
       error: session.workshopOnlyMarcos
-        ? 'Esta Workshop solo puede ser revisada y aprobada por marcosc@eagles.com.'
-        : 'No tienes permiso para aprobar y programar este contenido.',
+        ? 'Esta Workshop solo puede ser revisada y aprobada por Marcos.'
+        : session.courseOnlyVictoria
+          ? 'Los cursos solo pueden ser revisados, aprobados y programados por Victoria.'
+          : 'No tienes permiso para aprobar y programar este contenido.',
     }, { status: 403 })
   }
 

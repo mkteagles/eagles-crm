@@ -7,7 +7,7 @@ Cambios agregados sobre la versión de producción de Workshop:
 - Nuevo acceso rápido con dos tipos de copy:
   - Copy para redes.
   - Calentamiento WhatsApp.
-- Flujo del curso: Úrsula prepara y Victoria revisa/aprueba.
+- Flujo del curso: Victoria prepara, revisa, aprueba y programa de inicio a fin.
 - Calentamientos: imagen o video + preview de WhatsApp.
 - Programación automática a 10:00 AM / 5:00 PM.
 - Durante pruebas el destino es `PRUEBA_VICTORIA`.

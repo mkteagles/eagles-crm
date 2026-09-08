@@ -146,7 +146,7 @@ using (
 
 grant select, insert, update, delete on public.copy_requests to authenticated;
 
--- Realtime permite que Úrsula y Victoria vean los cambios sin recargar.
+-- Realtime refresca el Centro de Copys. Los permisos finales se aplican en Migracion_Roles_Copys_Marcos_Victoria_Ursula.sql.
 do $$
 begin
   alter publication supabase_realtime add table public.copy_requests;

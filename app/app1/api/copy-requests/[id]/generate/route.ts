@@ -21,6 +21,18 @@ function parseN8nResponse(payload: unknown): N8nPayload {
   return candidate as N8nPayload
 }
 
+function normalizeText(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+}
+
+function isWorkshopCopy(item: CopyRequest) {
+  return normalizeText(item.product_topic || '').includes('workshop')
+}
+
+function isCourseCopy(item: CopyRequest) {
+  return item.category === 'course' && !isWorkshopCopy(item)
+}
+
 export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -35,7 +47,7 @@ export async function POST(
   const { id } = await context.params
   const [{ data: copyRequest, error: requestError }, { data: profile }] = await Promise.all([
     supabase.from('copy_requests').select('*').eq('id', id).maybeSingle(),
-    supabase.from('user_profiles').select('role').eq('id', authData.user.id).maybeSingle(),
+    supabase.from('user_profiles').select('role,email,full_name').eq('id', authData.user.id).maybeSingle(),
   ])
 
   if (requestError || !copyRequest) {
@@ -43,9 +55,16 @@ export async function POST(
   }
 
   const item = copyRequest as CopyRequest
+  const userEmail = String(profile?.email || authData.user.email || '').trim().toLowerCase()
+  const normalizedUserName = normalizeText(String(profile?.full_name || ''))
+  const workshopOnlyMarcos = isWorkshopCopy(item)
+  const courseOnlyVictoria = isCourseCopy(item)
   const canGenerate = profile?.role === 'admin'
-    || item.assigned_to === authData.user.id
-    || item.requested_by === authData.user.id
+    || (workshopOnlyMarcos
+      ? userEmail === 'marcosc@eagles.com'
+      : courseOnlyVictoria
+        ? normalizedUserName.includes('victoria')
+        : item.assigned_to === authData.user.id || item.requested_by === authData.user.id)
 
   if (!canGenerate) {
     return NextResponse.json({ error: 'No tienes permiso para generar este copy.' }, { status: 403 })
