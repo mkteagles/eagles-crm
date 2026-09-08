@@ -1,0 +1,168 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eagles-copy-generate",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        5712,
+        2176
+      ],
+      "id": "d4e42518-3d15-4f4d-99e6-37493f793fb5",
+      "name": "Webhook - CRM Copys",
+      "webhookId": "a559a679-43b2-49f6-a58d-18b1b56b3444"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json || {};\nconst headers = input.headers || {};\nconst body = input.body || {};\n\nconst EXPECTED_SECRET = 'eagles2026';\nconst receivedSecret = String(headers['x-eagles-secret'] || headers['X-Eagles-Secret'] || '');\nif (!receivedSecret || receivedSecret !== EXPECTED_SECRET) {\n  throw new Error('Solicitud no autorizada');\n}\n\nconst request = body.copy_request || {};\nconst clean = (value) => String(value || '').trim();\nconst normalize = (value) => clean(value).normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase();\n\nconst channels = Array.isArray(request.channels) && request.channels.length\n  ? request.channels.map(clean).filter(Boolean)\n  : ['Facebook', 'Instagram'];\n\nif (!clean(request.product_topic)) throw new Error('Falta product_topic');\n\nconst categoryLabels = {\n  social: 'redes sociales',\n  taller: 'servicios del taller de transmisiones',\n  course: 'curso o capacitación de transmisiones'\n};\n\nconst facts = [\n  clean(request.brief),\n  clean(request.call_to_action) ? `CTA solicitado: ${clean(request.call_to_action)}` : '',\n  clean(request.audience) ? `Audiencia: ${clean(request.audience)}` : '',\n  clean(request.image_brief) ? `Brief visual: ${clean(request.image_brief)}` : ''\n].filter(Boolean).join('\\\\n');\n\nconst normalizedTopic = normalize(request.product_topic);\nconst normalizedObjective = normalize(request.objective);\nconst normalizedCampaign = normalize(request.campaign_code || body.campaign_code || body.copy_request?.campaign_code);\nconst requestedFramework = normalize(request.copy_framework || body.framework?.name || 'AIDA');\nconst useAIDA = !requestedFramework || requestedFramework === 'aida';\n\n// Detección robusta por campaña + tema + brief.\nconst routeText = normalize([\n  request.campaign_code,\n  body.campaign_code,\n  request.product_topic,\n  request.brief,\n  request.objective\n].filter(Boolean).join(' '));\n\nconst isWorkshopConvencionales =\n  normalizedCampaign.includes('workshop_octubre') ||\n  (routeText.includes('workshop') && routeText.includes('convencional'));\n\nconst isJF017 =\n  normalizedCampaign.includes('jf017') ||\n  routeText.includes('jf017') ||\n  routeText.includes('jf017e') ||\n  (routeText.includes('cvt') && routeText.includes('017'));\nconst isWhatsAppWarmup = channels.length === 1 && channels[0].toLowerCase() === 'whatsapp' && normalizedObjective.includes('calentamiento');\nconst hasSocialChannel = channels.some((channel) => ['facebook', 'instagram', 'tiktok'].includes(channel.toLowerCase()));\n\nconst WORKSHOP_GROUP_URL = 'https://chat.whatsapp.com/Gu955o9muhZ2eJGOaRw0wS?s=cl&p=i&mlu=4&ilr=4';\nconst WORKSHOP_HOTMART_URL = 'https://pay.hotmart.com/U107474945W?bid=1788557927997';\nconst JF017_DEFAULT_CTA = '📲 Reserva tu lugar: 449 110 7766';\nconst jf017CTA = clean(request.call_to_action) || JF017_DEFAULT_CTA;\n\nlet structureRules = '';\n\nif (isWorkshopConvencionales && isWhatsAppWarmup) {\n  structureRules = `\\nAIDA OBLIGATORIO · WORKSHOP WHATSAPP:\\nA · ATRACCIÓN: abre con un gancho corto basado en una falla, duda o situación real del técnico.\\nI · INTERÉS: aporta UNA sola idea técnica útil sobre transmisiones convencionales.\\nD · DESEO: conecta esa idea con lo que aprenderá o podrá comprender mejor en la Workshop, en una sola frase.\\nA · ACCIÓN: cierra UNA sola vez con el CTA fijo.\\n- Máximo 70 palabras antes del enlace.\\n- Sin hashtags y sin repetir datos.\\n- Mantén los datos confirmados en líneas separadas:\\n📅 2 y 3 de octubre\\n💻 Online en vivo vía Zoom\\n💲 17 USD\\n- Cierra UNA sola vez con:\\n👉 Inscríbete aquí:\\n${WORKSHOP_HOTMART_URL}\\n- NO escribas las palabras Atracción, Interés, Deseo o Acción dentro del copy final.\\n- El campo copy debe contener SOLO texto publicable, nunca JSON dentro del texto.`;\n} else if (isWorkshopConvencionales && hasSocialChannel) {\n  structureRules = `\\nAIDA OBLIGATORIO · REDES WORKSHOP:\\nA · ATRACCIÓN: gancho fuerte basado en un problema real del técnico/taller.\\nI · INTERÉS: una idea técnica o situación que genere identificación.\\nD · DESEO: explica en máximo 2 frases por qué la Workshop puede ayudarle a comprender o trabajar mejor ese tema.\\nA · ACCIÓN: CTA final UNA sola vez:\\n🔥 Únete al grupo y recibe toda la información para asegurar tu acceso:\\n👉 ${WORKSHOP_GROUP_URL}\\n- No pongas Hotmart.\\n- Máximo 3 hashtags relevantes.\\n- NO rotules las etapas AIDA en el copy final.\\n- El campo copy debe contener SOLO texto publicable, nunca JSON dentro del texto.`;\n} else if (isJF017 && isWhatsAppWarmup) {\n  structureRules = `\\nAIDA OBLIGATORIO · WHATSAPP CURSO CVT JF017:\\n- Este flujo arma el mensaje final después de Ollama y CONSERVA la estructura de emojis ya validada.\\nA · ATRACCIÓN: tú generas un gancho técnico corto que haga detenerse al transmisionista.\\nI · INTERÉS: completa con UNA sola idea útil de 20 a 32 palabras en total entre gancho e idea.\\nD · DESEO: n8n lo agregará después con los beneficios confirmados del curso.\\nA · ACCIÓN: n8n agregará después fecha, precio y CTA.\\n- Habla de UN SOLO tema: P17F0/P17F1, cuerpo de válvulas, presión hidráulica, cadena/poleas, TCM/software o deterioro térmico del aceite.\\n- No pongas fechas, horarios, precio, apartado, teléfono, CTA, beneficios, hashtags ni listas.\\n- No uses las palabras “calentamiento”, “campaña”, “brief”, “banco técnico” o “datos confirmados”.\\n- No escribas “Curso profesional”, “únete al curso”, “reserva” o “cupos limitados”.\\n- NO rotules AIDA en el copy final.\\n- El campo copy debe contener SOLO texto plano; jamás metas otro JSON dentro de copy.`;\n} else if (isJF017 && hasSocialChannel) {\n  structureRules = `\\nAIDA OBLIGATORIO · REDES CURSO CVT JF017:\\nA · ATRACCIÓN: gancho técnico fuerte, sin exageración.\\nI · INTERÉS: desarrolla UNA sola idea técnica o dolor real.\\nD · DESEO: conecta esa idea con el beneficio concreto del curso en máximo 2 frases.\\nA · ACCIÓN: CTA final UNA sola vez: ${JF017_DEFAULT_CTA}\\n- Máximo 2 datos del evento en el cuerpo.\\n- Máximo 4 hashtags relevantes; nunca una lista de códigos.\\n- No repitas teléfono, CTA ni datos.\\n- NO rotules AIDA en el copy final.\\n- El campo copy debe contener SOLO texto publicable, nunca JSON dentro del texto.`;\n}\n\nconst systemPrompt = `Eres copywriter senior de Eagles Digital Solutions y Eagles Gear Solutions.\\n\\nEscribes para técnicos, transmisionistas y dueños de taller en México. Tu estilo es humano, técnico, breve y comercial sin sonar generado por IA.\\n\\nMETODOLOGÍA OBLIGATORIA AIDA:\\n- Atracción: abre con un gancho que detenga la atención.\\n- Interés: aporta una idea útil, técnica o relevante.\\n- Deseo: conecta esa idea con un beneficio concreto para la audiencia.\\n- Acción: termina con un solo CTA claro.\\n- Aplica AIDA de forma natural; NO escribas las etiquetas “Atracción”, “Interés”, “Deseo” o “Acción” dentro del copy.\\n\\nREGLAS GLOBALES:\\n- Usa solo datos confirmados.\\n- No inventes precio, fechas, horarios, promociones, enlaces ni garantías.\\n- No prometas ingresos ni resultados económicos.\\n- No hagas diagnósticos definitivos por mensaje.\\n- Una idea central por copy.\\n- No repitas frases, CTA, teléfonos, fechas ni bloques de información.\\n- No conviertas listas técnicas en hashtags.\\n- Evita relleno, clichés y frases motivacionales genéricas.\\n- Respeta enlaces y números literalmente.\\n- Devuelve únicamente JSON válido con las claves copy e image_prompt.\\n- MUY IMPORTANTE: el valor de copy debe ser texto plano listo para publicar; jamás metas otro objeto JSON dentro de copy.${structureRules}\\n\\nFORMATO EXACTO:\\n{\"copy\":\"texto listo para publicar\",\"image_prompt\":\"prompt visual o cadena vacía\"}`;\n\nconst userPrompt = `Crea UN solo copy con estos datos:\\nMetodología: ${useAIDA ? 'AIDA (Atracción, Interés, Deseo, Acción)' : clean(request.copy_framework || body.framework?.name)}\\nCategoría: ${categoryLabels[request.category] || clean(request.category) || 'redes sociales'}\\nTema: ${clean(request.product_topic)}\\nObjetivo: ${clean(request.objective) || 'Venta'}\\nCanales: ${channels.join(', ')}\\nTono: ${clean(request.tone) || 'Directo y profesional'}\\nRequiere imagen: ${request.needs_image === true ? 'sí' : 'no'}\\nDatos confirmados:\\n${facts || 'No hay datos adicionales; trabaja únicamente con el tema y las reglas confirmadas.'}`;\n\nreturn [{\n  json: {\n    request_id: clean(body.request_id),\n    campaign_detected: isWorkshopConvencionales ? 'WORKSHOP_OCTUBRE' : isJF017 ? 'CURSO_JF017_OCTUBRE' : 'GENERAL',\n    framework_detected: useAIDA ? 'AIDA' : clean(request.copy_framework || body.framework?.name || 'AIDA'),\n    postprocess: {\n      is_jf017: isJF017,\n      is_workshop: isWorkshopConvencionales,\n      is_whatsapp_warmup: isWhatsAppWarmup,\n      cta: isJF017 ? jf017CTA : ''\n    },\n    ollama_request: {\n      model: 'qwen2.5:3b',\n      stream: false,\n      keep_alive: '30m',\n      format: {\n        type: 'object',\n        properties: {\n          copy: { type: 'string' },\n          image_prompt: { type: 'string' }\n        },\n        required: ['copy', 'image_prompt']\n      },\n      messages: [\n        { role: 'system', content: systemPrompt },\n        { role: 'user', content: userPrompt }\n      ],\n      options: {\n        temperature: 0.25,\n        num_predict: 420,\n        num_ctx: 4096,\n        repeat_penalty: 1.20,\n        repeat_last_n: 160\n      }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5952,
+        2176
+      ],
+      "id": "1093cba8-876f-4fa2-a4bb-568fe7d8accd",
+      "name": "Validar y preparar copy"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/chat",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.ollama_request) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6224,
+        2176
+      ],
+      "id": "0471dccf-ddf9-4ea3-bbb3-5d325eab8588",
+      "name": "Ollama qwen2.5:3b"
+    },
+    {
+      "parameters": {
+        "jsCode": "let content = String($json?.message?.content ?? $json?.response ?? '').trim();\ncontent = content.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '').trim();\n\nfunction parseMaybeJson(value) {\n  let current = String(value || '').trim();\n\n  for (let i = 0; i < 4; i++) {\n    try {\n      const parsed = JSON.parse(current);\n      if (typeof parsed === 'string') {\n        current = parsed.trim();\n        continue;\n      }\n      if (parsed && typeof parsed === 'object') return parsed;\n    } catch {}\n\n    const start = current.indexOf('{');\n    const end = current.lastIndexOf('}');\n    if (start !== -1 && end > start) {\n      try {\n        const parsed = JSON.parse(current.slice(start, end + 1));\n        if (parsed && typeof parsed === 'object') return parsed;\n      } catch {}\n    }\n    break;\n  }\n  return null;\n}\n\n// Recupera el campo copy incluso si Ollama cortó el JSON antes de cerrar.\nfunction recoverCopyFromBrokenJson(value) {\n  let raw = String(value || '').trim();\n  const match = raw.match(/[\"']?copy[\"']?\\s*:\\s*\"([\\s\\S]*)/i);\n  if (!match) return raw;\n\n  raw = match[1];\n\n  // Quita image_prompt si alcanzó a aparecer y cierres parciales del JSON.\n  raw = raw.replace(/\"\\s*,\\s*\"image_prompt\"[\\s\\S]*$/i, '');\n  raw = raw.replace(/\"\\s*}\\s*$/i, '');\n  raw = raw.replace(/\\\\n/g, '\\n').replace(/\\\\\"/g, '\"').replace(/\\\\\\\\/g, '\\\\');\n\n  return raw.trim();\n}\n\nlet parsed = parseMaybeJson(content);\nlet copy = String(parsed?.copy ?? '').trim();\nlet imagePrompt = String(parsed?.image_prompt || '').trim();\n\nif (!copy) {\n  copy = recoverCopyFromBrokenJson(content);\n}\n\n// Si el modelo metió JSON otra vez dentro de copy, lo desenvolvemos.\nfor (let i = 0; i < 3; i++) {\n  const nested = parseMaybeJson(copy);\n  if (nested?.copy && String(nested.copy).trim() !== copy) {\n    copy = String(nested.copy).trim();\n    if (!imagePrompt) imagePrompt = String(nested.image_prompt || '').trim();\n  } else {\n    const recovered = recoverCopyFromBrokenJson(copy);\n    if (recovered !== copy && recovered.length > 0) copy = recovered;\n    break;\n  }\n}\n\ncopy = copy.replace(/\\\\n/g, '\\n').replace(/\\\\\"/g, '\"').trim();\n\nconst prep = $('Validar y preparar copy').item.json;\nconst pp = prep?.postprocess || {};\n\nif (pp.is_whatsapp_warmup) {\n  copy = copy.replace(/(^|\\s)#[\\p{L}\\p{N}_-]+/gu, '$1');\n  copy = copy.replace(/[ \\t]+\\n/g, '\\n').replace(/\\n{3,}/g, '\\n\\n');\n  copy = copy.replace(/[ \\t]{2,}/g, ' ').trim();\n}\n\nif (!copy) throw new Error('Ollama no devolvió un copy');\n\nreturn [{\n  json: {\n    copy,\n    image_prompt: imagePrompt,\n    execution_id: String($execution.id),\n    campaign_detected: String(prep?.campaign_detected || 'GENERAL')\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6480,
+        2176
+      ],
+      "id": "0cfa206f-0691-4c2d-88fb-1584d5dafad9",
+      "name": "Limpiar respuesta"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        7000,
+        2176
+      ],
+      "id": "76f87e2f-e12d-4774-9be5-ffe20db339d6",
+      "name": "Responder al CRM"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = { ...$json };\nconst prep = $('Validar y preparar copy').item.json || {};\nconst pp = prep.postprocess || {};\nconst campaign = String(out.campaign_detected || prep.campaign_detected || '').trim();\n\n// WORKSHOP Y DEMÁS CAMPAÑAS:\n// pasan exactamente como vienen. Este nodo NO las modifica.\nconst isJF017WhatsApp =\n  (campaign === 'CURSO_JF017_OCTUBRE' || pp.is_jf017 === true) &&\n  pp.is_whatsapp_warmup === true;\n\nif (!isJF017WhatsApp) {\n  return [{ json: out }];\n}\n\n// ============================================================\n// JF017 WHATSAPP: FORMATO CONTROLADO DE PRODUCCIÓN\n// ============================================================\n\nlet raw = String(out.copy || '').trim();\n\n// Quitar residuos internos / comerciales si Ollama ignoró el prompt.\nraw = raw\n  .replace(/```json|```/gi, '')\n  .replace(/\\{?\\s*\"copy\"\\s*:\\s*\"?/gi, '')\n  .replace(/\"\\s*,?\\s*\"image_prompt\"[\\s\\S]*$/gi, '')\n  .replace(/\\b(banco técnico(?: confirmado)?|brief|datos confirmados|campaña|calentamiento(?: técnico| en vivo)?)\\b/gi, '')\n  .replace(/#[\\p{L}\\p{N}_-]+/gu, '')\n  .replace(/[ \\t]{2,}/g, ' ')\n  .replace(/\\n{3,}/g, '\\n\\n')\n  .trim();\n\nconst salesWords = /(curso|reserva|inscrib|precio|mxn|octubre|online|grabaciones|manuales|calibraciones|cupo|plaza|apart|tel[eé]fono|449\\s*110\\s*7766|viernes|s[aá]bado|horario|incluye|promoci[oó]n)/i;\n\n// Buscar una oración que sí parezca técnica.\nconst sentences = raw\n  .replace(/\\n+/g, ' ')\n  .split(/(?<=[.!?])\\s+/)\n  .map(s => s.trim())\n  .filter(Boolean);\n\nlet technical = sentences.find(s =>\n  s.length >= 35 &&\n  s.length <= 210 &&\n  !salesWords.test(s) &&\n  /(jf017|cvt|p17f|presi[oó]n|polea|cadena|v[aá]lvula|tcm|software|aceite|diagn[oó]st|transmisi[oó]n)/i.test(s)\n);\n\n// Banco seguro de respaldo si Ollama vuelve a ignorar las reglas.\nconst fallbackTips = [\n  'En una JF017, un código de falla no cuenta toda la historia: presión, cuerpo de válvulas y condición interna también orientan el diagnóstico.',\n  'Antes de condenar una JF017, revisar presión hidráulica y cuerpo de válvulas puede darte información clave sobre dónde está realmente la falla.',\n  'La JF017 trabaja con cadena y poleas; entender cómo cambia la relación ayuda a interpretar mejor síntomas y comportamiento de la transmisión.',\n  'Un P17F1 no debe analizarse aislado: presión, cuerpo de válvulas y condición de cadena y poleas también forman parte de la evaluación.',\n  'En una JF017, revisar TCM, señales y software antes de desarmar puede evitar que una falla electrónica se confunda con daño interno.',\n  'La temperatura influye directamente en el deterioro del aceite; revisar condición del fluido e historial térmico aporta contexto al diagnóstico.'\n];\n\nif (!technical) {\n  const seed = String(prep.request_id || out.execution_id || 'jf017');\n  let hash = 0;\n  for (let i = 0; i < seed.length; i++) {\n    hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;\n  }\n  technical = fallbackTips[Math.abs(hash) % fallbackTips.length];\n}\n\n// Limpieza final del tip.\ntechnical = technical\n  .replace(/^[-•🔥⚙️🔧\\s]+/u, '')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nif (technical.length > 210) {\n  technical = technical.slice(0, 207).trim() + '...';\n}\nif (!/[.!?]$/.test(technical)) technical += '.';\n\n// Este bloque SIEMPRE será el resultado final del JF017 WhatsApp.\nout.copy = [\n  '⚙️ ¡CARNALITOS!',\n  `🔧 ${technical}`,\n  '',\n  '📅 16 y 17 de octubre',\n  '💻 100% online',\n  '🕚 Vie 11:00 AM–5:00 PM | Sáb 11:00 AM–3:00 PM (MX)',\n  '💲 $2,997 MXN | Aparta con $1,500',\n  '',\n  '🎁 Grabaciones + manuales de apoyo + calibraciones de regalo',\n  '📲 Reserva tu lugar: 449 110 7766'\n].join('\\n');\n\nreturn [{ json: out }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        6736,
+        2176
+      ],
+      "id": "570666ea-cc4b-4835-9182-38b88a96a29b",
+      "name": "Postproceso FINAL por campaña"
+    }
+  ],
+  "connections": {
+    "Webhook - CRM Copys": {
+      "main": [
+        [
+          {
+            "node": "Validar y preparar copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y preparar copy": {
+      "main": [
+        [
+          {
+            "node": "Ollama qwen2.5:3b",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama qwen2.5:3b": {
+      "main": [
+        [
+          {
+            "node": "Limpiar respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpiar respuesta": {
+      "main": [
+        [
+          {
+            "node": "Postproceso FINAL por campaña",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postproceso FINAL por campaña": {
+      "main": [
+        [
+          {
+            "node": "Responder al CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "a6400dc370b5da48354b6b00dfe1cde88e60c37bd4fd182d3cc7c29da7f28053"
+  },
+  "name": "Eagles · Centro de Copys · CONSOLIDADO PRODUCCION · AIDA",
+  "active": false
+}

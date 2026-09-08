@@ -71,6 +71,30 @@ export const COPY_TONES = [
   'Técnico y confiable',
 ] as const
 
+
+export const COPY_FRAMEWORK_AIDA = [
+  {
+    key: 'A',
+    label: 'Atracción',
+    description: 'Gancho breve que detiene la atención con un dolor, duda o situación real del técnico.',
+  },
+  {
+    key: 'I',
+    label: 'Interés',
+    description: 'Una idea útil o técnica que haga que la persona quiera seguir leyendo.',
+  },
+  {
+    key: 'D',
+    label: 'Deseo',
+    description: 'Conecta el contenido con el beneficio concreto de aprender, asistir o resolver mejor el trabajo.',
+  },
+  {
+    key: 'A',
+    label: 'Acción',
+    description: 'Cierre claro con un solo CTA: reservar, inscribirse, entrar al grupo o pedir información.',
+  },
+] as const
+
 // Septiembre se conserva para etiquetar historial, pero ya no aparece como acceso rápido.
 export const COPY_CAMPAIGNS = [
   {
@@ -132,7 +156,7 @@ export const COPY_FEATURED_COURSES = [
       'Precio: $2,997 MXN. Aparta con $1,500 MXN. Cupos limitados.',
       'Incluye grabaciones, manuales de apoyo y calibraciones de regalo.',
       `Más información: ${JF017_OCTOBER_CONTACT}.`,
-      'Banco técnico confirmado para variar contenidos: funcionamiento de la JF017/JF017E, sistema de poleas y cadena, fallas comunes, cuerpo de válvulas, TCM, actualización de software, códigos P17F0, P17F1, P0841, P0744, P0776, P0965, P0715 y P0720, además de deterioro térmico del aceite.',
+      'Temas técnicos disponibles para variar contenidos: funcionamiento de la JF017/JF017E, sistema de poleas y cadena, fallas comunes, cuerpo de válvulas, TCM, actualización de software, códigos P17F0, P17F1, P0841, P0744, P0776, P0965, P0715 y P0720, además de deterioro térmico del aceite.',
       'Usar estos temas como ganchos educativos sin inventar información adicional ni diagnosticar definitivamente por mensaje.',
     ].join(' '),
     owner: 'victoria',

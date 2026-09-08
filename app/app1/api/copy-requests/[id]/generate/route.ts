@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { createClient } from '@/lib/supabase/server'
-import type { CopyRequest } from '@/lib/copy-center'
+import { COPY_FRAMEWORK_AIDA, type CopyRequest } from '@/lib/copy-center'
 
 // Ollama puede tardar más en la primera generación mientras carga el modelo.
 // Vercel mantiene esta función disponible y el fetch conserva un margen menor.
@@ -31,6 +31,13 @@ function isWorkshopCopy(item: CopyRequest) {
 
 function isCourseCopy(item: CopyRequest) {
   return item.category === 'course' && !isWorkshopCopy(item)
+}
+
+function getCampaignCode(item: CopyRequest) {
+  const topic = normalizeText(item.product_topic || '')
+  if (topic.includes('workshop') && item.campaign_month === '2026-10') return 'WORKSHOP_OCTUBRE'
+  if (topic.includes('jf017') && item.campaign_month === '2026-10') return 'CURSO_JF017_OCTUBRE'
+  return null
 }
 
 export async function POST(
@@ -109,8 +116,21 @@ export async function POST(
           call_to_action: item.call_to_action,
           needs_image: item.needs_image,
           image_brief: item.image_brief,
+          campaign_code: getCampaignCode(item),
+          copy_framework: 'AIDA',
+        },
+        framework: {
+          name: 'AIDA',
+          stages: COPY_FRAMEWORK_AIDA,
+          instruction: 'Aplica AIDA de forma natural. No escribas las etiquetas Atracción, Interés, Deseo o Acción dentro del copy final.',
         },
         rules: [
+          'Usa la metodología AIDA en este orden: Atracción, Interés, Deseo y Acción.',
+          'Atracción: abre con un gancho corto basado en un dolor, duda, falla o situación real de la audiencia.',
+          'Interés: aporta una sola idea útil, técnica o relevante que mantenga la lectura.',
+          'Deseo: conecta esa idea con el beneficio concreto del curso, workshop, servicio o contenido.',
+          'Acción: termina con un solo CTA claro y directo.',
+          'No escribas las palabras Atracción, Interés, Deseo o Acción como títulos dentro del copy.',
           'Escribe en español natural y listo para publicar.',
           'No inventes precio, fecha, disponibilidad, garantía ni promoción.',
           'No diagnostiques definitivamente una transmisión por mensaje.',

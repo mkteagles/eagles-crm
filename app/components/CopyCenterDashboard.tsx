@@ -33,6 +33,7 @@ import {
   COPY_TONES,
   COPY_WORKSHOPS,
   COPY_FEATURED_COURSES,
+  COPY_FRAMEWORK_AIDA,
   CopyCategory,
   CopyRequest,
   CopyStatus,
@@ -793,6 +794,26 @@ export default function CopyCenterDashboard() {
         </button>}
       </header>
 
+      {!currentIsUrsula && (
+        <section className="rounded-2xl border border-violet-500/25 bg-violet-500/[0.06] p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-violet-500">Metodología automática</p>
+              <h2 className="mt-1 font-bold text-foreground">AIDA · Atracción → Interés → Deseo → Acción</h2>
+              <p className="mt-1 text-xs text-foreground/55">El CRM envía esta estructura a la IA automáticamente. Tú solo revisas que el copy se sienta natural y no repetitivo.</p>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 text-center">
+              {COPY_FRAMEWORK_AIDA.map((stage, index) => (
+                <div key={`${stage.label}-${index}`} className="rounded-lg border border-violet-500/20 bg-surface px-2 py-2">
+                  <span className="block text-sm font-black text-violet-500">{stage.key}</span>
+                  <span className="block text-[10px] font-semibold text-foreground/60">{stage.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {notice && (
         <div className="flex items-start justify-between gap-3 rounded-xl border border-brand-orange/30 bg-brand-orange/10 px-4 py-3 text-sm text-foreground">
           <span>{notice}</span>
@@ -847,7 +868,7 @@ export default function CopyCenterDashboard() {
             <div className="mt-3 flex items-center gap-3 text-xs text-foreground/55">
               <img src={workshop.groupIcon} alt="Icono del grupo" className="size-10 rounded-lg object-cover" />
               <img src={workshop.referenceFlyer} alt="Flyer inicial" className="size-10 rounded-lg object-cover" />
-              <span>Referencias visuales guardadas · calentamientos programables automáticamente a las 10:00 AM y 5:00 PM.</span>
+              <span>Metodología AIDA automática · referencias visuales guardadas · calentamientos programables a las 10:00 AM y 5:00 PM.</span>
             </div>
           </div>
         ))}
@@ -881,7 +902,7 @@ export default function CopyCenterDashboard() {
             </div>
             <div className="mt-3 flex items-center gap-3 text-xs text-foreground/55">
               <img src={course.referenceFlyer} alt="Flyer Curso CVT JF017" className="size-12 rounded-lg object-cover" />
-              <span>Victoria lleva el flujo completo · prueba de WhatsApp en PRUEBA_VICTORIA · admite imagen o video.</span>
+              <span>Victoria lleva el flujo completo · metodología AIDA automática · el destino de WhatsApp se toma de la campaña · admite imagen o video.</span>
             </div>
           </div>
         ))}
@@ -960,6 +981,18 @@ export default function CopyCenterDashboard() {
             <div className="space-y-5">
               <label><span className="mb-1.5 block text-sm font-semibold">¿Qué necesitas anunciar? *</span><textarea autoFocus value={form.product_topic} onChange={(event) => setForm({ ...form, product_topic: event.target.value })} rows={3} placeholder="Ej. Promocionar el curso 6L80 y 6L90 de septiembre" className="w-full rounded-xl border border-border-color bg-background p-3 text-base outline-none focus:border-brand-orange" /></label>
 
+              <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.06] p-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-violet-500">Se generará con AIDA</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {COPY_FRAMEWORK_AIDA.map((stage, index) => (
+                    <div key={`${stage.label}-create-${index}`} className="rounded-lg bg-surface px-2.5 py-2">
+                      <p className="text-xs font-bold text-foreground">{stage.key} · {stage.label}</p>
+                      <p className="mt-1 text-[11px] leading-4 text-foreground/50">{stage.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               <div className="rounded-xl border border-border-color">
                 <button type="button" onClick={() => setShowAdvanced((current) => !current)} className="flex min-h-11 w-full items-center justify-between px-4 text-sm font-semibold"><span>Agregar detalles <span className="font-normal text-foreground/45">(opcional)</span></span><ChevronDown size={18} className={`transition ${showAdvanced ? 'rotate-180' : ''}`} /></button>
                 {showAdvanced && <div className="grid gap-4 border-t border-border-color p-4 sm:grid-cols-2">
@@ -1008,7 +1041,7 @@ export default function CopyCenterDashboard() {
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white/80 px-4 py-3 dark:border-white/10 dark:bg-white/5">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-400">Vista previa WhatsApp · Programación</p>
-                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{selectedIsWorkshop ? 'Solo tú apruebas esta Workshop. El envío queda en cola para 10:00 AM o 5:00 PM.' : selectedIsJF017Warmup ? 'Victoria prepara, revisa y aprueba. Durante pruebas se programa a PRUEBA_VICTORIA.' : 'Esto es lo que la persona revisora aprobará antes del envío.'}</p>
+                        <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{selectedIsWorkshop ? 'Solo tú apruebas esta Workshop. El envío queda en cola para 10:00 AM o 5:00 PM.' : selectedIsJF017Warmup ? 'Victoria prepara, revisa y aprueba. El destino y horario se toman de la campaña configurada.' : 'Esto es lo que la persona revisora aprobará antes del envío.'}</p>
                       </div>
                       {whatsAppPreview?.destination && (
                         <span className="rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-400">
@@ -1079,6 +1112,17 @@ export default function CopyCenterDashboard() {
 
               <aside className="space-y-4">
                 <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : selectedIsCourse ? 'Victoria · exclusiva Cursos' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">{selectedIsScheduledWarmup ? 'Programación' : 'Entrega'}</dt><dd className="font-semibold">{selectedIsScheduledWarmup && !selected.due_date ? 'Se asigna al aprobar · 10 AM / 5 PM' : displayDate(selected.due_date)}</dd></div></dl></div>
+                <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.06] p-4 text-sm">
+                  <p className="text-xs font-bold uppercase tracking-wider text-violet-500">Checklist AIDA</p>
+                  <div className="mt-3 space-y-2">
+                    {COPY_FRAMEWORK_AIDA.map((stage, index) => (
+                      <div key={`${stage.label}-review-${index}`} className="flex gap-2">
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-violet-500/15 text-xs font-black text-violet-500">{stage.key}</span>
+                        <span><strong>{stage.label}:</strong> <span className="text-foreground/55">{stage.description}</span></span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Publicación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Tema</dt><dd className="font-semibold">{selected.product_topic}</dd></div><div><dt className="text-foreground/45">Canales</dt><dd className="font-semibold">{selected.channels.join(', ')}</dd></div><div><dt className="text-foreground/45">Objetivo</dt><dd className="font-semibold">{selected.objective}</dd></div><div><dt className="text-foreground/45">Tono</dt><dd className="font-semibold">{selected.tone}</dd></div></dl></div>
                 {selected.needs_image && <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm"><p className="flex items-center gap-2 font-bold text-amber-600 dark:text-amber-300"><ImageIcon size={17} /> Requiere contenido visual</p><p className="mt-2 text-foreground/65">{selected.image_brief || 'Sin indicaciones visuales.'}</p>{selected.image_prompt && <p className="mt-3 border-t border-amber-500/20 pt-3 text-xs text-foreground/55">Prompt: {selected.image_prompt}</p>}</div>}
               </aside>
