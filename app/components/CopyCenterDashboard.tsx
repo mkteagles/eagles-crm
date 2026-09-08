@@ -41,6 +41,7 @@ import {
   getCategoryLabel,
 } from '@/lib/copy-center'
 import type { UserProfile } from '@/lib/marketing-types'
+import { buildLiveFlyerFile, nextLiveTemplateIdClient } from '@/lib/live-flyer-client'
 
 type CopyForm = {
   title: string
@@ -535,6 +536,14 @@ export default function CopyCenterDashboard() {
       if (createError || !created) throw createError || new Error('No se pudo crear el Live.')
       const createdRequest = created as CopyRequest
 
+      // El flyer se genera en el navegador con Canvas. Así no dependemos de Sharp,
+      // Vercel, Ollama ni ningún modelo de imagen de pago.
+      const renderedFlyer = await buildLiveFlyerFile(
+        topic,
+        liveForm.liveDate,
+        liveForm.templateId,
+      )
+
       const configResponse = await fetch(`/app1/api/copy-requests/${createdRequest.id}/live`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -542,12 +551,14 @@ export default function CopyCenterDashboard() {
           action: 'configure',
           liveDate: liveForm.liveDate,
           isExtraordinary: liveForm.extraordinary,
-          templateId: liveForm.templateId,
+          templateId: renderedFlyer.templateId,
           selectedGroupCodes: liveForm.selectedGroupCodes,
         }),
       })
       const configPayload = await configResponse.json()
       if (!configResponse.ok) throw new Error(configPayload.error || 'No se pudo guardar la configuración del Live.')
+
+      await uploadMediaForCopy(createdRequest.id, renderedFlyer.file)
 
       const generateResponse = await fetch(`/app1/api/copy-requests/${createdRequest.id}/generate`, { method: 'POST' })
       const generatePayload = await generateResponse.json()
@@ -558,8 +569,12 @@ export default function CopyCenterDashboard() {
       setEditorCopy(generatedRequest.final_copy || generatedRequest.generated_copy || '')
       setFeedback('')
       setShowLiveCreate(false)
-      setNotice('Live listo. El flyer se generó automáticamente con tema y fecha. Úrsula solo revisa, aprueba y programa.')
-      await loadData()
+      setNotice(`Live listo. Flyer PNG generado automáticamente en tu navegador · Plantilla ${renderedFlyer.templateId}.`)
+      await Promise.all([
+        loadData(),
+        loadWhatsAppPreview(createdRequest.id),
+        loadLivePreview(createdRequest.id),
+      ])
     } catch (liveError) {
       setNotice(liveError instanceof Error ? liveError.message : 'No se pudo crear el Live.')
     } finally {
@@ -611,20 +626,44 @@ export default function CopyCenterDashboard() {
 
   const regenerateLiveFlyer = async () => {
     if (!selected || !isLiveCopy(selected)) return
+    if (!livePreview?.settings) {
+      setNotice('Primero abre o vuelve a crear la configuración del Live.')
+      return
+    }
+
     setWorking(true)
     setNotice(null)
     try {
-      const response = await fetch(`/app1/api/copy-requests/${selected.id}/live`, {
+      const topic = selected.product_topic
+        .replace(/^live\s*[·:\-–—]?\s*/i, '')
+        .replace(/^transmisi[oó]n\s+/i, '')
+        .trim()
+      const nextTemplate = nextLiveTemplateIdClient(livePreview.settings.template_id)
+      const renderedFlyer = await buildLiveFlyerFile(
+        topic,
+        livePreview.settings.live_date,
+        nextTemplate,
+      )
+
+      const configResponse = await fetch(`/app1/api/copy-requests/${selected.id}/live`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ action: 'regenerate-flyer', templateId: 'next' }),
+        body: JSON.stringify({
+          action: 'configure',
+          liveDate: livePreview.settings.live_date,
+          isExtraordinary: livePreview.settings.is_extraordinary,
+          templateId: renderedFlyer.templateId,
+          selectedGroupCodes: livePreview.settings.selected_group_codes,
+        }),
       })
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'No se pudo regenerar el flyer.')
+      const configPayload = await configResponse.json()
+      if (!configResponse.ok) throw new Error(configPayload.error || 'No se pudo actualizar la plantilla del Live.')
+
+      await uploadMediaForCopy(selected.id, renderedFlyer.file)
       await Promise.all([loadWhatsAppPreview(selected.id), loadLivePreview(selected.id)])
-      setNotice(`Flyer actualizado automáticamente · Plantilla ${payload.settings?.template_id || ''}.`)
+      setNotice(`Flyer generado en el navegador · Plantilla ${renderedFlyer.templateId}.`)
     } catch (flyerError) {
-      setNotice(flyerError instanceof Error ? flyerError.message : 'No se pudo regenerar el flyer.')
+      setNotice(flyerError instanceof Error ? flyerError.message : 'No se pudo generar el flyer.')
     } finally {
       setWorking(false)
     }
@@ -871,61 +910,66 @@ export default function CopyCenterDashboard() {
     void loadLivePreview(selected.id)
   }, [loadLivePreview, selected?.id])
 
+  const uploadMediaForCopy = async (copyId: string, file: File) => {
+    const prepareResponse = await fetch(`/app1/api/copy-requests/${copyId}/whatsapp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'prepare-upload',
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+      }),
+    })
+    const preparePayload = await prepareResponse.json()
+    if (!prepareResponse.ok) throw new Error(preparePayload.error || 'No se pudo preparar la carga.')
+
+    const upload = preparePayload.upload as {
+      bucket: string
+      storagePath: string
+      token: string
+      version: number
+      assetType: 'image' | 'video'
+    }
+
+    const { error: storageError } = await supabase.storage
+      .from(upload.bucket)
+      .uploadToSignedUrl(upload.storagePath, upload.token, file, {
+        contentType: file.type,
+        cacheControl: '3600',
+      })
+
+    if (storageError) throw storageError
+
+    const finalizeResponse = await fetch(`/app1/api/copy-requests/${copyId}/whatsapp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'finalize-upload',
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        storagePath: upload.storagePath,
+        version: upload.version,
+        assetType: upload.assetType,
+      }),
+    })
+    const finalizePayload = await finalizeResponse.json()
+    if (!finalizeResponse.ok) throw new Error(finalizePayload.error || 'No se pudo guardar el contenido.')
+
+    return finalizePayload.asset as WhatsAppAsset
+  }
+
   const uploadWhatsAppMedia = async (file: File | null) => {
     if (!selected || !file) return
     setImageUploading(true)
     setNotice(null)
 
     try {
-      const prepareResponse = await fetch(`/app1/api/copy-requests/${selected.id}/whatsapp`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: 'prepare-upload',
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-        }),
-      })
-      const preparePayload = await prepareResponse.json()
-      if (!prepareResponse.ok) throw new Error(preparePayload.error || 'No se pudo preparar la carga.')
-
-      const upload = preparePayload.upload as {
-        bucket: string
-        storagePath: string
-        token: string
-        version: number
-        assetType: 'image' | 'video'
-      }
-
-      const { error: storageError } = await supabase.storage
-        .from(upload.bucket)
-        .uploadToSignedUrl(upload.storagePath, upload.token, file, {
-          contentType: file.type,
-          cacheControl: '3600',
-        })
-
-      if (storageError) throw storageError
-
-      const finalizeResponse = await fetch(`/app1/api/copy-requests/${selected.id}/whatsapp`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          action: 'finalize-upload',
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          storagePath: upload.storagePath,
-          version: upload.version,
-          assetType: upload.assetType,
-        }),
-      })
-      const finalizePayload = await finalizeResponse.json()
-      if (!finalizeResponse.ok) throw new Error(finalizePayload.error || 'No se pudo guardar el contenido.')
-
+      const asset = await uploadMediaForCopy(selected.id, file)
       await loadWhatsAppPreview(selected.id)
       setNotice(isOctoberWorkshop(selected) || isCourseCopy(selected)
-        ? `${upload.assetType === 'video' ? 'Video' : 'Imagen'} guardado. Ya puedes revisarlo en la vista previa de WhatsApp.`
+        ? `${asset.asset_type === 'video' ? 'Video' : 'Imagen'} guardado. Ya puedes revisarlo en la vista previa de WhatsApp.`
         : 'Contenido guardado. La persona revisora ya puede verlo en la vista previa de WhatsApp.')
     } catch (uploadError) {
       setNotice(uploadError instanceof Error ? uploadError.message : 'No se pudo subir el contenido.')
@@ -1438,8 +1482,8 @@ export default function CopyCenterDashboard() {
                       ) : (
                         <div className="mx-auto flex min-h-56 max-w-md flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white/70 p-6 text-center dark:border-slate-700 dark:bg-white/5">
                           <ImageIcon size={34} className="text-slate-400" />
-                          <p className="mt-3 font-bold">{selectedIsLive ? 'Falta el flyer final del Live' : 'Falta el contenido del calentamiento'}</p>
-                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedIsLive ? 'Selecciona una de las plantillas como referencia y sube aquí el flyer final. Los PNG recibidos no tienen capas editables.' : 'Puedes subir un flyer o un video corto.'}</p>
+                          <p className="mt-3 font-bold">{selectedIsLive ? 'Flyer aún no generado' : 'Falta el contenido del calentamiento'}</p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{selectedIsLive ? 'Pulsa “Generar flyer automático”. El CRM lo crea en tu navegador con tema y fecha y lo sube a Supabase.' : 'Puedes subir un flyer o un video corto.'}</p>
                         </div>
                       )}
 
@@ -1448,7 +1492,7 @@ export default function CopyCenterDashboard() {
                           {selectedIsLive && (
                             <button type="button" disabled={working} onClick={() => void regenerateLiveFlyer()} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-sky-500 bg-white px-4 text-sm font-bold text-sky-700 transition hover:bg-sky-50 disabled:opacity-50 dark:bg-white/5 dark:text-sky-300">
                               {working ? <Loader2 className="animate-spin" size={17} /> : <RefreshCw size={17} />}
-                              Cambiar estilo del flyer
+                              {whatsAppPreview?.asset ? 'Cambiar estilo del flyer' : 'Generar flyer automático'}
                             </button>
                           )}
                           <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-white/5 dark:text-slate-100">
