@@ -455,6 +455,12 @@ export default function CopyCenterDashboard() {
     setLiveGroupsLoading(true)
     try {
       const response = await fetch('/app1/api/live-stream/groups', { cache: 'no-store' })
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.includes('application/json')) {
+        const raw = await response.text()
+        console.error('[LIVE GROUPS] respuesta no JSON', { status: response.status, redirected: response.redirected, url: response.url, raw: raw.slice(0, 180) })
+        throw new Error('El endpoint de grupos fue redirigido o no está disponible. Recarga el CRM e inténtalo de nuevo.')
+      }
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'No se pudieron cargar los grupos.')
       setLiveGroups((payload.groups || []) as LiveGroupOption[])

@@ -118,6 +118,18 @@ export async function updateSession(
     return response
   }
 
+  // Los endpoints de Lives validan nuevamente sesión y permisos dentro
+  // de sus Route Handlers. Si no los dejamos pasar aquí, un usuario
+  // executor (Úrsula) es redirigido a /app1 y fetch recibe HTML en lugar
+  // de JSON, provocando: Unexpected token '<', '<!DOCTYPE...'.
+  if (
+    pathname.startsWith(
+      '/app1/api/live-stream/'
+    )
+  ) {
+    return response
+  }
+
   // =====================================================
   // OBTENER PERFIL
   // =====================================================
