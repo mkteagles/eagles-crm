@@ -29,3 +29,11 @@ Cada evidencia recibe `expires_at = created_at + 3 days`.
 - El bloque **Evidencia de mis actividades** ahora muestra únicamente actividades con `due_date` igual a la fecha local actual del usuario.
 - Ya no aparecen actividades de días anteriores ni actividades futuras para subir evidencia.
 - Las evidencias ya cargadas siguen disponibles en el consolidado durante 3 días y luego se eliminan según la política existente.
+
+
+## FIX acceso de visores a Reportes
+- Nancy, Jonathan y Lalo/Eduardo se reconocen por nombre o correo.
+- Middleware les permite entrar explícitamente a `/app1/marketing/reports` sin depender del `role`.
+- Esos visores ven Evidencias consolidadas en modo consulta y no montan `ConsolidatedReports`.
+- Victoria conserva la capacidad de consolidar evidencias.
+- Los demás admins conservan el consolidado histórico anterior.

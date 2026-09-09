@@ -215,6 +215,25 @@ export async function updateSession(
     normalizedName.includes('jesús') ||
     normalizedEmail === 'chuy@eagles.com'
 
+  // Visores de evidencias de Reportes. Se detectan por nombre o correo
+  // para que un cambio de role/perfil no los saque de la ruta.
+  const isNancy =
+    normalizedName.includes('nancy') ||
+    normalizedEmail.includes('nancy')
+
+  const isJonathan =
+    normalizedName.includes('jonathan') ||
+    normalizedEmail.includes('jonathan')
+
+  const isLaloEduardo =
+    normalizedName.includes('lalo') ||
+    normalizedName.includes('eduardo') ||
+    normalizedEmail.includes('lalo') ||
+    normalizedEmail.includes('eduardo')
+
+  const isEvidenceViewer =
+    isNancy || isJonathan || isLaloEduardo
+
   // =====================================================
   // RUTAS
   // =====================================================
@@ -228,6 +247,10 @@ export async function updateSession(
     pathname.startsWith(
       '/app1/marketing/'
     )
+
+  const isReports =
+    pathname === '/app1/marketing/reports' ||
+    pathname.startsWith('/app1/marketing/reports/')
 
   const isSales =
     pathname === '/app1/leads' ||
@@ -256,6 +279,16 @@ export async function updateSession(
     pathname.startsWith(
       '/app1/taller/'
     )
+
+  // =====================================================
+  // VISORES DE EVIDENCIAS
+  // =====================================================
+  // Nancy, Jonathan y Lalo/Eduardo siempre pueden entrar a Reportes,
+  // independientemente de si su role quedó como admin, viewer o executor.
+  // El Route Handler de evidencias valida nuevamente qué pueden consultar.
+  if (isReports && isEvidenceViewer) {
+    return response
+  }
 
   // =====================================================
   // ADMIN

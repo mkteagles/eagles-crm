@@ -50,11 +50,15 @@ function permissions(profile: { role?: string | null; full_name?: string | null;
   const name = normalize(String(profile.full_name || ''))
   const email = normalize(String(profile.email || ''))
 
-  const isVictoria = name.includes('victoria')
-  const isNancy = name.includes('nancy')
-  const isJonathan = name.includes('jonathan')
-  const isLalo = name.includes('lalo') || name.includes('eduardo')
-  const isLuis = name.includes('luis')
+  const isVictoria = name.includes('victoria') || email.includes('victoria')
+  const isNancy = name.includes('nancy') || email.includes('nancy')
+  const isJonathan = name.includes('jonathan') || email.includes('jonathan')
+  const isLalo =
+    name.includes('lalo') ||
+    name.includes('eduardo') ||
+    email.includes('lalo') ||
+    email.includes('eduardo')
+  const isLuis = name.includes('luis') || email.includes('luis')
   const isMarcos = name.includes('marcos') || email === 'marcosc@eagles.com'
   const isUrsula = name.includes('ursula') || email === 'ursula@eagles.com'
   const viewerNamed = isNancy || isJonathan || isLalo

@@ -27,19 +27,30 @@ export default function ReportsPage() {
   const name = normalize(user.full_name || "");
   const email = normalize(user.email || "");
 
-  const isVictoria = name.includes("victoria");
-  const isLuis = name.includes("luis");
+  const isVictoria = name.includes("victoria") || email.includes("victoria");
+  const isLuis = name.includes("luis") || email.includes("luis");
   const isMarcos = name.includes("marcos") || email === "marcosc@eagles.com";
   const isUrsula = name.includes("ursula") || email === "ursula@eagles.com";
-  const isEvidenceViewer =
-    name.includes("nancy") ||
-    name.includes("jonathan") ||
+  const isNancy = name.includes("nancy") || email.includes("nancy");
+  const isJonathan = name.includes("jonathan") || email.includes("jonathan");
+  const isLaloEduardo =
     name.includes("lalo") ||
-    name.includes("eduardo");
+    name.includes("eduardo") ||
+    email.includes("lalo") ||
+    email.includes("eduardo");
+  const isEvidenceViewer = isNancy || isJonathan || isLaloEduardo;
 
   const canUploadEvidence = user.role === "executor" || isLuis || isMarcos || isVictoria || isUrsula;
-  const canSeeConsolidatedReports = user.role === "admin" || isVictoria;
-  const canSeeEvidenceModule = canUploadEvidence || user.role === "admin" || isEvidenceViewer || isVictoria;
+
+  // Victoria arma el consolidado operativo con evidencias. Los visores
+  // (Nancy, Jonathan y Lalo/Eduardo) entran a Reportes en modo consulta
+  // y no montan el consolidado histórico, evitando mezclar permisos y vistas.
+  // Los demás admins conservan el consolidado anterior.
+  const canSeeConsolidatedReports =
+    isVictoria || (user.role === "admin" && !isEvidenceViewer);
+
+  const canSeeEvidenceModule =
+    canUploadEvidence || user.role === "admin" || isEvidenceViewer || isVictoria;
 
   return (
     <div className="space-y-6">
