@@ -34,6 +34,7 @@ import {
   COPY_WORKSHOPS,
   COPY_FEATURED_COURSES,
   COPY_FRAMEWORK_AIDA,
+  LIVE_STREAM_TEMPLATES,
   CopyCategory,
   CopyRequest,
   CopyStatus,
