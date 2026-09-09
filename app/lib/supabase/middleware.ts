@@ -71,6 +71,12 @@ export async function updateSession(
   const pathname =
     request.nextUrl.pathname
 
+  // La limpieza de evidencias corre desde n8n sin sesión de navegador.
+  // El Route Handler valida REPORT_EVIDENCE_CLEANUP_SECRET.
+  if (pathname === '/app1/api/report-evidence/cleanup') {
+    return response
+  }
+
   // =====================================================
   // LOGIN
   // =====================================================
@@ -125,6 +131,17 @@ export async function updateSession(
   if (
     pathname.startsWith(
       '/app1/api/live-stream/'
+    )
+  ) {
+    return response
+  }
+
+  // Evidencias de Reportes validan sesión/permisos dentro del Route Handler.
+  // Se permite pasar aquí para que executors (Úrsula, Victoria, etc.) no
+  // reciban HTML por una redirección del middleware durante fetch().
+  if (
+    pathname.startsWith(
+      '/app1/api/report-evidence'
     )
   ) {
     return response

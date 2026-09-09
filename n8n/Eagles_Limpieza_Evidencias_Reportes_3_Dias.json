@@ -1,0 +1,118 @@
+{
+  "name": "Eagles · Limpieza evidencias reportes · 3 dias",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "7b9dd3df-8ccb-4771-be34-6cfc45fc85e7",
+      "name": "Todos los dias 3 30 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "crmBaseUrl",
+              "value": "https://TU-DOMINIO-CRM.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "cleanupSecret",
+              "value": "PEGA_AQUI_EL_MISMO_REPORT_EVIDENCE_CLEANUP_SECRET_DE_VERCEL",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "456deba1-5535-442b-bffd-e133755cc9bf",
+      "name": "Configuracion privada",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        256,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ (($json.crmBaseUrl || '').endsWith('/') ? $json.crmBaseUrl.slice(0,-1) : $json.crmBaseUrl) + '/app1/api/report-evidence/cleanup' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-eagles-cleanup-secret",
+              "value": "={{ $json.cleanupSecret }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "6b390fc9-6d8c-4e95-9e68-bb919b6e2042",
+      "name": "Borrar evidencias vencidas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        512,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Todos los dias 3 30 AM": {
+      "main": [
+        [
+          {
+            "node": "Configuracion privada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuracion privada": {
+      "main": [
+        [
+          {
+            "node": "Borrar evidencias vencidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "active": false
+}
