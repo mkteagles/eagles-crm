@@ -23,3 +23,9 @@ Cada evidencia recibe `expires_at = created_at + 3 days`.
 - Los usuarios solo pueden adjuntar a actividades asignadas a su propio usuario.
 - La eliminación manual está disponible para el autor y Victoria.
 - La tabla usa RLS sin policies públicas; la API server-side usa service role.
+
+
+## Ajuste 2026-09-09 — carga solo del día
+- El bloque **Evidencia de mis actividades** ahora muestra únicamente actividades con `due_date` igual a la fecha local actual del usuario.
+- Ya no aparecen actividades de días anteriores ni actividades futuras para subir evidencia.
+- Las evidencias ya cargadas siguen disponibles en el consolidado durante 3 días y luego se eliminan según la política existente.

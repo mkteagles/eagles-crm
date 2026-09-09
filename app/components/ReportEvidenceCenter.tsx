@@ -57,11 +57,6 @@ function dateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function addDays(date: Date, days: number) {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy;
-}
 
 function formatDateTime(value: string) {
   return new Date(value).toLocaleString("es-MX", {
@@ -123,26 +118,24 @@ export default function ReportEvidenceCenter() {
   const loadActivities = useCallback(async () => {
     if (!user?.id) return;
 
-    const since = dateKey(addDays(new Date(), -2));
+    // Evidencias operativas: cada usuario solo debe cargar evidencia
+    // de las actividades que le corresponden HOY. La evidencia ya
+    // cargada sí permanece visible durante 3 días para consolidación.
+    const today = dateKey(new Date());
     const { data, error } = await supabase
       .from("activities")
       .select("id,title,status,due_date,updated_at")
       .eq("assigned_to", user.id)
+      .eq("due_date", today)
       .order("updated_at", { ascending: false })
       .limit(80);
 
     if (error) {
-      console.error("Error cargando actividades para evidencia:", error);
+      console.error("Error cargando actividades de hoy para evidencia:", error);
       return;
     }
 
-    const recent = (data || []).filter((item: any) => {
-      const due = item.due_date ? String(item.due_date).split("T")[0] : "";
-      const updated = item.updated_at ? String(item.updated_at).split("T")[0] : "";
-      return due >= since || updated >= since;
-    });
-
-    setActivities(recent as ActivityRow[]);
+    setActivities((data || []) as ActivityRow[]);
   }, [user?.id]);
 
   const refresh = useCallback(async () => {
@@ -324,7 +317,7 @@ export default function ReportEvidenceCenter() {
                 <h2 className="text-xl font-bold">Evidencia de mis actividades</h2>
               </div>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Sube captura, foto o PDF. Cada archivo dura 3 días y después se elimina para ahorrar espacio.
+                Solo se muestran tus actividades de hoy. Sube captura, foto o PDF; cada archivo dura 3 días y después se elimina para ahorrar espacio.
               </p>
             </div>
             <button
@@ -339,7 +332,7 @@ export default function ReportEvidenceCenter() {
 
           {activities.length === 0 ? (
             <div className="rounded-xl bg-gray-50 p-5 text-sm text-gray-500 dark:bg-gray-950 dark:text-gray-400">
-              No tienes actividades recientes de los últimos 3 días.
+              No tienes actividades asignadas para hoy.
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
