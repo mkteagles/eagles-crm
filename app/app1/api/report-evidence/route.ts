@@ -95,6 +95,55 @@ async function sessionContext() {
   }
 }
 
+
+type ActivityOwnerContext = {
+  ids: Set<string>
+  aliases: Set<string>
+}
+
+async function activityOwnerContext(
+  admin: ReturnType<typeof createAdminClient>,
+  session: { userId: string; profile: { full_name?: string | null; email?: string | null } },
+): Promise<ActivityOwnerContext> {
+  const currentName = normalize(String(session.profile.full_name || ''))
+  const currentEmail = normalize(String(session.profile.email || ''))
+
+  const ids = new Set<string>([session.userId])
+  const aliases = new Set<string>()
+  if (currentName) aliases.add(currentName)
+  if (currentEmail) aliases.add(currentEmail)
+
+  const { data: profiles, error } = await admin
+    .from('user_profiles')
+    .select('id,full_name,email')
+
+  if (error) throw error
+
+  for (const profile of profiles || []) {
+    const profileName = normalize(String(profile.full_name || ''))
+    const profileEmail = normalize(String(profile.email || ''))
+
+    // Compatibilidad con cuentas duplicadas/antiguas del mismo integrante.
+    // Varias actividades históricas quedaron ligadas a otro UUID aunque en
+    // el CRM se muestran con el mismo nombre (por ejemplo, Victoria).
+    if (
+      (currentEmail && profileEmail === currentEmail) ||
+      (currentName && profileName === currentName)
+    ) {
+      ids.add(String(profile.id))
+    }
+  }
+
+  return { ids, aliases }
+}
+
+function activityBelongsToUser(assignedTo: unknown, owner: ActivityOwnerContext) {
+  const raw = String(assignedTo || '').trim()
+  if (!raw) return false
+  if (owner.ids.has(raw)) return true
+  return owner.aliases.has(normalize(raw))
+}
+
 async function cleanupExpiredEvidence() {
   const admin = createAdminClient()
   const nowIso = new Date().toISOString()
@@ -133,6 +182,27 @@ export async function GET() {
     })
 
     const admin = createAdminClient()
+    const owner = await activityOwnerContext(admin, session)
+
+    const { data: todayActivityRows, error: todayActivitiesError } = await admin
+      .from('activities')
+      .select('id,title,status,due_date,updated_at,assigned_to')
+      .eq('due_date', mexicoDate())
+      .order('updated_at', { ascending: false })
+      .limit(250)
+
+    if (todayActivitiesError) throw todayActivitiesError
+
+    const todayActivities = (todayActivityRows || [])
+      .filter((activity) => activityBelongsToUser(activity.assigned_to, owner))
+      .map((activity) => ({
+        id: activity.id,
+        title: activity.title,
+        status: activity.status,
+        due_date: activity.due_date,
+        updated_at: activity.updated_at,
+      }))
+
     let query = admin
       .from('report_evidence')
       .select('*')
@@ -179,6 +249,7 @@ export async function GET() {
 
     return NextResponse.json({
       evidence: enriched,
+      activities: todayActivities,
       permissions: session.permissions,
       retention_days: 3,
     })
@@ -227,8 +298,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No se encontró la actividad.' }, { status: 404 })
     }
 
-    if (String(activity.assigned_to) !== session.userId) {
+    const owner = await activityOwnerContext(admin, session)
+    if (!activityBelongsToUser(activity.assigned_to, owner)) {
       return NextResponse.json({ error: 'Solo puedes subir evidencia a actividades asignadas a ti.' }, { status: 403 })
+    }
+
+    if (String(activity.due_date || '').slice(0, 10) !== mexicoDate()) {
+      return NextResponse.json({ error: 'Solo puedes subir evidencia de actividades del día de hoy.' }, { status: 400 })
     }
 
     if (payload.action === 'prepare-upload') {

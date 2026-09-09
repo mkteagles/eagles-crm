@@ -109,40 +109,18 @@ export default function ReportEvidenceCenter() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "No se pudieron cargar las evidencias.");
       setEvidence(payload.evidence || []);
+      setActivities(payload.activities || []);
       setPermissions(payload.permissions || permissions);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "No se pudieron cargar las evidencias.");
     }
   }, []);
 
-  const loadActivities = useCallback(async () => {
-    if (!user?.id) return;
-
-    // Evidencias operativas: cada usuario solo debe cargar evidencia
-    // de las actividades que le corresponden HOY. La evidencia ya
-    // cargada sí permanece visible durante 3 días para consolidación.
-    const today = dateKey(new Date());
-    const { data, error } = await supabase
-      .from("activities")
-      .select("id,title,status,due_date,updated_at")
-      .eq("assigned_to", user.id)
-      .eq("due_date", today)
-      .order("updated_at", { ascending: false })
-      .limit(80);
-
-    if (error) {
-      console.error("Error cargando actividades de hoy para evidencia:", error);
-      return;
-    }
-
-    setActivities((data || []) as ActivityRow[]);
-  }, [user?.id]);
-
   const refresh = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadEvidence(), loadActivities()]);
+    await loadEvidence();
     setLoading(false);
-  }, [loadEvidence, loadActivities]);
+  }, [loadEvidence]);
 
   useEffect(() => {
     if (!userLoading && user) void refresh();
