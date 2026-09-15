@@ -32,8 +32,9 @@ export async function creativeCalendarSession() {
   const email = String(profile?.email || authData.user.email || '')
   const normalizedName = normalize(fullName)
   const normalizedEmail = normalize(email)
-  const isUrsula = normalizedName.includes('ursula') || normalizedEmail.includes('ursula')
-  const canEdit = isUrsula || profile?.role === 'admin'
+  const isUrsula = normalizedName.includes('ursula') || normalizedEmail === 'ursula@eagles.com' || normalizedEmail.includes('ursula')
+  const isMarcos = normalizedName.includes('marcos') || normalizedEmail === 'marcosc@eagles.com' || normalizedEmail.includes('marcos')
+  const canEdit = isUrsula || isMarcos || profile?.role === 'admin'
 
   return {
     userId: authData.user.id,
@@ -44,6 +45,7 @@ export async function creativeCalendarSession() {
       role: profile?.role || 'executor',
     },
     isUrsula,
+    isMarcos,
     canEdit,
   }
 }
@@ -51,7 +53,7 @@ export async function creativeCalendarSession() {
 export function assertCreativeEditor(session: { canEdit: boolean }) {
   if (session.canEdit) return null
   return NextResponse.json(
-    { error: 'El calendario creativo solo puede ser editado por Úrsula o un administrador.' },
+    { error: 'El calendario creativo solo puede ser editado por Úrsula, Marcos o un administrador.' },
     { status: 403 },
   )
 }

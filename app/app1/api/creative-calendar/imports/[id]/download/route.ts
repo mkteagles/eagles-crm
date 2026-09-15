@@ -6,6 +6,11 @@ export const runtime = 'nodejs'
 
 const BUCKET = 'creative-calendar-files'
 
+function contentDisposition(name: string) {
+  const safe = name.replace(/[\r\n"]/g, '').trim() || 'calendario.docx'
+  return `attachment; filename="${safe}"`
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -17,26 +22,33 @@ export async function GET(
 
   try {
     const admin = createAdminClient()
-    const { data: imported, error } = await admin
+    const { data: imported, error: importError } = await admin
       .from('creative_calendar_imports')
-      .select('storage_path')
+      .select('file_name,storage_path')
       .eq('id', id)
       .maybeSingle()
 
-    if (error) throw error
-    if (!imported?.storage_path) {
+    if (importError) throw importError
+    if (!imported) {
       return NextResponse.json({ error: 'No se encontró el Word original.' }, { status: 404 })
     }
 
-    const { data, error: signedError } = await admin.storage
+    const { data: file, error: downloadError } = await admin.storage
       .from(BUCKET)
-      .createSignedUrl(imported.storage_path, 120)
+      .download(imported.storage_path)
 
-    if (signedError) throw signedError
-    return NextResponse.redirect(data.signedUrl)
+    if (downloadError) throw downloadError
+
+    return new Response(await file.arrayBuffer(), {
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'Content-Disposition': contentDisposition(imported.file_name),
+        'Cache-Control': 'private, no-store',
+      },
+    })
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'No se pudo abrir el Word.' },
+      { error: error instanceof Error ? error.message : 'No se pudo descargar el Word.' },
       { status: 500 },
     )
   }

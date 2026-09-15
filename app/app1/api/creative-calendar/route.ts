@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { SEPTEMBER_2026_SEED } from '@/lib/creative-calendar-september-2026'
 import {
   assertCreativeEditor,
   creativeCalendarSession,
@@ -22,7 +23,7 @@ export async function GET(request: Request) {
     const admin = createAdminClient()
     const periodMonth = `${period}-01`
 
-    const [{ data: items, error: itemsError }, { data: imports, error: importsError }] = await Promise.all([
+    const [{ data: loadedItems, error: itemsError }, { data: imports, error: importsError }] = await Promise.all([
       admin
         .from('creative_calendar_items')
         .select('*')
@@ -40,8 +41,29 @@ export async function GET(request: Request) {
     if (itemsError) throw itemsError
     if (importsError) throw importsError
 
+    let items = loadedItems || []
+
+    // Respaldo automático: si septiembre 2026 quedó vacío aunque la migración
+    // ya se haya ejecutado, el CRM carga la base del Word compartido una sola vez.
+    if (period === '2026-09' && items.length === 0) {
+      const payload = SEPTEMBER_2026_SEED.map((row) => ({
+        ...row,
+        period_month: '2026-09-01',
+        created_by: session.userId,
+        updated_by: session.userId,
+      }))
+
+      const { data: seededItems, error: seedError } = await admin
+        .from('creative_calendar_items')
+        .insert(payload)
+        .select('*')
+
+      if (seedError) throw seedError
+      items = seededItems || []
+    }
+
     return NextResponse.json({
-      items: items || [],
+      items,
       canEdit: session.canEdit,
       isUrsula: session.isUrsula,
       sourceImport: imports?.[0] || null,

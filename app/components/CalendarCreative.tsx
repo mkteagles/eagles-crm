@@ -358,6 +358,8 @@ export default function CalendarCreative() {
                   <h2 className="text-2xl font-bold text-gray-950 dark:text-white">Calendario creativo</h2>
                   {isUrsula ? (
                     <span className="rounded-full bg-purple-600 px-2.5 py-1 text-xs font-bold text-white">Editor de Úrsula</span>
+                  ) : canEdit ? (
+                    <span className="rounded-full bg-gray-900 px-2.5 py-1 text-xs font-bold text-white dark:bg-white dark:text-gray-900">Editor</span>
                   ) : null}
                 </div>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-gray-600 dark:text-gray-300">
@@ -467,6 +469,10 @@ export default function CalendarCreative() {
                   <Download size={16} /> Word original
                 </button>
               </>
+            ) : items.length > 0 ? (
+              <div className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+                Base mensual precargada · {items.length} contenidos
+              </div>
             ) : (
               <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
                 Sin Word cargado para este mes.
