@@ -3,9 +3,9 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import {
-  LIVE_STREAM_COPY_TUESDAY,
-  LIVE_STREAM_COPY_WEDNESDAY,
+  LIVE_STREAM_COPY_FOR_MOMENT,
   type CopyRequest,
+  type LiveStreamReminderMoment,
 } from '@/lib/copy-center'
 
 export const runtime = 'nodejs'
@@ -14,6 +14,7 @@ export const maxDuration = 60
 const LIVE_CAMPAIGN_CODE = 'LIVE_STREAM'
 const LIVE_TIMEZONE = 'America/Mexico_City'
 const LIVE_TEMPLATE_IDS = new Set(['1', '2', '3', '4', '5'])
+const EXCLUDED_LIVE_GROUP_CODES = new Set(['LIVE_ORG_OCTUBRE', 'LIVE_ORG_SEPTIEMBRE'])
 
 type LiveSettings = {
   copy_request_ref: string
@@ -91,18 +92,38 @@ function localDateTimeToUtc(dateText: string, hour: number, minute: number, time
   return guess
 }
 
-function distributedOffsets(count: number) {
-  if (count <= 1) return [0]
-  const maxSlot = 24 // 0..24 => 120 minutes, grid de 5 minutos
-  return Array.from({ length: count }, (_, index) => {
-    const slot = Math.round((index * maxSlot) / (count - 1))
-    return slot * 5
-  })
+function ceilToFiveMinutes(date: Date) {
+  const step = 5 * 60 * 1000
+  return new Date(Math.ceil(date.getTime() / step) * step)
 }
 
-function withOffset(dateText: string, startHour: number, startMinute: number, offsetMinutes: number, timeZone: string) {
-  const total = startHour * 60 + startMinute + offsetMinutes
-  return localDateTimeToUtc(dateText, Math.floor(total / 60), total % 60, timeZone)
+function distributedWindowTimes(
+  dateText: string,
+  startHour: number,
+  startMinute: number,
+  endHour: number,
+  endMinute: number,
+  count: number,
+  timeZone: string,
+  now: Date,
+) {
+  if (count <= 0) return [] as Date[]
+
+  const windowStart = localDateTimeToUtc(dateText, startHour, startMinute, timeZone)
+  const windowEnd = localDateTimeToUtc(dateText, endHour, endMinute, timeZone)
+  if (now >= windowEnd) return [] as Date[]
+
+  const minimumFuture = new Date(now.getTime() + 60 * 1000)
+  const effectiveStart = windowStart > minimumFuture ? windowStart : ceilToFiveMinutes(minimumFuture)
+  if (effectiveStart > windowEnd) return [] as Date[]
+  if (count === 1) return [effectiveStart]
+
+  const stepMs = 5 * 60 * 1000
+  const maxSlot = Math.max(0, Math.floor((windowEnd.getTime() - effectiveStart.getTime()) / stepMs))
+  return Array.from({ length: count }, (_, index) => {
+    const slot = Math.round((index * maxSlot) / (count - 1))
+    return new Date(effectiveStart.getTime() + slot * stepMs)
+  })
 }
 
 async function getContext(id: string) {
@@ -180,7 +201,7 @@ async function getGroups(admin: ReturnType<typeof createAdminClient>, codes: str
     .eq('whatsapp_instances.code', 'GRUPOS')
     .eq('whatsapp_instances.is_active', true)
   if (error) throw error
-  return (data || []) as unknown as GroupRow[]
+  return ((data || []) as unknown as GroupRow[]).filter((group) => !EXCLUDED_LIVE_GROUP_CODES.has(group.code))
 }
 
 export async function GET(
@@ -228,9 +249,10 @@ export async function POST(
     if (payload.action === 'configure') {
       const liveDate = String(payload.liveDate || '').trim()
       const requestedTemplateId = String(payload.templateId || '1').trim()
-      const groupCodes = Array.isArray(payload.selectedGroupCodes)
+      const requestedGroupCodes = Array.isArray(payload.selectedGroupCodes)
         ? [...new Set(payload.selectedGroupCodes.map((value) => String(value).trim()).filter(Boolean))]
         : []
+      const groupCodes = requestedGroupCodes.filter((code) => !EXCLUDED_LIVE_GROUP_CODES.has(code))
       const isExtraordinary = payload.isExtraordinary === true
 
       if (!/^\d{4}-\d{2}-\d{2}$/.test(liveDate)) {
@@ -303,47 +325,58 @@ export async function POST(
     }
 
     const topic = cleanLiveTopic(ctx.item.product_topic)
-    const captionDayBefore = LIVE_STREAM_COPY_TUESDAY(topic)
-    const captionDayOf = LIVE_STREAM_COPY_WEDNESDAY(topic)
-    const dayBefore = addDays(settings.live_date, -1)
-    const offsets = distributedOffsets(groups.length)
     const now = new Date()
 
+    const reminderWindows: Array<{
+      date: string
+      startHour: number
+      startMinute: number
+      endHour: number
+      endMinute: number
+      moment: LiveStreamReminderMoment
+    }> = settings.is_extraordinary
+      ? [
+          { date: addDays(settings.live_date, -2), startHour: 8, startMinute: 30, endHour: 10, endMinute: 30, moment: 'two-days-before' },
+          { date: addDays(settings.live_date, -1), startHour: 8, startMinute: 30, endHour: 10, endMinute: 30, moment: 'day-before' },
+          { date: settings.live_date, startHour: 8, startMinute: 0, endHour: 10, endMinute: 0, moment: 'day-of' },
+        ]
+      : [
+          { date: addDays(settings.live_date, -1), startHour: 8, startMinute: 30, endHour: 10, endMinute: 30, moment: 'day-before' },
+          { date: settings.live_date, startHour: 8, startMinute: 0, endHour: 10, endMinute: 0, moment: 'day-of' },
+        ]
+
     const rows: Array<Record<string, unknown>> = []
-    groups.forEach((group, index) => {
-      const dayBeforeAt = withOffset(dayBefore, 8, 30, offsets[index], settings.timezone)
-      const dayOfAt = withOffset(settings.live_date, 8, 0, offsets[index], settings.timezone)
+    for (const reminder of reminderWindows) {
+      const times = distributedWindowTimes(
+        reminder.date,
+        reminder.startHour,
+        reminder.startMinute,
+        reminder.endHour,
+        reminder.endMinute,
+        groups.length,
+        settings.timezone,
+        now,
+      )
+      if (!times.length) continue
 
-      if (dayBeforeAt > now) {
+      const caption = LIVE_STREAM_COPY_FOR_MOMENT(topic, settings.live_date, reminder.moment)
+      groups.forEach((group, index) => {
+        const scheduledAt = times[index]
+        if (!scheduledAt) return
         rows.push({
           copy_request_ref: id,
           campaign_code: LIVE_CAMPAIGN_CODE,
           asset_id: asset.id,
           instance_id: group.instance_id,
           group_id: group.id,
-          caption: captionDayBefore,
-          scheduled_at: dayBeforeAt.toISOString(),
+          caption,
+          scheduled_at: scheduledAt.toISOString(),
           status: 'scheduled',
           approved_by: ctx.userId,
           approved_at: now.toISOString(),
         })
-      }
-
-      if (dayOfAt > now) {
-        rows.push({
-          copy_request_ref: id,
-          campaign_code: LIVE_CAMPAIGN_CODE,
-          asset_id: asset.id,
-          instance_id: group.instance_id,
-          group_id: group.id,
-          caption: captionDayOf,
-          scheduled_at: dayOfAt.toISOString(),
-          status: 'scheduled',
-          approved_by: ctx.userId,
-          approved_at: now.toISOString(),
-        })
-      }
-    })
+      })
+    }
 
     if (!rows.length) {
       return NextResponse.json({ error: 'Las ventanas de envío de este Live ya pasaron. Cambia la fecha.' }, { status: 400 })
@@ -359,7 +392,13 @@ export async function POST(
     const { data: updated, error: updateError } = await ctx.supabase
       .from('copy_requests')
       .update({
-        final_copy: captionDayBefore,
+        // Conserva cualquier edición manual hecha por Úrsula en el borrador.
+        // Los mensajes programados usan la relación correcta con la fecha real del Live.
+        final_copy: ctx.item.final_copy || LIVE_STREAM_COPY_FOR_MOMENT(
+          topic,
+          settings.live_date,
+          settings.is_extraordinary ? 'two-days-before' : 'day-before',
+        ),
         status: 'approved',
         feedback: null,
         reviewed_at: now.toISOString(),

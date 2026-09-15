@@ -185,10 +185,44 @@ export const LIVE_STREAM_TEMPLATES = [
   { id: '5', label: 'Plantilla 5 · Live programación', src: '/live-templates/5.png' },
 ] as const
 
-export const LIVE_STREAM_COPY_TUESDAY = (topic: string) => `🚨 ¡RECUERDEN, CARNALITOS! 🚨
+export type LiveStreamReminderMoment = 'two-days-before' | 'day-before' | 'day-of'
 
-🔥 MAÑANA tenemos LIVE sobre Transmisión ${topic}
+export function formatLiveStreamDate(liveDate: string) {
+  const date = new Date(`${liveDate}T12:00:00Z`)
+  if (Number.isNaN(date.getTime())) return liveDate
 
+  const formatted = new Intl.DateTimeFormat('es-MX', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'UTC',
+  }).format(date)
+
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+}
+
+export function LIVE_STREAM_COPY_FOR_MOMENT(
+  topic: string,
+  liveDate: string,
+  moment: LiveStreamReminderMoment,
+) {
+  const relation = moment === 'day-of'
+    ? 'HOY'
+    : moment === 'day-before'
+      ? 'MAÑANA'
+      : 'EN 2 DÍAS'
+  const closing = moment === 'day-of'
+    ? 'hoy'
+    : moment === 'day-before'
+      ? 'mañana'
+      : 'en 2 días'
+  const dateLabel = formatLiveStreamDate(liveDate)
+
+  return `🚨 ¡RECUERDEN, CARNALITOS! 🚨
+
+🔥 ${relation} tenemos LIVE sobre Transmisión ${topic}
+
+📅 ${dateLabel}
 ⏰ ${LIVE_STREAM_TIME} | ${LIVE_STREAM_TIMEZONE_LABEL}
 
 📲 Conéctense desde nuestras redes y acompáñennos en vivo.
@@ -201,25 +235,15 @@ export const LIVE_STREAM_COPY_TUESDAY = (topic: string) => `🚨 ¡RECUERDEN, CA
 
 🔵 Facebook Taller Eagles: ${LIVE_STREAM_LINKS.facebookTaller}
 
-🔥 ¡Nos vemos mañana a las 11, carnalitos!`
+🔥 ¡Nos vemos ${closing} a las 11, carnalitos!`
+}
 
-export const LIVE_STREAM_COPY_WEDNESDAY = (topic: string) => `🚨 ¡RECUERDEN, CARNALITOS! 🚨
+// Compatibilidad con el flujo normal de miércoles.
+export const LIVE_STREAM_COPY_TUESDAY = (topic: string, liveDate = '') =>
+  LIVE_STREAM_COPY_FOR_MOMENT(topic, liveDate, 'day-before')
 
-🔥 HOY tenemos LIVE sobre Transmisión ${topic}
-
-⏰ ${LIVE_STREAM_TIME} | ${LIVE_STREAM_TIMEZONE_LABEL}
-
-📲 Conéctense desde nuestras redes y acompáñennos en vivo.
-
-🎵 TikTok Transmisiones: ${LIVE_STREAM_LINKS.tiktokTransmisiones}
-
-🎵 TikTok EAGLES: ${LIVE_STREAM_LINKS.tiktokEagles}
-
-🔵 Facebook EAGLES: ${LIVE_STREAM_LINKS.facebookEagles}
-
-🔵 Facebook Taller Eagles: ${LIVE_STREAM_LINKS.facebookTaller}
-
-🔥 ¡Nos vemos hoy a las 11, carnalitos!`
+export const LIVE_STREAM_COPY_WEDNESDAY = (topic: string, liveDate = '') =>
+  LIVE_STREAM_COPY_FOR_MOMENT(topic, liveDate, 'day-of')
 
 export const COPY_STATUS_LABELS: Record<CopyStatus, string> = {
   pending: 'Solicitud',

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { createClient } from '@/lib/supabase/server'
-import { COPY_FRAMEWORK_AIDA, LIVE_STREAM_COPY_TUESDAY, type CopyRequest } from '@/lib/copy-center'
+import { COPY_FRAMEWORK_AIDA, LIVE_STREAM_COPY_FOR_MOMENT, type CopyRequest, type LiveStreamReminderMoment } from '@/lib/copy-center'
 
 // Ollama puede tardar más en la primera generación mientras carga el modelo.
 // Vercel mantiene esta función disponible y el fetch conserva un margen menor.
@@ -44,6 +44,30 @@ function cleanLiveTopic(value: string) {
     .replace(/^live\s*[·:\-–—]?\s*/i, '')
     .replace(/^transmisi[oó]n\s+/i, '')
     .trim()
+}
+
+function todayInTimeZone(timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || ''
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
+
+function diffCalendarDays(fromDate: string, toDate: string) {
+  const from = new Date(`${fromDate}T12:00:00Z`)
+  const to = new Date(`${toDate}T12:00:00Z`)
+  return Math.round((to.getTime() - from.getTime()) / 86400000)
+}
+
+function previewMomentForLive(liveDate: string): LiveStreamReminderMoment {
+  const daysUntil = diffCalendarDays(todayInTimeZone('America/Mexico_City'), liveDate)
+  if (daysUntil <= 0) return 'day-of'
+  if (daysUntil === 1) return 'day-before'
+  return 'two-days-before'
 }
 
 function getCampaignCode(item: CopyRequest) {
@@ -99,7 +123,15 @@ export async function POST(
 
   if (liveOnlyUrsula) {
     const topic = cleanLiveTopic(item.product_topic)
-    const generatedCopy = LIVE_STREAM_COPY_TUESDAY(topic)
+    const { data: liveSettings } = await supabase
+      .from('copy_live_settings')
+      .select('live_date,is_extraordinary')
+      .eq('copy_request_ref', id)
+      .maybeSingle()
+
+    const liveDate = String(liveSettings?.live_date || item.due_date || '').trim()
+    const moment = liveDate ? previewMomentForLive(liveDate) : 'day-before'
+    const generatedCopy = LIVE_STREAM_COPY_FOR_MOMENT(topic, liveDate, moment)
 
     const { data: updated, error: updateError } = await supabase
       .from('copy_requests')

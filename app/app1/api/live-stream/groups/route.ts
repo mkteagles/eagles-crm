@@ -54,6 +54,7 @@ export async function GET() {
     // cómo quedó registrada la instancia/grupo pueden devolver 0 filas aunque
     // el grupo exista. Filtramos aquí de forma robusta.
     const TEST_GROUP_JID = '120363409439960903@g.us'
+    const EXCLUDED_LIVE_GROUP_CODES = new Set(['live_org_octubre', 'live_org_septiembre'])
     const groups = (data || []).filter((row) => {
       const relation = Array.isArray(row.whatsapp_instances)
         ? row.whatsapp_instances[0]
@@ -66,8 +67,9 @@ export async function GET() {
       const purpose = normalizeText(String(row.purpose || ''))
       const code = normalizeText(String(row.code || ''))
       const isLiveGroup = purpose === 'live' || code.startsWith('live_') || row.group_jid === TEST_GROUP_JID
+      const isExcludedOrganizationGroup = EXCLUDED_LIVE_GROUP_CODES.has(code)
 
-      return isGroupsInstance && isLiveGroup
+      return isGroupsInstance && isLiveGroup && !isExcludedOrganizationGroup
     })
 
     return NextResponse.json({

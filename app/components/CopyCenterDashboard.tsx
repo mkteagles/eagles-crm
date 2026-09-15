@@ -605,6 +605,17 @@ export default function CopyCenterDashboard() {
     setWorking(true)
     setNotice(null)
     try {
+      // Si Úrsula editó el borrador, guárdalo antes de programar para que
+      // la aprobación nunca vuelva a pisar su edición en pantalla.
+      const editedLiveCopy = editorCopy.trim()
+      if (editedLiveCopy && editedLiveCopy !== String(selected.final_copy || '').trim()) {
+        const { error: saveLiveCopyError } = await supabase
+          .from('copy_requests')
+          .update({ final_copy: editedLiveCopy })
+          .eq('id', selected.id)
+        if (saveLiveCopyError) throw saveLiveCopyError
+      }
+
       const response = await fetch(`/app1/api/copy-requests/${selected.id}/live`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1214,7 +1225,7 @@ export default function CopyCenterDashboard() {
               <div>
                 <span className="block text-xs font-bold uppercase tracking-wider text-sky-500">Lives · Úrsula</span>
                 <span className="mt-1 block font-bold text-foreground">Live de los miércoles</span>
-                <p className="mt-2 max-w-2xl text-sm text-foreground/55">Copy fijo: solo cambian tema y fecha. Tú generas, revisas, apruebas y programas. Martes se distribuye 8:30–10:30 AM y el día del Live 8:00–10:00 AM en los grupos seleccionados de la instancia GRUPOS.</p>
+                <p className="mt-2 max-w-2xl text-sm text-foreground/55">Copy fijo: solo cambian tema y fecha. Tú generas, revisas, apruebas y programas. Live normal: día anterior 8:30–10:30 AM y día del Live 8:00–10:00 AM. Fecha extraordinaria: también se envía 2 días antes, con el texto relativo correcto a la fecha real del Live.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={() => void openLiveCreate(false)} className="rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-sky-700">
@@ -1336,7 +1347,7 @@ export default function CopyCenterDashboard() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold">Grupos de WhatsApp · instancia GRUPOS *</p>
-                    <p className="mt-1 text-xs text-foreground/45">Selecciona los grupos que recibirán el recordatorio del día anterior y el aviso del día del Live.</p>
+                    <p className="mt-1 text-xs text-foreground/45">Selecciona los grupos que recibirán los recordatorios previos y el aviso del día del Live. Los dos grupos de Organización quedan excluidos.</p>
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setLiveForm((current) => ({ ...current, selectedGroupCodes: liveGroups.map((group) => group.code) }))} className="rounded-lg border border-border-color px-3 py-1.5 text-xs font-semibold">Todos</button>
@@ -1367,7 +1378,7 @@ export default function CopyCenterDashboard() {
 
               <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 text-sm">
                 <p className="font-bold text-emerald-600 dark:text-emerald-400">Programación automática multigrupo</p>
-                <p className="mt-1 text-foreground/60">Día anterior: 8:30–10:30 AM · Día del Live: 8:00–10:00 AM · Hora México. Los grupos se distribuyen durante la ventana para evitar ráfagas.</p>
+                <p className="mt-1 text-foreground/60">{liveForm.extraordinary ? 'Fecha extraordinaria: 2 días antes 8:30–10:30 AM · 1 día antes 8:30–10:30 AM · día del Live 8:00–10:00 AM.' : 'Live normal: día anterior 8:30–10:30 AM · día del Live 8:00–10:00 AM.'} Hora México. Los grupos se distribuyen durante la ventana para evitar ráfagas.</p>
               </div>
             </div>
 
@@ -1520,6 +1531,7 @@ export default function CopyCenterDashboard() {
                               <p><strong>Grupos:</strong> {livePreview?.groups?.length || 0}</p>
                               <p><strong>Fecha:</strong> {displayDate(livePreview?.settings?.live_date || selected.due_date)}</p>
                               <p><strong>Flyer:</strong> Automático · Plantilla {livePreview?.settings?.template_id || '—'}</p>
+                              {livePreview?.settings?.is_extraordinary && <p><strong>2 días antes:</strong> 8:30–10:30 AM</p>}
                               <p><strong>Día anterior:</strong> 8:30–10:30 AM</p>
                               <p><strong>Día del Live:</strong> 8:00–10:00 AM</p>
                             </>
@@ -1542,7 +1554,7 @@ export default function CopyCenterDashboard() {
               </div>
 
               <aside className="space-y-4">
-                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsLive ? 'Úrsula · exclusiva Lives' : selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : selectedIsCourse ? 'Victoria · exclusiva Cursos' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">{selectedIsLive || selectedIsScheduledWarmup ? 'Programación' : 'Entrega'}</dt><dd className="font-semibold">{selectedIsLive ? 'Día anterior 8:30–10:30 · Día del Live 8:00–10:00' : selectedIsScheduledWarmup && !selected.due_date ? 'Se asigna al aprobar · 10 AM / 5 PM' : displayDate(selected.due_date)}</dd></div></dl></div>
+                <div className="rounded-xl border border-border-color p-4 text-sm"><p className="text-xs font-bold uppercase tracking-wider text-foreground/45">Asignación</p><dl className="mt-3 space-y-3"><div><dt className="text-foreground/45">Responsable</dt><dd className="font-semibold">{userName(users, selected.assigned_to)}</dd></div><div><dt className="text-foreground/45">Revisión</dt><dd className="font-semibold">{selectedIsLive ? 'Úrsula · exclusiva Lives' : selectedIsWorkshop ? 'Marcos · exclusiva Workshop' : selectedIsCourse ? 'Victoria · exclusiva Cursos' : userName(users, selected.reviewer_id)}</dd></div><div><dt className="text-foreground/45">{selectedIsLive || selectedIsScheduledWarmup ? 'Programación' : 'Entrega'}</dt><dd className="font-semibold">{selectedIsLive ? (livePreview?.settings?.is_extraordinary ? '2 días antes + día anterior 8:30–10:30 · Día del Live 8:00–10:00' : 'Día anterior 8:30–10:30 · Día del Live 8:00–10:00') : selectedIsScheduledWarmup && !selected.due_date ? 'Se asigna al aprobar · 10 AM / 5 PM' : displayDate(selected.due_date)}</dd></div></dl></div>
                 {!selectedIsLive && <div className="rounded-xl border border-violet-500/25 bg-violet-500/[0.06] p-4 text-sm">
                   <p className="text-xs font-bold uppercase tracking-wider text-violet-500">Checklist AIDA</p>
                   <div className="mt-3 space-y-2">
