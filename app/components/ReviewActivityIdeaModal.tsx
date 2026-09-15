@@ -10,6 +10,7 @@ import {
 import {
   ActivityIdea,
   approveActivityIdea,
+  approveOwnActivityIdea,
 } from '@/lib/activity-ideas-hooks'
 
 import {
@@ -44,6 +45,7 @@ interface UserProfile {
 interface ReviewActivityIdeaModalProps {
   isOpen: boolean
   idea: ActivityIdea | null
+  selfApproval?: boolean
   onClose: () => void
   onSuccess: () => void
 }
@@ -55,6 +57,7 @@ interface ReviewActivityIdeaModalProps {
 export default function ReviewActivityIdeaModal({
   isOpen,
   idea,
+  selfApproval = false,
   onClose,
   onSuccess,
 }: ReviewActivityIdeaModalProps) {
@@ -305,8 +308,7 @@ export default function ReviewActivityIdeaModal({
       setSaving(true)
       setError(null)
 
-      await approveActivityIdea({
-
+      const approvalPayload = {
         ideaId:
           idea.id,
 
@@ -329,8 +331,17 @@ export default function ReviewActivityIdeaModal({
           null,
 
         priority,
+      }
 
-      })
+      if (selfApproval) {
+        await approveOwnActivityIdea(
+          approvalPayload,
+        )
+      } else {
+        await approveActivityIdea(
+          approvalPayload,
+        )
+      }
 
       /*
        * El hook debe encargarse de:

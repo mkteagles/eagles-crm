@@ -33,6 +33,7 @@ interface ActivityIdeasProps {
   userName: string
   role: string
   refreshKey?: number
+  onActivityCreated?: () => void
 }
 
 // =========================================================
@@ -44,6 +45,7 @@ export default function ActivityIdeas({
   userName,
   role,
   refreshKey = 0,
+  onActivityCreated,
 }: ActivityIdeasProps) {
 
   // =======================================================
@@ -58,14 +60,22 @@ export default function ActivityIdeas({
       .trim()
       .toLowerCase()
 
-  const canCreate =
-    [
+  const isMarcos =
+    normalizedUserName.includes(
       'marcos',
-      'ursula',
-      'úrsula',
-    ].includes(
-      normalizedUserName,
     )
+
+  const isUrsula =
+    normalizedUserName.includes(
+      'ursula',
+    ) ||
+    normalizedUserName.includes(
+      'úrsula',
+    )
+
+  const canCreate =
+    isMarcos ||
+    isUrsula
 
   // =======================================================
   // IDEAS
@@ -175,10 +185,24 @@ export default function ActivityIdeas({
         }
 
         // -------------------------------------------------
-        // USUARIOS NORMALES
+        // MARCOS
         //
-        // Marcos / Úrsula solamente ven sus propias
-        // ideas pendientes.
+        // Además de sus ideas creadas, ve cualquier idea
+        // pendiente que esté asignada directamente a él.
+        // Así puede aprobar sus propias actividades sin
+        // depender de otra persona.
+        // -------------------------------------------------
+
+        if (isMarcos) {
+          return pendingIdeas.filter(
+            (idea) =>
+              idea.created_by === userId ||
+              idea.assigned_to === userId,
+          )
+        }
+
+        // -------------------------------------------------
+        // OTROS USUARIOS
         // -------------------------------------------------
 
         return pendingIdeas.filter(
@@ -189,6 +213,7 @@ export default function ActivityIdeas({
       [
         ideas,
         isAdmin,
+        isMarcos,
         userId,
       ],
     )
@@ -229,6 +254,8 @@ export default function ActivityIdeas({
       )
 
       await refresh()
+
+      onActivityCreated?.()
     }
 
   // =======================================================
@@ -596,7 +623,13 @@ export default function ActivityIdeas({
                   idea={
                     idea
                   }
-                  isAdmin={
+                  canApprove={
+                    isAdmin ||
+                    (isMarcos &&
+                      idea.assigned_to ===
+                        userId)
+                  }
+                  canReject={
                     isAdmin
                   }
                   processing={
@@ -655,6 +688,14 @@ export default function ActivityIdeas({
         }
         idea={
           reviewIdea
+        }
+        selfApproval={
+          Boolean(
+            reviewIdea &&
+            isMarcos &&
+            reviewIdea.assigned_to ===
+              userId,
+          )
         }
         onClose={
           handleReviewClose
@@ -843,7 +884,8 @@ export default function ActivityIdeas({
 
 interface IdeaCardProps {
   idea: ActivityIdea
-  isAdmin: boolean
+  canApprove: boolean
+  canReject: boolean
   processing: boolean
 
   onApprove: (
@@ -861,7 +903,8 @@ interface IdeaCardProps {
 
 function IdeaCard({
   idea,
-  isAdmin,
+  canApprove,
+  canReject,
   processing,
   onApprove,
   onReject,
@@ -1119,7 +1162,7 @@ function IdeaCard({
             ACCIONES ADMIN
         ================================================= */}
 
-        {isAdmin &&
+        {(canApprove || canReject) &&
           idea.status ===
             'pending' && (
 
@@ -1133,54 +1176,60 @@ function IdeaCard({
 
               {/* APROBAR */}
 
-              <button
-                type="button"
-                onClick={() =>
-                  onApprove(
-                    idea,
-                  )
-                }
-                disabled={
-                  processing
-                }
-                title="Revisar y aprobar"
-                className="
-                  flex items-center
-                  gap-1
-                  rounded-lg
-                  bg-green-600
-                  px-3 py-2
-                  text-sm
-                  font-semibold
-                  text-white
-                  hover:bg-green-700
-                  disabled:cursor-not-allowed
-                  disabled:opacity-60
-                "
-              >
+              {canApprove && (
 
-                {processing ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onApprove(
+                      idea,
+                    )
+                  }
+                  disabled={
+                    processing
+                  }
+                  title="Revisar y aprobar"
+                  className="
+                    flex items-center
+                    gap-1
+                    rounded-lg
+                    bg-green-600
+                    px-3 py-2
+                    text-sm
+                    font-semibold
+                    text-white
+                    hover:bg-green-700
+                    disabled:cursor-not-allowed
+                    disabled:opacity-60
+                  "
+                >
 
-                  <Loader
-                    size={16}
-                    className="
-                      animate-spin
-                    "
-                  />
+                  {processing ? (
 
-                ) : (
+                    <Loader
+                      size={16}
+                      className="
+                        animate-spin
+                      "
+                    />
 
-                  <Check
-                    size={16}
-                  />
+                  ) : (
 
-                )}
+                    <Check
+                      size={16}
+                    />
 
-                Aprobar
+                  )}
 
-              </button>
+                  Aprobar
+
+                </button>
+
+              )}
 
               {/* RECHAZAR */}
+
+              {canReject && (
 
               <button
                 type="button"
@@ -1215,6 +1264,8 @@ function IdeaCard({
                 Rechazar
 
               </button>
+
+              )}
 
             </div>
 

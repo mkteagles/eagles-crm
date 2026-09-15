@@ -1,0 +1,230 @@
+{
+  "name": "Eagles · Reporte Marcos WhatsApp · 5 PM Lun-Sáb",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 17 * * 1-6"
+            }
+          ]
+        }
+      },
+      "id": "schedule-report-17",
+      "name": "Lunes a sábado 5 PM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "crm",
+              "name": "crmBaseUrl",
+              "value": "https://eaglescrm-alpha.vercel.app",
+              "type": "string"
+            },
+            {
+              "id": "secret",
+              "name": "automationSecret",
+              "value": "PEGA_AQUI_EL_MISMO_DAILY_REPORT_AUTOMATION_SECRET_DE_VERCEL",
+              "type": "string"
+            },
+            {
+              "id": "evo-url",
+              "name": "evolutionBaseUrl",
+              "value": "https://lanzamientodigital-evolution-api.rstd2l.easypanel.host",
+              "type": "string"
+            },
+            {
+              "id": "evo-key",
+              "name": "evolutionApiKey",
+              "value": "PEGA_AQUI_TU_EVOLUTION_API_KEY",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "config-report",
+      "name": "Configuración privada",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ ($('Configuración privada').item.json.crmBaseUrl || '').replace(/\\/$/, '') + '/app1/api/automation/marcos-daily-report' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "={{ $('Configuración privada').item.json.automationSecret }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-report",
+      "name": "Generar reporte Marcos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "if ($json.shouldSend !== true) {\n  return [];\n}\n\nif (!$json.report || !$json.recipient || !$json.instanceName) {\n  throw new Error('El CRM no devolvió reporte, destinatario o instancia.');\n}\n\nreturn [{ json: $json }];"
+      },
+      "id": "guard-report",
+      "name": "Continuar solo si toca enviar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -50,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ (($('Configuración privada').item.json.evolutionBaseUrl || '').endsWith('/') ? $('Configuración privada').item.json.evolutionBaseUrl.slice(0, -1) : $('Configuración privada').item.json.evolutionBaseUrl) + '/message/sendText/' + $json.instanceName }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $('Configuración privada').item.json.evolutionApiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ number: $json.recipient, text: $json.report }) }}",
+        "options": {}
+      },
+      "id": "send-report",
+      "name": "Enviar reporte por WORKSHOP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        210,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($('Configuración privada').item.json.crmBaseUrl || '').replace(/\\/$/, '') + '/app1/api/automation/marcos-daily-report' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "={{ $('Configuración privada').item.json.automationSecret }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ action: 'mark-sent', userId: $('Generar reporte Marcos').item.json.userId, reportDate: $('Generar reporte Marcos').item.json.reportDate, evolutionMessageId: String($json.key?.id || $json.messageId || $json.id || ''), responsePayload: $json }) }}",
+        "options": {}
+      },
+      "id": "log-report",
+      "name": "Registrar envío en CRM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Lunes a sábado 5 PM": {
+      "main": [
+        [
+          {
+            "node": "Configuración privada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Configuración privada": {
+      "main": [
+        [
+          {
+            "node": "Generar reporte Marcos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar reporte Marcos": {
+      "main": [
+        [
+          {
+            "node": "Continuar solo si toca enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continuar solo si toca enviar": {
+      "main": [
+        [
+          {
+            "node": "Enviar reporte por WORKSHOP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar reporte por WORKSHOP": {
+      "main": [
+        [
+          {
+            "node": "Registrar envío en CRM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Mexico_City"
+  },
+  "tags": []
+}

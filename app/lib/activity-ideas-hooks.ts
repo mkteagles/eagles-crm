@@ -360,3 +360,52 @@ export async function rejectActivityIdea(
 
   return data
 }
+
+// =========================================================
+// APROBACIÓN PROPIA DE MARCOS
+//
+// Usa un Route Handler protegido que valida que:
+// - el usuario autenticado sea Marcos;
+// - la idea siga pendiente;
+// - la idea esté asignada al propio Marcos.
+//
+// El servidor crea la actividad y marca la idea como
+// aprobada sin depender de Victoria ni de permisos de admin.
+// =========================================================
+
+export async function approveOwnActivityIdea(
+  data: {
+    ideaId: string
+    title: string
+    description?: string | null
+    assigned_to?: string | null
+    due_date?: string | null
+    due_time?: string | null
+    priority: ActivityIdeaPriority
+  },
+) {
+  const response = await fetch(
+    '/app1/api/activity-ideas/self-approve',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    },
+  )
+
+  const payload = await response
+    .json()
+    .catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(
+      typeof payload?.error === 'string'
+        ? payload.error
+        : 'No se pudo aprobar la idea.',
+    )
+  }
+
+  return payload
+}

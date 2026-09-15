@@ -63,11 +63,17 @@ export default function ReportsPage() {
 
       {canSeeEvidenceModule && <ReportEvidenceCenter />}
 
-      {user.role === "executor" && <DailyReportGenerator />}
+      {isMarcos && (
+        <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900/50 dark:bg-green-900/10 dark:text-green-300">
+          📲 Tu reporte diario se prepara automáticamente y se envía por WhatsApp a las 5:00 PM, de lunes a sábado, desde la instancia WORKSHOP.
+        </div>
+      )}
+
+      {(user.role === "executor" || isMarcos) && <DailyReportGenerator />}
 
       {canSeeConsolidatedReports && <ConsolidatedReports />}
 
-      {!canSeeEvidenceModule && user.role !== "executor" && !canSeeConsolidatedReports && (
+      {!canSeeEvidenceModule && user.role !== "executor" && !isMarcos && !canSeeConsolidatedReports && (
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-8 text-center dark:border-gray-800 dark:bg-gray-900">
           <p className="text-gray-500 dark:text-gray-400">No tienes acceso al módulo de reportes.</p>
         </div>

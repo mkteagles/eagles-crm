@@ -77,6 +77,16 @@ export async function updateSession(
     return response
   }
 
+  // Las automatizaciones servidor-a-servidor validan su propio secreto.
+  // No requieren una sesión de navegador.
+  if (
+    pathname.startsWith(
+      '/app1/api/automation/'
+    )
+  ) {
+    return response
+  }
+
   // =====================================================
   // LOGIN
   // =====================================================
@@ -109,6 +119,16 @@ export async function updateSession(
   if (
     !user ||
     !pathname.startsWith('/app1')
+  ) {
+    return response
+  }
+
+  // La aprobación propia de ideas valida la sesión y que la idea esté
+  // asignada al propio Marcos dentro del Route Handler.
+  if (
+    pathname.startsWith(
+      '/app1/api/activity-ideas/'
+    )
   ) {
     return response
   }

@@ -544,6 +544,11 @@ export default function MarketingDashboard() {
           userName={user.full_name}
           role={user.role}
           refreshKey={refreshKey}
+          onActivityCreated={() =>
+            setRefreshKey(
+              prev => prev + 1
+            )
+          }
         />
       )}
 

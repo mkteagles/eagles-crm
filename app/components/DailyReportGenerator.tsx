@@ -160,6 +160,21 @@ export default function DailyReportGenerator() {
     []
   );
 
+  const canGenerateIndividualReport = useMemo(() => {
+    if (!user) return false;
+
+    const normalizedName = String(user.full_name || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+
+    return (
+      user.role === "executor" ||
+      normalizedName.includes("marcos")
+    );
+  }, [user]);
+
   // =========================================================
   // ACTIVIDADES DEL DÍA
   // =========================================================
@@ -603,7 +618,7 @@ Generado automáticamente por Eagles Gear CRM.`;
   useEffect(() => {
     if (
       !user?.id ||
-      user.role !== "executor"
+      !canGenerateIndividualReport
     ) {
       return;
     }
@@ -619,7 +634,7 @@ Generado automáticamente por Eagles Gear CRM.`;
     };
 
     initialize();
-  }, [user?.id, today]);
+  }, [user?.id, today, canGenerateIndividualReport]);
 
   // =========================================================
   // ACTUALIZAR AUTOMÁTICAMENTE
@@ -634,7 +649,7 @@ Generado automáticamente por Eagles Gear CRM.`;
   useEffect(() => {
     if (
       !user?.id ||
-      user.role !== "executor" ||
+      !canGenerateIndividualReport ||
       loading
     ) {
       return;
@@ -664,6 +679,7 @@ Generado automáticamente por Eagles Gear CRM.`;
     suggestions,
     user?.id,
     loading,
+    canGenerateIndividualReport,
   ]);
 
   // =========================================================
@@ -726,7 +742,7 @@ Generado automáticamente por Eagles Gear CRM.`;
     );
   }
 
-  if (user.role !== "executor") {
+  if (!canGenerateIndividualReport) {
     return (
       <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6 text-center">
         <p className="text-gray-600 dark:text-gray-400">
