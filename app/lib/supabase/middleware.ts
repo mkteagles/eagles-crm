@@ -167,6 +167,18 @@ export async function updateSession(
     return response
   }
 
+  // Calendario Creativo: sus Route Handlers validan sesión/permisos.
+  // Si no se excluye aquí, los executors son redirigidos a /app1 y fetch()
+  // recibe HTML en lugar de JSON; eso dejaba el calendario en 0 y ocultaba
+  // los botones Importar Word / Nuevo contenido.
+  if (
+    pathname.startsWith(
+      '/app1/api/creative-calendar'
+    )
+  ) {
+    return response
+  }
+
   // =====================================================
   // OBTENER PERFIL
   // =====================================================

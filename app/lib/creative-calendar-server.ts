@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 function normalize(value: string) {
   return value
@@ -22,7 +23,10 @@ export async function creativeCalendarSession() {
     }
   }
 
-  const { data: profile } = await supabase
+  // Consultar el perfil con service role evita que una policy de RLS
+  // oculte el propio perfil y haga que Marcos/Úrsula pierdan canEdit.
+  const admin = createAdminClient()
+  const { data: profile } = await admin
     .from('user_profiles')
     .select('id,full_name,email,role')
     .eq('id', authData.user.id)
