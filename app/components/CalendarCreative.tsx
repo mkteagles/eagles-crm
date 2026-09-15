@@ -368,27 +368,27 @@ export default function CalendarCreative() {
               </div>
             </div>
 
-            {canEdit ? (
-              <div className="flex flex-wrap gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    if (file) void importWord(file)
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={working}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-purple-200 bg-white px-4 text-sm font-bold text-purple-700 shadow-sm transition hover:bg-purple-50 disabled:opacity-50 dark:border-purple-800 dark:bg-gray-950 dark:text-purple-200 dark:hover:bg-purple-950/40"
-                >
-                  {working ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />}
-                  Importar Word
-                </button>
+            <div className="flex flex-wrap gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) void importWord(file)
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={working}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-purple-200 bg-white px-4 text-sm font-bold text-purple-700 shadow-sm transition hover:bg-purple-50 disabled:opacity-50 dark:border-purple-800 dark:bg-gray-950 dark:text-purple-200 dark:hover:bg-purple-950/40"
+              >
+                {working ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />}
+                Importar Word
+              </button>
+              {canEdit ? (
                 <button
                   type="button"
                   onClick={() => openCreate()}
@@ -396,8 +396,8 @@ export default function CalendarCreative() {
                 >
                   <Plus size={17} /> Nuevo contenido
                 </button>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -552,10 +552,18 @@ export default function CalendarCreative() {
                 <Upload size={30} className="mx-auto text-purple-500" />
                 <h4 className="mt-3 font-black text-gray-900 dark:text-white">Este mes todavía no tiene calendario creativo</h4>
                 <p className="mx-auto mt-1 max-w-xl text-sm text-gray-500 dark:text-gray-400">
-                  {canEdit
-                    ? 'Úrsula puede subir el Word con el mismo formato fijo y el CRM convertirá cada fila en contenido editable.'
-                    : 'Cuando Úrsula cargue el Word del mes, aparecerá aquí automáticamente.'}
+                  Sube el Word del mes con el formato fijo. El CRM leerá la tabla y convertirá cada fila en una tarjeta editable.
                 </p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={working}
+                  className="mt-5 inline-flex min-h-12 items-center gap-2 rounded-xl bg-purple-600 px-5 text-sm font-black text-white shadow-lg shadow-purple-600/20 transition hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {working ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                  Subir Word de {displayMonth(currentDate)}
+                </button>
+                <p className="mt-2 text-xs text-gray-500">Acepta .docx · máximo 10 MB</p>
               </div>
             ) : null}
           </>

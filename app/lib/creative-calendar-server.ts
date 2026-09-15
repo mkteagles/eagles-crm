@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 
 function normalize(value: string) {
   return value
@@ -23,10 +22,7 @@ export async function creativeCalendarSession() {
     }
   }
 
-  // Consultar el perfil con service role evita que una policy de RLS
-  // oculte el propio perfil y haga que Marcos/Úrsula pierdan canEdit.
-  const admin = createAdminClient()
-  const { data: profile } = await admin
+  const { data: profile } = await supabase
     .from('user_profiles')
     .select('id,full_name,email,role')
     .eq('id', authData.user.id)
@@ -38,7 +34,14 @@ export async function creativeCalendarSession() {
   const normalizedEmail = normalize(email)
   const isUrsula = normalizedName.includes('ursula') || normalizedEmail === 'ursula@eagles.com' || normalizedEmail.includes('ursula')
   const isMarcos = normalizedName.includes('marcos') || normalizedEmail === 'marcosc@eagles.com' || normalizedEmail.includes('marcos')
-  const canEdit = isUrsula || isMarcos || profile?.role === 'admin'
+  const normalizedRole = normalize(String(profile?.role || authData.user.user_metadata?.role || 'executor'))
+  // El calendario creativo es un flujo operativo de Marketing. Úrsula y Marcos
+  // deben poder editarlo aunque su perfil técnico esté guardado como executor.
+  const canEdit =
+    isUrsula ||
+    isMarcos ||
+    normalizedRole === 'admin' ||
+    normalizedRole === 'executor'
 
   return {
     userId: authData.user.id,

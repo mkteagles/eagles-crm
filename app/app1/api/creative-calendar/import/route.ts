@@ -64,6 +64,22 @@ export async function POST(request: Request) {
     const periodMonth = `${period}-01`
     const path = `${period}/${Date.now()}-${safeFileName(file.name)}`
 
+    // Respaldo: si por alguna razón la migración no creó el bucket,
+    // lo aseguramos aquí antes de guardar el Word.
+    const { data: existingBucket } = await admin.storage.getBucket(BUCKET)
+    if (!existingBucket) {
+      const { error: bucketError } = await admin.storage.createBucket(BUCKET, {
+        public: false,
+        fileSizeLimit: MAX_FILE_SIZE,
+        allowedMimeTypes: [
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ],
+      })
+      if (bucketError && !String(bucketError.message || '').toLowerCase().includes('already')) {
+        throw bucketError
+      }
+    }
+
     const { error: uploadError } = await admin.storage
       .from(BUCKET)
       .upload(path, buffer, {
