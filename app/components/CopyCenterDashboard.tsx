@@ -99,6 +99,28 @@ type WhatsAppPreview = {
   schedule: WhatsAppSchedule | null
 }
 
+type WhatsAppDeliverySummary = {
+  id: string
+  copyRequestRef: string
+  campaignCode: string | null
+  status: 'scheduled' | 'sending' | 'sent' | 'failed' | string
+  scheduledAt: string | null
+  sentAt: string | null
+  errorMessage: string | null
+  groupName: string | null
+  groupJid: string | null
+  instanceName: string | null
+}
+
+type WhatsAppDeliveryRollup = {
+  kind: 'scheduled' | 'sent' | 'failed'
+  count: number
+  timestamp: string | null
+  groupName: string | null
+  instanceName: string | null
+  errorMessage: string | null
+}
+
 type LiveGroupOption = {
   code: string
   name: string
@@ -249,6 +271,69 @@ function displayScheduledDateTime(value: string | null, timeZone = 'America/Mexi
   }).format(new Date(value))
 }
 
+function getDeliveryRollup(deliveries: WhatsAppDeliverySummary[]): WhatsAppDeliveryRollup | null {
+  if (!deliveries.length) return null
+
+  const active = deliveries
+    .filter((item) => item.status === 'scheduled' || item.status === 'sending')
+    .sort((a, b) => new Date(a.scheduledAt || 0).getTime() - new Date(b.scheduledAt || 0).getTime())
+
+  if (active.length) {
+    return {
+      kind: 'scheduled',
+      count: active.length,
+      timestamp: active[0].scheduledAt,
+      groupName: active[0].groupName,
+      instanceName: active[0].instanceName,
+      errorMessage: null,
+    }
+  }
+
+  const failed = deliveries
+    .filter((item) => item.status === 'failed')
+    .sort((a, b) => new Date(b.scheduledAt || 0).getTime() - new Date(a.scheduledAt || 0).getTime())
+
+  if (failed.length) {
+    return {
+      kind: 'failed',
+      count: failed.length,
+      timestamp: failed[0].scheduledAt,
+      groupName: failed[0].groupName,
+      instanceName: failed[0].instanceName,
+      errorMessage: failed[0].errorMessage,
+    }
+  }
+
+  const sent = deliveries
+    .filter((item) => item.status === 'sent')
+    .sort((a, b) => new Date(b.sentAt || b.scheduledAt || 0).getTime() - new Date(a.sentAt || a.scheduledAt || 0).getTime())
+
+  if (sent.length) {
+    return {
+      kind: 'sent',
+      count: sent.length,
+      timestamp: sent[0].sentAt || sent[0].scheduledAt,
+      groupName: sent[0].groupName,
+      instanceName: sent[0].instanceName,
+      errorMessage: null,
+    }
+  }
+
+  return null
+}
+
+function deliveryBadgeLabel(delivery: WhatsAppDeliveryRollup) {
+  if (delivery.kind === 'scheduled') return delivery.count > 1 ? `${delivery.count} PROGRAMADOS` : 'PROGRAMADO'
+  if (delivery.kind === 'sent') return delivery.count > 1 ? `${delivery.count} ENVIADOS` : 'ENVIADO'
+  return 'REVISAR ENVÍO'
+}
+
+function deliveryBadgeClass(delivery: WhatsAppDeliveryRollup) {
+  if (delivery.kind === 'scheduled') return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+  if (delivery.kind === 'sent') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300'
+  return 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
+}
+
 export default function CopyCenterDashboard() {
   const supabase = useMemo(() => createClient(), [])
   const { user, loading: userLoading } = useCurrentUser()
@@ -269,6 +354,7 @@ export default function CopyCenterDashboard() {
   const [feedback, setFeedback] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const [whatsAppPreview, setWhatsAppPreview] = useState<WhatsAppPreview | null>(null)
+  const [deliverySummaries, setDeliverySummaries] = useState<Record<string, WhatsAppDeliverySummary[]>>({})
   const [whatsAppLoading, setWhatsAppLoading] = useState(false)
   const [imageUploading, setImageUploading] = useState(false)
   const [showLiveCreate, setShowLiveCreate] = useState(false)
@@ -282,6 +368,31 @@ export default function CopyCenterDashboard() {
     templateId: '1',
     selectedGroupCodes: [],
   })
+
+  const loadScheduleSummary = useCallback(async () => {
+    try {
+      const response = await fetch('/app1/api/copy-requests/schedule-summary', {
+        method: 'GET',
+        cache: 'no-store',
+      })
+      if (!response.ok) {
+        console.error('[COPY SCHEDULE SUMMARY] No se pudo cargar', response.status)
+        return
+      }
+
+      const payload = await response.json() as { deliveries?: WhatsAppDeliverySummary[] }
+      const grouped: Record<string, WhatsAppDeliverySummary[]> = {}
+
+      for (const delivery of payload.deliveries || []) {
+        if (!delivery.copyRequestRef) continue
+        grouped[delivery.copyRequestRef] = [...(grouped[delivery.copyRequestRef] || []), delivery]
+      }
+
+      setDeliverySummaries(grouped)
+    } catch (summaryError) {
+      console.error('[COPY SCHEDULE SUMMARY]', summaryError)
+    }
+  }, [])
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -303,8 +414,9 @@ export default function CopyCenterDashboard() {
     }
 
     if (!usersResult.error) setUsers((usersResult.data || []) as UserProfile[])
+    await loadScheduleSummary()
     setLoading(false)
-  }, [supabase])
+  }, [loadScheduleSummary, supabase])
 
   useEffect(() => {
     if (!user) return
@@ -347,12 +459,22 @@ export default function CopyCenterDashboard() {
     return requests
   }, [currentIsMarcos, currentIsUrsula, currentIsVictoria, requests, user])
 
+  const deliveryRollups = useMemo(() => {
+    const result: Record<string, WhatsAppDeliveryRollup> = {}
+    for (const [copyId, deliveries] of Object.entries(deliverySummaries)) {
+      const rollup = getDeliveryRollup(deliveries)
+      if (rollup) result[copyId] = rollup
+    }
+    return result
+  }, [deliverySummaries])
+
   const counts = useMemo(() => ({
     active: visibleRequests.filter((item) => !['approved', 'published'].includes(item.status)).length,
     review: visibleRequests.filter((item) => item.status === 'review').length,
     approved: visibleRequests.filter((item) => item.status === 'approved').length,
+    scheduled: visibleRequests.filter((item) => deliveryRollups[item.id]?.kind === 'scheduled').length,
     image: visibleRequests.filter((item) => item.needs_image && item.status !== 'published').length,
-  }), [visibleRequests])
+  }), [deliveryRollups, visibleRequests])
 
   const filtered = useMemo(() => {
     const normalizedQuery = normalizeName(query.trim())
@@ -1066,6 +1188,7 @@ export default function CopyCenterDashboard() {
   const selectedIsWorkshopWarmup = isOctoberWorkshopWarmup(selected)
   const selectedIsJF017Warmup = isOctoberJF017Warmup(selected)
   const selectedIsScheduledWarmup = isScheduledWhatsAppWarmup(selected)
+  const selectedDeliveryRollup = selected ? deliveryRollups[selected.id] || null : null
   const canWorkSelected = Boolean(selected && (
     selectedIsLive
       ? currentIsUrsula
@@ -1134,11 +1257,20 @@ export default function CopyCenterDashboard() {
         </div>
       )}
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="flex flex-col gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-bold text-emerald-700 dark:text-emerald-300">Estado de WhatsApp visible para todos</p>
+          <p className="mt-0.5 text-xs text-foreground/55"><strong>PROGRAMADO</strong> = ya está en la cola y no hay que volver a tocarlo. <strong>ENVIADO</strong> = n8n ya lo mandó.</p>
+        </div>
+        <span className="whitespace-nowrap text-xs font-semibold text-foreground/45">Hora México</span>
+      </div>
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {[
           { label: 'En proceso', value: counts.active, icon: Clock3 },
           { label: 'Por revisar', value: counts.review, icon: UserRoundCheck },
           { label: 'Aprobados', value: counts.approved, icon: CheckCircle2 },
+          { label: 'Programados', value: counts.scheduled, icon: CalendarDays },
           { label: 'Piezas multimedia', value: counts.image, icon: ImageIcon },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="rounded-2xl border border-border-color bg-surface p-4">
@@ -1288,21 +1420,43 @@ export default function CopyCenterDashboard() {
           <div className="p-12 text-center"><MessageSquareText className="mx-auto text-foreground/25" size={42} /><h3 className="mt-3 font-bold">No hay solicitudes aquí</h3><p className="mt-1 text-sm text-foreground/55">Crea la primera o cambia los filtros.</p></div>
         ) : (
           <div className="divide-y divide-border-color">
-            {filtered.map((item) => (
-              <button key={item.id} onClick={() => openRequest(item)} className="grid w-full gap-3 p-4 text-left transition hover:bg-foreground/[0.03] sm:grid-cols-[1fr_auto] sm:items-center lg:grid-cols-[minmax(0,1.5fr)_minmax(130px,.65fr)_minmax(130px,.65fr)_auto]">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${COPY_STATUS_STYLES[item.status]}`}>{COPY_STATUS_LABELS[item.status]}</span>
-                    {item.needs_image && <span className="inline-flex items-center gap-1 text-xs text-foreground/55"><ImageIcon size={13} /> Multimedia</span>}
+            {filtered.map((item) => {
+              const delivery = deliveryRollups[item.id]
+              const programmingText = delivery
+                ? delivery.kind === 'scheduled'
+                  ? delivery.count > 1
+                    ? `${delivery.count} envíos · próximo ${displayScheduledDateTime(delivery.timestamp)}`
+                    : displayScheduledDateTime(delivery.timestamp)
+                  : delivery.kind === 'sent'
+                    ? `Enviado ${displayScheduledDateTime(delivery.timestamp)}`
+                    : `Revisar envío · ${displayScheduledDateTime(delivery.timestamp)}`
+                : isLiveCopy(item)
+                  ? `${displayDate(item.due_date)} · multigrupo`
+                  : isScheduledWhatsAppWarmup(item) && !item.due_date
+                    ? 'Al aprobar · 10 AM / 5 PM'
+                    : displayDate(item.due_date)
+
+              return (
+                <button key={item.id} onClick={() => openRequest(item)} className="grid w-full gap-3 p-4 text-left transition hover:bg-foreground/[0.03] sm:grid-cols-[1fr_auto] sm:items-center lg:grid-cols-[minmax(0,1.5fr)_minmax(130px,.65fr)_minmax(130px,.65fr)_minmax(190px,.8fr)]">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${COPY_STATUS_STYLES[item.status]}`}>{COPY_STATUS_LABELS[item.status]}</span>
+                      {delivery && <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${deliveryBadgeClass(delivery)}`}>{deliveryBadgeLabel(delivery)}</span>}
+                      {item.needs_image && <span className="inline-flex items-center gap-1 text-xs text-foreground/55"><ImageIcon size={13} /> Multimedia</span>}
+                    </div>
+                    <h3 className="mt-2 truncate font-bold text-foreground">{item.title}</h3>
+                    <p className="mt-1 truncate text-sm text-foreground/55">{item.product_topic} · {item.channels.join(', ')}</p>
                   </div>
-                  <h3 className="mt-2 truncate font-bold text-foreground">{item.title}</h3>
-                  <p className="mt-1 truncate text-sm text-foreground/55">{item.product_topic} · {item.channels.join(', ')}</p>
-                </div>
-                <div className="text-sm"><p className="text-xs text-foreground/45">Responsable</p><p className="mt-1 font-medium">{userName(users, item.assigned_to)}</p></div>
-                <div className="text-sm"><p className="text-xs text-foreground/45">Revisión</p><p className="mt-1 font-medium">{userName(users, item.reviewer_id)}</p></div>
-                <div className="text-sm sm:text-right"><p className="text-xs text-foreground/45">{isLiveCopy(item) || isScheduledWhatsAppWarmup(item) ? 'Programación' : 'Entrega'}</p><p className="mt-1 font-medium">{isLiveCopy(item) ? `${displayDate(item.due_date)} · multigrupo` : isScheduledWhatsAppWarmup(item) && !item.due_date ? 'Al aprobar · 10 AM / 5 PM' : displayDate(item.due_date)}</p></div>
-              </button>
-            ))}
+                  <div className="text-sm"><p className="text-xs text-foreground/45">Responsable</p><p className="mt-1 font-medium">{userName(users, item.assigned_to)}</p></div>
+                  <div className="text-sm"><p className="text-xs text-foreground/45">Revisión</p><p className="mt-1 font-medium">{userName(users, item.reviewer_id)}</p></div>
+                  <div className="min-w-0 text-sm sm:text-right">
+                    <p className="text-xs text-foreground/45">{isLiveCopy(item) || isScheduledWhatsAppWarmup(item) || delivery ? 'Programación' : 'Entrega'}</p>
+                    <p className="mt-1 font-semibold">{programmingText}</p>
+                    {delivery?.groupName && <p className="mt-1 truncate text-xs text-foreground/45">{delivery.groupName}{delivery.instanceName ? ` · ${delivery.instanceName}` : ''}</p>}
+                  </div>
+                </button>
+              )
+            })}
           </div>
         )}
       </section>
@@ -1446,6 +1600,33 @@ export default function CopyCenterDashboard() {
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/65 p-0 sm:items-center sm:p-5" onMouseDown={(event) => { if (event.target === event.currentTarget && !working) setSelected(null) }}>
           <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-2xl border border-border-color bg-surface shadow-2xl sm:max-w-5xl sm:rounded-2xl">
             <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border-color bg-surface p-5"><div><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${COPY_STATUS_STYLES[selected.status]}`}>{COPY_STATUS_LABELS[selected.status]}</span><span className="text-xs text-foreground/50">{getCategoryLabel(selected.category)} · {getCampaignLabel(selected.campaign_month)}</span></div><h2 className="mt-2 text-xl font-bold sm:text-2xl">{selected.title}</h2></div><button onClick={() => setSelected(null)} className="rounded-lg p-2 hover:bg-foreground/5"><X /></button></div>
+
+            {selectedDeliveryRollup && (
+              <div className={`mx-5 mt-5 rounded-2xl border p-4 ${selectedDeliveryRollup.kind === 'scheduled' ? 'border-emerald-500/30 bg-emerald-500/[0.07]' : selectedDeliveryRollup.kind === 'sent' ? 'border-cyan-500/30 bg-cyan-500/[0.07]' : 'border-rose-500/30 bg-rose-500/[0.07]'}`}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${deliveryBadgeClass(selectedDeliveryRollup)}`}>{deliveryBadgeLabel(selectedDeliveryRollup)}</span>
+                      <span className="text-xs font-semibold uppercase tracking-wider text-foreground/45">Estado real de WhatsApp</span>
+                    </div>
+                    <p className="mt-2 font-bold text-foreground">
+                      {selectedDeliveryRollup.kind === 'scheduled'
+                        ? selectedDeliveryRollup.count > 1
+                          ? `${selectedDeliveryRollup.count} envíos ya están en cola`
+                          : 'Este copy ya está en cola. No necesitas volver a programarlo.'
+                        : selectedDeliveryRollup.kind === 'sent'
+                          ? 'n8n ya procesó este envío.'
+                          : 'El envío necesita revisión.'}
+                    </p>
+                    {selectedDeliveryRollup.errorMessage && <p className="mt-1 text-xs text-rose-500">{selectedDeliveryRollup.errorMessage}</p>}
+                  </div>
+                  <div className="text-sm sm:text-right">
+                    <p className="font-bold">{displayScheduledDateTime(selectedDeliveryRollup.timestamp)}</p>
+                    <p className="mt-1 text-xs text-foreground/50">{selectedDeliveryRollup.groupName || 'Grupo configurado'}{selectedDeliveryRollup.instanceName ? ` · ${selectedDeliveryRollup.instanceName}` : ''}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid gap-6 p-5 lg:grid-cols-[minmax(0,1fr)_280px]">
               <div className="space-y-5">
